@@ -7,6 +7,8 @@ import { MsalProvider } from '@azure/msal-react';
 import msalInstance from './services/authService';
 import { config } from './config';
 import App from './App';
+import './index.css';
+import './App.css';
 
 // Create theme based on config
 const theme = createTheme({

@@ -6,6 +6,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
@@ -22,6 +23,8 @@ const Bookings: React.FC = () => {
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+    const theme = useTheme();
+  
 
   // Column definitions for the table
   const columns = [
@@ -102,6 +105,61 @@ const Bookings: React.FC = () => {
             lender: 'Secure Mortgage Corp',
             status: 'Completed',
           },
+          {
+          id: '1',
+          closingDate: '2024-07-24',
+          closingLocation: 'San Juan',
+          propertyAddress: '123 Oak Street, Anytown, USA',
+          borrower: 'Sarah Miller',
+          loanCloser: 'Mark Edwards',
+          loanOfficer: 'John Davis',
+          lender: 'First Fidelity Bank',
+          status: 'Scheduled',
+        },
+        {
+          id: '2',
+          closingDate: '2024-07-25',
+          closingLocation: 'Ponce',
+          propertyAddress: '456 Elm Avenue, Springfield, USA',
+          borrower: 'Robert Miller',
+          loanCloser: 'Anna White',
+          loanOfficer: 'Laura Chen',
+          lender: 'Secure Mortgage Corp',
+          status: 'Completed',
+        },
+        {
+          id: '3',
+          closingDate: '2024-07-28',
+          closingLocation: 'San Juan',
+          propertyAddress: '789 Pine Lane, Lakeside, USA',
+          borrower: 'Emily Green',
+          loanCloser: 'David Lee',
+          loanOfficer: 'Michael Brown',
+          lender: 'United Funding Group',
+          status: 'Completed',
+        },
+        {
+          id: '4',
+          closingDate: '2024-07-27',
+          closingLocation: 'Ponce',
+          propertyAddress: '101 Maple Drive, Hillside, USA',
+          borrower: 'James Wilson',
+          loanCloser: 'Olivia Harris',
+          loanOfficer: 'John Davis',
+          lender: 'First Fidelity Bank',
+          status: 'Scheduled',
+        },
+        {
+          id: '5',
+          closingDate: '2024-07-28',
+          closingLocation: 'San Juan',
+          propertyAddress: '222 Cedar Road, Rivertown, USA',
+          borrower: 'Elizabeth Turner',
+          loanCloser: 'Brian Clark',
+          loanOfficer: 'Laura Chen',
+          lender: 'Secure Mortgage Corp',
+          status: 'Completed',
+        },
         ];
         
         setBookings(sampleBookings);
@@ -159,20 +217,29 @@ const Bookings: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1">
+        <Box 
+        sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: 3,}}>
+        <Typography variant="h4" component="h1" 
+        sx={{ 
+          fontWeight: 'bold', 
+          fontSize: 36,
+      }}>
           Bookings
         </Typography>
-        <Button
+        {/* <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={handleNewBooking}
         >
           New Booking
-        </Button>
+        </Button> */}
       </Box>
 
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 3, }}>
         <SearchBar
           placeholder="Search schedules..."
           value={searchQuery}

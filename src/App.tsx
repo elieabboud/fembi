@@ -1,16 +1,14 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import Layout from './components/Layout/Layout';
+import Layout from './components/layout/Layout';
 import ProtectedRoute from './routes/ProtectedRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Bookings from './pages/Bookings';
 import Calendar from './pages/Calendar';
-import Contacts from './pages/Contacts';
-import Settings from './pages/Settings';
+// import Contacts from './pages/Contacts';
 import Profile from './pages/Profile';
-import BookingForm from './components/forms/BookingForm';
 
 const App: React.FC = () => {
   return (
@@ -36,14 +34,6 @@ const App: React.FC = () => {
             }
           />
           <Route
-            path="/bookings/new"
-            element={
-              <ProtectedRoute>
-                <BookingForm />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/calendar"
             element={
               <ProtectedRoute>
@@ -51,22 +41,14 @@ const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
-          <Route
+          {/* <Route
             path="/contacts"
             element={
               <ProtectedRoute>
                 <Contacts />
               </ProtectedRoute>
             }
-          />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <Settings />
-              </ProtectedRoute>
-            }
-          />
+          />*/}
           <Route
             path="/profile"
             element={

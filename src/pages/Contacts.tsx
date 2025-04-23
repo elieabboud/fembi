@@ -17,6 +17,7 @@ import AppTable from '../components/common/AppTable';
 import SearchBar from '../components/common/SearchBar';
 import StatusBadge from '../components/common/StatusBadge';
 import { Contact } from '../types/contact';
+import { Column } from '../components/common/AppTable';
 
 // Sample contacts data
 const sampleContacts: Contact[] = [
@@ -91,11 +92,11 @@ const Contacts: React.FC = () => {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
 
   // Table columns
-  const columns = [
+  const columns: Column[] = [
     { 
       id: 'name', 
       label: 'Name',
-      format: (value: string, row: Contact) => (
+      format: (value: any, row: any) => (
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <Avatar 
             sx={{ width: 32, height: 32, mr: 2 }}
@@ -115,7 +116,7 @@ const Contacts: React.FC = () => {
     { 
       id: 'status', 
       label: 'Status',
-      format: (value: string) => <StatusBadge status={value as any} />
+      format: (value: any) => <StatusBadge status={value as any} />
     },
   ];
 

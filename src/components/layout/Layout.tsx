@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Box, AppBar, Toolbar, IconButton, Typography, Container } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
-import Sidebar from './Sidebar';
+import Sidebar from './Sidebar'; 
 import { useAuth } from '../../context/AuthContext';
 
 const Layout = () => {

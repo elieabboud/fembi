@@ -1,5 +1,5 @@
 import React from 'react';
-import { InputBase, Paper, IconButton } from '@mui/material';
+import { InputBase, Paper, IconButton, useTheme, Chip, Avatar } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 
 interface SearchBarProps {
@@ -15,6 +15,8 @@ const SearchBar: React.FC<SearchBarProps> = ({
   onChange,
   onSearch
 }) => {
+  const theme = useTheme();
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && onSearch) {
       onSearch();
@@ -30,15 +32,28 @@ const SearchBar: React.FC<SearchBarProps> = ({
         alignItems: 'center',
         width: '100%',
         borderRadius: 1,
+        height: 70,
+        bgcolor: theme.palette.secondary.main,
       }}
       elevation={0}
       onSubmit={(e) => e.preventDefault()}
     >
       <IconButton sx={{ p: '10px' }} aria-label="search">
-        <SearchIcon />
+        <SearchIcon style={{color: 'white'}} />
       </IconButton>
       <InputBase
-        sx={{ ml: 1, flex: 1 }}
+        sx={{
+          ml: 1,
+          flex: 1,
+          fontSize: 20,
+          '& .MuiInputBase-input': {
+            color: 'white',
+          },
+          '& .MuiInputBase-input::placeholder': {
+            color: 'white',
+            opacity: 1,
+          },
+        }}
         placeholder={placeholder}
         value={value}
         onChange={onChange}

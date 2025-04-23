@@ -15,14 +15,14 @@ export const config = {
     },
     // API Configuration
     apiConfig: {
-      baseUrl: "https://api.firstnationaltitle.com/api", // Replace with your API base URL
-      scopes: ["api://your-client-id/access_as_user"] // Replace with your API scopes
+      baseUrl: "https://api.firstnationaltitle.com/api", 
+      scopes: ["https://graph.microsoft.com/.default"]
     },
     // App Configuration
     appConfig: {
       appName: "First National Title & Insurance Services, Inc.",
       appShortName: "FNTIS",
       primaryColor: "#1a3c75", // Dark blue from the logo
-      secondaryColor: "#d32f2f" // Red color used in the app
+      secondaryColor: "#D3323A" // Red color used in the app
     },
   };

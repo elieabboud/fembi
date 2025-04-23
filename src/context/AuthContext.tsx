@@ -47,7 +47,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       setLoading(true);
       const result = await login();
-      if (result) {
+      if (result && result.account) {
         setIsAuthenticated(true);
         convertAccountToUser(result.account);
       }

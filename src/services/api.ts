@@ -1,3 +1,7 @@
+import axios from 'axios';
+import { config } from '../config';
+import { acquireToken } from './authService';
+
 const api = axios.create({
     baseURL: config.apiConfig.baseUrl,
     headers: {

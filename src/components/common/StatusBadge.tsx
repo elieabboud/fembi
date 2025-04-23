@@ -10,9 +10,9 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status, ...props }) => {
   const getStatusProps = () => {
     switch (status) {
       case 'Completed':
-        return { bgcolor: '#4caf50', color: '#fff' };
+        return { bgcolor: '#008000', color: '#fff' };
       case 'Scheduled':
-        return { bgcolor: '#1a3c75', color: '#fff' };
+        return { bgcolor: '#D3323A', color: '#fff' };
       case 'Cancelled':
         return { bgcolor: '#f44336', color: '#fff' };
       case 'Active':
@@ -34,6 +34,10 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status, ...props }) => {
       size="small"
       sx={{
         fontWeight: 'medium',
+        padding: '4px 8px',
+        width: '100%',
+        height: '30px',
+        borderRadius: '10px',
         ...getStatusProps(),
       }}
       {...props}

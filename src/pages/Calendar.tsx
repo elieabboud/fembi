@@ -10,6 +10,11 @@ import {
   Stack,
   Chip,
   Avatar,
+  Select,
+  FormControl,
+  MenuItem,
+  SelectChangeEvent,
+  Dialog
 } from '@mui/material';
 import {
   ChevronLeft as PrevIcon,
@@ -21,6 +26,11 @@ import {
   Clear as ClearIcon,
 } from '@mui/icons-material';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday } from 'date-fns';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import NewBookingForm from '../components/forms/NewBookingForm';
+import Confirmation from '../components/forms/Confirmation';
 
 // Sample events for the calendar
 const sampleEvents = [
@@ -83,8 +93,38 @@ const sampleEvents = [
 ];
 
 const Calendar: React.FC = () => {
-  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState<Date>(new Date(2025, 3, 5)); // April 5, 2025
+  const [openBookingModal, setOpenBookingModal] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+
+  const [submittedData, setSubmittedData] = useState<{
+    serviceLocation: string;
+    loanID: string;
+    borrowerFirstName: string;
+    borrowerLastName: string;
+    borrowerEmail: string;
+    borrowerPhone: string;
+    borrowerAddress: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    loanNumber: string;
+    loanType: string;
+    loanAmount: string;
+    loanCloser: string;
+    dpaProgram: string;
+    notes: string;
+    selectedDate: Date | null;
+    selectedTime: string;
+  } | null>(null);
+
+  const handleFormSubmit = (formData: typeof submittedData) => {
+    // Send data to backend here
+    // On success:
+    setOpenBookingModal(false);
+    setSubmittedData(formData);
+    setConfirmationOpen(true);
+  };
   
   const handlePrevMonth = () => {
     setCurrentDate(subMonths(currentDate, 1));
@@ -98,9 +138,22 @@ const Calendar: React.FC = () => {
     setCurrentDate(new Date(2025, 3, 5)); // Set to April 5, 2025 to match the design
   };
 
-  const handleNewBooking = () => {
-    navigate('/bookings/new');
+  const handleMonthChange = (event: SelectChangeEvent<number>) => {
+    const newMonth = parseInt(event.target.value as string, 10);
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newMonth);
+    setCurrentDate(newDate);
   };
+
+  const handleNewBooking = () => {
+    // navigate('/bookings/new');
+    setOpenBookingModal(true);
+  };
+
+    // Handle modal close
+    const handleCloseModal = () => {
+      setOpenBookingModal(false);
+    };
 
   // Generate days for the current month view
   const monthStart = startOfMonth(currentDate);
@@ -117,42 +170,153 @@ const Calendar: React.FC = () => {
   };
 
   const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = [
+    'January', 'February', 'March', 'April', 
+    'May', 'June', 'July', 'August', 
+    'September', 'October', 'November', 'December'
+  ];
+
+  const menuProps = {
+    PaperProps: {
+      style: {
+        maxHeight: 160,
+        width: 'auto',
+      },
+      sx: {
+        // Put scrollbar hiding in sx instead of style
+        '&::-webkit-scrollbar': {
+          display: 'none',
+        },
+        scrollbarWidth: 'none' as const, // TypeScript now knows this is a literal
+        msOverflowStyle: 'none' as const,
+      }
+    },
+    anchorOrigin: {
+      vertical: 'bottom' as const,
+      horizontal: 'left' as const,
+    },
+    transformOrigin: {
+      vertical: 'top' as const,
+      horizontal: 'left' as const,
+    },
+    variant: 'menu' as const,
+  };
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1">
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: {xs: 1, md: 3} }}>
+        <Typography 
+        variant="h4" 
+        component="h1"
+        sx={{ 
+          fontWeight: 'bold',
+          textAlign: 'center',
+          marginBottom: 2,
+        }}>
           Calendar
         </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'end', alignItems: 'center', mb: 3 }}>
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
+          // startIcon={<AddIcon />}
           onClick={handleNewBooking}
+          sx={{height: 50, minWidth: 150, fontSize: 16, fontWeight: 'bold'}}
         >
           New Booking
         </Button>
       </Box>
 
       {/* Calendar Controls */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <IconButton onClick={handlePrevMonth}>
-            <PrevIcon />
-          </IconButton>
-          <Typography variant="h6" sx={{ mx: 2 }}>
-            {format(currentDate, 'dd MMM yyyy')}
-          </Typography>
-          <IconButton onClick={handleNextMonth}>
-            <NextIcon />
-          </IconButton>
-        </Box>
-        <Box>
-          <Button variant="outlined" onClick={handleToday} sx={{ mr: 1 }}>
-            Today
-          </Button>
-          <IconButton sx={{ mr: 1 }}>
-            <ModuleIcon />
-          </IconButton>
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        flexDirection: { xs: 'column', md: 'row' },
+        mb: 3,
+        width: '100%',
+        flexGrow: 1,
+      }}>
+          <FormControl size="small"
+            sx={{
+              minWidth: 120,
+              display: 'flex',
+              alignItems: {sx: 'start', md:'center'},
+              justifyContent: 'center',
+              width: {xs:'100%', md:'auto'},
+            }}>
+            <Box sx={{ alignItems: 'center', display: 'flex' }}>
+              <CalendarMonthIcon/>
+              <Select
+                value={currentDate.getMonth()}
+                onChange={handleMonthChange}
+                displayEmpty
+                variant="outlined"
+                IconComponent={KeyboardArrowDownIcon}
+                MenuProps={menuProps}
+                sx={{
+                  paddingRight: 3,
+                  fontWeight: 'bold',
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    border: 'none'
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    border: 'none'
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    border: 'none'
+                  },
+                  border: 'none',
+                  boxShadow: 'none',
+                  outline: 'none'
+                }}
+              >
+                {months.map((month, index) => (
+                  <MenuItem key={month} value={index}>
+                    {month}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Box>
+          </FormControl>
+          {/* calendar controls */}
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          gap: { xs: 8, md: 0 },
+          mt: {xs: 2, md: 0},}}>
+          <Box sx={{
+          display: 'flex',
+          alignItems:'center',
+          justifyContent: { xs: 'flex-start', md: 'center' },
+          mb: 0,
+          width: '100%',
+          }}>
+            <IconButton onClick={handlePrevMonth}>
+              <PrevIcon />
+            </IconButton>
+            <Typography variant="h6" sx={{ mx: {xs:0, md:2}, fontWeight: 'bold', width: {xs: '100%', md: 'auto'}, fontSize: {xs: '12px', md: '20px'} }}>
+              {format(currentDate, 'dd MMM yyyy')}
+            </Typography>
+            <IconButton onClick={handleNextMonth}>
+              <NextIcon />
+            </IconButton>
+          </Box>
+          <Box sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end'
+          }}>
+            <Button
+              variant="contained"
+              onClick={handleToday}
+              sx={{height: 40, mr: 3, fontSize: 16, fontWeight: 'bold'}}>
+              Today
+            </Button>
+            <FilterListIcon/>
+          </Box>
         </Box>
       </Box>
 
@@ -168,7 +332,11 @@ const Calendar: React.FC = () => {
         </Grid>
 
         {/* Calendar Days */}
-        <Grid container sx={{ minHeight: '600px' }}>
+        <Grid container sx={{ 
+          height: '600px', 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(7, 1fr)'
+        }}>
           {Array.from({ length: 35 }).map((_, index) => {
             const dayOffset = index - monthStart.getDay();
             const day = new Date(monthStart);
@@ -181,10 +349,9 @@ const Calendar: React.FC = () => {
             return (
               <Grid 
                 item 
-                xs 
                 key={index} 
                 sx={{ 
-                  height: '100px',
+                  overflow: 'auto',
                   borderRight: index % 7 === 6 ? 'none' : '1px solid rgba(0, 0, 0, 0.12)',
                   borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
                   p: 1,
@@ -225,8 +392,8 @@ const Calendar: React.FC = () => {
 
       {/* Agents Filter */}
       <Box sx={{ mt: 4 }}>
-        <Typography variant="h6" gutterBottom>
-          Agents
+        <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
+          Loan Agents
         </Typography>
         <Stack direction="row" spacing={1}>
           <Chip
@@ -243,6 +410,37 @@ const Calendar: React.FC = () => {
           />
         </Stack>
       </Box>
+      <Dialog
+        open={openBookingModal}
+        onClose={handleCloseModal}
+        fullWidth
+        maxWidth="sm"
+        scroll="paper"
+        aria-labelledby="booking-dialog-title"
+      >
+        <NewBookingForm onSubmit={handleFormSubmit} onClose={handleCloseModal}/>
+      </Dialog>
+
+      {
+        submittedData && (
+          <Dialog
+          open={confirmationOpen}
+          onClose={() => setConfirmationOpen(false)}
+          fullWidth
+          maxWidth="sm"
+          scroll="paper"
+          aria-labelledby="booking-dialog-confirmation-title">
+            <Confirmation
+            open={confirmationOpen}
+            onClose={() => setConfirmationOpen(false)}
+            serviceLocation={submittedData.serviceLocation}
+            dateTime={submittedData.selectedDate}
+            loanCloser={submittedData.loanCloser}
+            customer={submittedData.borrowerFirstName + ' ' + submittedData.borrowerLastName}
+            />
+          </Dialog>
+        )
+      }
     </Box>
   );
 };
