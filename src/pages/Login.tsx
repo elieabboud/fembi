@@ -25,6 +25,7 @@ const Login: React.FC = () => {
 
   // Redirect if already authenticated
   useEffect(() => {
+    debugger
     if (isAuthenticated) {
       navigate('/dashboard');
     }
@@ -32,10 +33,12 @@ const Login: React.FC = () => {
 
   const handleMicrosoftLogin = async () => {
     try {
+      // This will redirect to Microsoft login page, no popup
       await login();
-      navigate('/dashboard');
+      // Note: The following code won't execute immediately due to the redirect
+      // The redirect handling is now done in AuthContext useEffect
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('Login redirect failed:', error);
     }
   };
 
@@ -68,7 +71,7 @@ const Login: React.FC = () => {
         justifyContent: 'center',
       }}
     >
-      <Grid container  sx={{ height: '100%' }}>
+      <Grid container sx={{ height: '100%' }}>
         {/* Left side - Image */}
         <Grid item xs={12} md={6} sx={{ 
           display: { xs: 'none', md: 'flex' },
@@ -160,8 +163,9 @@ const Login: React.FC = () => {
               onClick={handleMicrosoftLogin}
               sx={{ 
                 mt: 1, 
-                mb: 2 ,
-                padding: '10px 20px',  }}
+                mb: 2,
+                padding: '10px 20px',
+              }}
             >
               Log in using Microsoft
             </Button>

@@ -36,15 +36,42 @@ const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
 
-root.render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <MsalProvider instance={msalInstance}>
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
-          <App />
-        </ThemeProvider>
-      </MsalProvider>
-    </BrowserRouter>
-  </React.StrictMode>
-);
+// Handle the redirect before rendering the app
+msalInstance.handleRedirectPromise()
+  .then(response => {
+    // If we got a successful authentication response, set the active account
+    if (response !== null) {
+      msalInstance.setActiveAccount(response.account);
+    }
+    
+    // Now render the app with authentication state properly initialized
+    root.render(
+      <React.StrictMode>
+        <BrowserRouter>
+          <MsalProvider instance={msalInstance}>
+            <ThemeProvider theme={theme}>
+              <CssBaseline />
+              <App />
+            </ThemeProvider>
+          </MsalProvider>
+        </BrowserRouter>
+      </React.StrictMode>
+    );
+  })
+  .catch(error => {
+    console.error("Error handling redirect:", error);
+    
+    // Even if there was an error, still render the app
+    root.render(
+      <React.StrictMode>
+        <BrowserRouter>
+          <MsalProvider instance={msalInstance}>
+            <ThemeProvider theme={theme}>
+              <CssBaseline />
+              <App />
+            </ThemeProvider>
+          </MsalProvider>
+        </BrowserRouter>
+      </React.StrictMode>
+    );
+  });

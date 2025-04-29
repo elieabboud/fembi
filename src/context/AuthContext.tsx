@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { AccountInfo } from '@azure/msal-browser';
-import msalInstance, { getAccount, login, logout } from '../services/authService';
+import { AccountInfo, EventType } from '@azure/msal-browser';
+import msalInstance, { getAccount, loginRedirect, logout, handleRedirectResponse } from '../services/authService';
 import { User } from '../types/user';
 
 interface AuthContextType {
@@ -25,13 +25,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // Check if user is already logged in
-    const account = getAccount();
-    if (account) {
-      setIsAuthenticated(true);
-      convertAccountToUser(account);
-    }
-    setLoading(false);
+    const initializeAuth = async () => {
+      setLoading(true);
+      try {
+        // Handle the redirect response if there is one
+        const account = await handleRedirectResponse();
+        debugger;
+        if (account) {
+          setIsAuthenticated(true);
+          convertAccountToUser(account);
+        } else {
+          // Check if user is already logged in
+          const currentAccount = getAccount();
+          if (currentAccount) {
+            setIsAuthenticated(true);
+            convertAccountToUser(currentAccount);
+          }
+        }
+      } catch (error) {
+        console.error('Authentication initialization failed:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
   }, []);
 
   const convertAccountToUser = (account: AccountInfo): void => {
@@ -46,14 +64,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const handleLogin = async (): Promise<void> => {
     try {
       setLoading(true);
-      const result = await login();
-      if (result && result.account) {
-        setIsAuthenticated(true);
-        convertAccountToUser(result.account);
-      }
+      // Use redirect method instead of popup
+      await loginRedirect();
+      // Note: we won't reach this point immediately as the page will redirect
     } catch (error) {
       console.error('Login failed:', error);
-    } finally {
       setLoading(false);
     }
   };
@@ -65,6 +80,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(null);
     setLoading(false);
   };
+
+  // In AuthContext.tsx, add this inside the AuthProvider:
+useEffect(() => {
+  // Subscribe to MSAL events
+  const callbackId = msalInstance.addEventCallback((event) => {
+    debugger;
+    if (event.eventType === EventType.ACQUIRE_TOKEN_SUCCESS || 
+        event.eventType === EventType.LOGIN_SUCCESS) {
+      console.log("Auth event:", event.eventType);
+      
+      // Update authenticated state when login succeeds
+      if (event.payload) {
+        setIsAuthenticated(true);
+        const account = msalInstance.getActiveAccount();
+        if (account) {
+          convertAccountToUser(account);
+        }
+      }
+    }
+  });
+  
+  // Clean up subscription
+  return () => {
+    if (callbackId) {
+      msalInstance.removeEventCallback(callbackId);
+    }
+  };
+}, []);
 
   return (
     <AuthContext.Provider
