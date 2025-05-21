@@ -27,25 +27,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState<boolean>(true);
   const [isAdmin, setIsAdmin] = useState(true);
 
-  // Mock user data for auto-login
-  const mockUser: User = {
-    id: 'auto-user-123',
-    fullName: 'Auto Login User',
-    email: 'auto@example.com'
-  };
-
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
       try {
-        // Simulate loading
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Auto-login with mock user
-        setIsAuthenticated(true);
-        setUser(mockUser);
-        
-        console.log('Auto-login successful for:', mockUser.fullName);
+        // Handle the redirect response if there is one
+        const account = await handleRedirectResponse();
+        if (account) {
+          setIsAuthenticated(true);
+          convertAccountToUser(account);
+        } else {
+          // Check if user is already logged in
+          const currentAccount = getAccount();
+          if (currentAccount) {
+            setIsAuthenticated(true);
+            convertAccountToUser(currentAccount);
+          }
+        }
       } catch (error) {
         console.error('Authentication initialization failed:', error);
       } finally {
@@ -68,9 +66,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const handleLogin = async (): Promise<void> => {
     try {
       setLoading(true);
-      // Skip actual login since we're auto-logged in
-      console.log('Already auto-logged in');
-      setLoading(false);
+      // Use redirect method instead of popup
+      await loginRedirect();
+      // Note: we won't reach this point immediately as the page will redirect
     } catch (error) {
       console.error('Login failed:', error);
       setLoading(false);
@@ -79,39 +77,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const handleLogout = (): void => {
     setLoading(true);
-    // Keep logout functionality but don't use MSAL logout
+    logout();
     setIsAuthenticated(false);
     setUser(null);
     setLoading(false);
-    console.log('Logged out from auto-login');
   };
 
-  // Comment out MSAL event subscription for auto-login
-  useEffect(() => {
-    // Subscribe to MSAL events
-    // const callbackId = msalInstance.addEventCallback((event) => {
-    //   if (event.eventType === EventType.ACQUIRE_TOKEN_SUCCESS || 
-    //       event.eventType === EventType.LOGIN_SUCCESS) {
-    //     console.log("Auth event:", event.eventType);
-        
-    //     // Update authenticated state when login succeeds
-    //     if (event.payload) {
-    //       setIsAuthenticated(true);
-    //       const account = msalInstance.getActiveAccount();
-    //       if (account) {
-    //         convertAccountToUser(account);
-    //       }
-    //     }
-    //   }
-    // });
-    
-    // // Clean up subscription
-    // return () => {
-    //   if (callbackId) {
-    //     msalInstance.removeEventCallback(callbackId);
-    //   }
-    // };
-  }, []);
+  // In AuthContext.tsx, add this inside the AuthProvider:
+useEffect(() => {
+  // Subscribe to MSAL events
+  const callbackId = msalInstance.addEventCallback((event) => {
+    if (event.eventType === EventType.ACQUIRE_TOKEN_SUCCESS || 
+        event.eventType === EventType.LOGIN_SUCCESS) {
+      console.log("Auth event:", event.eventType);
+      
+      // Update authenticated state when login succeeds
+      if (event.payload) {
+        setIsAuthenticated(true);
+        const account = msalInstance.getActiveAccount();
+        if (account) {
+          convertAccountToUser(account);
+        }
+      }
+    }
+  });
+  
+  // Clean up subscription
+  return () => {
+    if (callbackId) {
+      msalInstance.removeEventCallback(callbackId);
+    }
+  };
+}, []);
 
   return (
     <AuthContext.Provider
