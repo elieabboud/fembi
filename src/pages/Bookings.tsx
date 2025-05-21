@@ -8,7 +8,21 @@ import {
   CircularProgress,
   useTheme,
   Dialog,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  TextField,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
+import {
+  Email as EmailIcon,
+  AttachFile as AttachFileIcon,
+  ContentCopy as CopyIcon,
+  ExpandMore as ExpandMoreIcon,
+} from '@mui/icons-material';
 import AppTable from '../components/common/AppTable';
 import SearchBar from '../components/common/SearchBar';
 import { Booking } from '../types/booking';
@@ -24,6 +38,44 @@ import CreateBookingForm from '../components/forms/NewBookingForm';
 import { CreateAppointmentRequest } from '../types/CreateAppointmentRequest';
 import { LoanDetails } from '../types/loanDetails';
 import Confirmation from '../components/forms/Confirmation';
+import { EmailService } from '../services/emailService'; 
+
+
+// Custom sorting function for bookings
+const sortBookings = (bookings: calendarBooking[]): calendarBooking[] => {
+  return [...bookings].sort((a, b) => {
+    // Define status priority: inProgress = 1, upcoming = 2, completed = 3
+    const getStatusPriority = (status: BookingStatus | undefined) => {
+      switch (status) {
+        case 'inProgress': return 1;
+        case 'upcoming': return 2;
+        case 'completed': return 3;
+        default: return 4; // For any other status
+      }
+    };
+
+    const statusPriorityA = getStatusPriority(a.status);
+    const statusPriorityB = getStatusPriority(b.status);
+
+    // First sort by status priority
+    if (statusPriorityA !== statusPriorityB) {
+      return statusPriorityA - statusPriorityB;
+    }
+
+    // If same status, sort by time (earliest first)
+    if (a.start?.dateTime && b.start?.dateTime) {
+      const timeA = new Date(a.start.dateTime).getTime();
+      const timeB = new Date(b.start.dateTime).getTime();
+      return timeA - timeB;
+    }
+
+    // If one doesn't have a start time, put it at the end
+    if (!a.start?.dateTime) return 1;
+    if (!b.start?.dateTime) return -1;
+
+    return 0;
+  });
+};
 
 const Bookings: React.FC = () => {
   const navigate = useNavigate();
@@ -35,7 +87,7 @@ const Bookings: React.FC = () => {
   const [services, setServices] = useState<BookingService[]>([]);
   const [followers, setFollowers] = useState<string[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<calendarBooking[]>([]);
-  const [selectedBookings, setSelectedBookings] = useState<calendarBooking[]>([]); // New state for selected rows
+  const [selectedBookings, setSelectedBookings] = useState<calendarBooking[]>([]);
   const [newBooking, setNewBooking] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [submittedData, setSubmittedData] = useState<CreateAppointmentRequest | null>(null);
@@ -65,6 +117,11 @@ const Bookings: React.FC = () => {
   const [officersFilter, setOfficersFilter] = useState<string[]>([]);
   const [locationFilter, setLocationFilter] = useState<string>('');
   const [dataFetched, setDataFetched] = useState(false);
+
+  // Email functionality state
+  const [emailMenuAnchor, setEmailMenuAnchor] = useState<null | HTMLElement>(null);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState('');
 
   const columns = createBookingColumns();
   
@@ -100,17 +157,19 @@ const Bookings: React.FC = () => {
       const response = await bookingService.getCalendarData(formattedStart, formattedEnd);
       
       const bookingsWithStatus = addStatusToBookings(response);
-
       const filteredBookings = bookingsWithStatus.filter(booking => booking.bookingId !== null);
+      
+      // Apply custom sorting
+      const sortedBookings = sortBookings(filteredBookings);
 
-      setBookings(filteredBookings);
-      setFilteredBookings(filteredBookings);
+      setBookings(sortedBookings);
+      setFilteredBookings(sortedBookings);
 
-      const uniqueLocations = Array.from(new Set(filteredBookings.map(booking => booking.serviceLocation.displayName)))
+      const uniqueLocations = Array.from(new Set(sortedBookings.map(booking => booking.serviceLocation.displayName)))
         .map(location => ({ id: location, label: location }));
       setLocationOptions(uniqueLocations);
       
-      const loanOfficers = Array.from(new Set(filteredBookings.map(booking => booking.loanData.loanOfficer)))
+      const loanOfficers = Array.from(new Set(sortedBookings.map(booking => booking.loanData.loanOfficer)))
         .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
       setLoanOfficersOptions(loanOfficers);
     } catch (error) {
@@ -123,11 +182,8 @@ const Bookings: React.FC = () => {
       if (dataFetched) return;
       try {
         setLoading(true);
-
         await fetchBookingsData();
-
         setDataFetched(true);
-
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -147,12 +203,12 @@ const Bookings: React.FC = () => {
       const lowercaseQuery = searchQuery.toLowerCase();
       filtered = filtered.filter((booking) => {
         return (
-          booking.loanData?.borrowerFirstName.toLowerCase().includes(lowercaseQuery) ||
-          booking.loanData?.borrowerLastName.toLowerCase().includes(lowercaseQuery) ||
-          booking.loanData?.borrowerAddress.toLowerCase().includes(lowercaseQuery) ||
-          booking.loanData?.borrowerCity.toLowerCase().includes(lowercaseQuery) ||
-          booking.loanData?.borrowerState.toLowerCase().includes(lowercaseQuery) ||
-          booking.loanData?.loanOfficer.toLowerCase().includes(lowercaseQuery)
+          booking.loanData?.borrowerFirstName?.toLowerCase().includes(lowercaseQuery) ||
+          booking.loanData?.borrowerLastName?.toLowerCase().includes(lowercaseQuery) ||
+          booking.loanData?.borrowerAddress?.toLowerCase().includes(lowercaseQuery) ||
+          booking.loanData?.borrowerCity?.toLowerCase().includes(lowercaseQuery) ||
+          booking.loanData?.borrowerState?.toLowerCase().includes(lowercaseQuery) ||
+          booking.loanData?.loanOfficer?.toLowerCase().includes(lowercaseQuery)
         );
       });
     }
@@ -178,7 +234,9 @@ const Bookings: React.FC = () => {
       filtered = filtered.filter(booking => booking.serviceLocation.displayName === locationFilter);
     }
 
-    setFilteredBookings(filtered);
+    // Apply sorting to filtered results as well
+    const sortedFiltered = sortBookings(filtered);
+    setFilteredBookings(sortedFiltered);
   }, [searchQuery, bookings, statusFilter, officersFilter, locationFilter]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -197,10 +255,56 @@ const Bookings: React.FC = () => {
     setLocationFilter(value as string);
   };
 
-  const handleEmailTo = () => {
+  // Email functionality handlers
+  const handleEmailMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setEmailMenuAnchor(event.currentTarget);
   };
 
-  // Updated export handler
+  const handleEmailMenuClose = () => {
+    setEmailMenuAnchor(null);
+  };
+
+  const handleEmailOption = (option: 'eml' | 'mailto' | 'copy') => {
+    const dataToEmail = selectedBookings.length > 0 ? selectedBookings : filteredBookings;
+    
+    switch (option) {
+      case 'eml':
+        EmailService.createEMLFile(dataToEmail, columns, recipientEmail);
+        break;
+      case 'mailto':
+        const success = EmailService.openDefaultEmailClient(dataToEmail, columns, recipientEmail);
+        if (!success) {
+          // Fallback to EML if mailto fails
+          EmailService.createEMLFile(dataToEmail, columns, recipientEmail);
+        }
+        break;
+      case 'copy':
+        EmailService.copyToClipboard(dataToEmail, columns).then(success => {
+          if (success) {
+            alert('Bookings data copied to clipboard! You can now paste it into any email client.');
+          } else {
+            alert('Failed to copy to clipboard. Please try another option.');
+          }
+        });
+        break;
+    }
+    
+    handleEmailMenuClose();
+  };
+
+  const handleEmailWithRecipient = () => {
+    setEmailDialogOpen(true);
+    handleEmailMenuClose();
+  };
+
+  const handleSendEmailWithRecipient = () => {
+    const dataToEmail = selectedBookings.length > 0 ? selectedBookings : filteredBookings;
+    EmailService.createEMLFile(dataToEmail, columns, recipientEmail);
+    setEmailDialogOpen(false);
+    setRecipientEmail('');
+  };
+
+  // Export handler
   const handleExport = () => {
     const dataToExport = selectedBookings.length > 0 ? selectedBookings : filteredBookings;
     const filename = selectedBookings.length > 0 
@@ -237,30 +341,41 @@ const Bookings: React.FC = () => {
 
   return (
     <Box sx={{ px: 4, py: 2 }}>
-        <Box 
+      <Box 
         sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        mb: 3,}}>
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: 3,
+        }}
+      >
         <Typography variant="h4" component="h1" 
-        sx={{ 
-          fontWeight: 'bold', 
-          fontSize: 36,
-      }}>
+          sx={{ 
+            fontWeight: 'bold', 
+            fontSize: 36,
+          }}
+        >
           Bookings
         </Typography>
         <Button
           variant="contained"
-          onClick = {()=> setNewBooking(!newBooking)}
+          onClick={() => setNewBooking(!newBooking)}
         >
           New Booking
         </Button>
       </Box>
 
       <Box 
-      sx={{ mb: 3, display: 'flex', flexDirection:{sm:'column', md:'row'}, gap: {sm: '10px', md: '5px'}, 
-      justifyContent: 'space-evenly', alignItems: 'center', flexWrap: 'wrap' }}>
+        sx={{ 
+          mb: 3, 
+          display: 'flex', 
+          flexDirection: {sm:'column', md:'row'}, 
+          gap: {sm: '10px', md: '5px'}, 
+          justifyContent: 'space-evenly', 
+          alignItems: 'center', 
+          flexWrap: 'wrap' 
+        }}
+      >
         <Box sx={{ flexGrow: 1, width: '100%', maxWidth: {md: '260px'} }}>
           <SearchBar
             placeholder="Search schedules..."
@@ -270,22 +385,22 @@ const Bookings: React.FC = () => {
         </Box>
         
         <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', gap: '10px' }}>
-        <FilterDropdown
+          <FilterDropdown
             id="status-filter"
             label="Status"
             options={statusOptions}
-            // multiSelect={true}
             value={statusFilter}
             onChange={handleStatusFilterChange}
           />
           
           <FilterDropdown
-            id="location-filter"
+            id="officers-filter"
             label="Loan Officers"
             options={loanOfficersOptions}
             value={officersFilter}
             onChange={handleOfficersFilterChange}
           />
+          
           <FilterDropdown
             id="location-filter"
             label="Location"
@@ -294,6 +409,7 @@ const Bookings: React.FC = () => {
             onChange={handleLocationFilterChange}
           />
         </Box>
+        
         <Box sx={{display: 'flex', justifyContent: {sm: 'start',md:'center'}, gap: 2, width: {sm:'100%', md: 'auto'}}}>
           <Button
             variant="contained"
@@ -307,13 +423,94 @@ const Bookings: React.FC = () => {
   
           <Button
             variant="contained"
-            onClick={handleEmailTo}
+            onClick={handleEmailMenuOpen}
+            endIcon={<ExpandMoreIcon />}
           >
             Email to
           </Button>
         </Box>
-
       </Box>
+
+      {/* Email Menu */}
+      <Menu
+        anchorEl={emailMenuAnchor}
+        open={Boolean(emailMenuAnchor)}
+        onClose={handleEmailMenuClose}
+        PaperProps={{
+          style: {
+            maxHeight: 200,
+            width: '250px',
+          },
+        }}
+      >
+        <MenuItem onClick={() => handleEmailOption('eml')}>
+          <ListItemIcon>
+            <AttachFileIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText 
+            primary="Create EML File" 
+            secondary="Opens in email client"
+          />
+        </MenuItem>
+        
+        <MenuItem onClick={() => handleEmailOption('mailto')}>
+          <ListItemIcon>
+            <EmailIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText 
+            primary="Quick Email" 
+            secondary="Default email app"
+          />
+        </MenuItem>
+        
+        <MenuItem onClick={() => handleEmailOption('copy')}>
+          <ListItemIcon>
+            <CopyIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText 
+            primary="Copy to Clipboard" 
+            secondary="Paste in any email"
+          />
+        </MenuItem>
+        
+        <MenuItem onClick={handleEmailWithRecipient}>
+          <ListItemIcon>
+            <EmailIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText 
+            primary="Send to Recipient" 
+            secondary="Specify email address"
+          />
+        </MenuItem>
+      </Menu>
+
+      {/* Email Dialog */}
+      <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Send Bookings Report</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Recipient Email"
+            type="email"
+            fullWidth
+            variant="outlined"
+            value={recipientEmail}
+            onChange={(e) => setRecipientEmail(e.target.value)}
+            placeholder="Enter recipient's email address"
+          />
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            This will create an EML file with the bookings data that you can send via email.
+            {selectedBookings.length > 0 && ` Including ${selectedBookings.length} selected bookings.`}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEmailDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSendEmailWithRecipient} variant="contained">
+            Create Email File
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', height: 'auto' }}>
@@ -321,7 +518,7 @@ const Bookings: React.FC = () => {
         </Box>
       )}
 
-    {/* NEW BOOKING DIALOG */}
+      {/* NEW BOOKING DIALOG */}
       <Dialog
         open={newBooking}
         onClose={handleNewBookingClose}
@@ -331,13 +528,13 @@ const Bookings: React.FC = () => {
         aria-labelledby="booking-dialog-title"
       >
         <CreateBookingForm
-        onSuccess={handleBookingSuccess}
-        onClose= {handleNewBookingClose}/>
+          onSuccess={handleBookingSuccess}
+          onClose={handleNewBookingClose}
+        />
       </Dialog>
 
       {loadingPostResponse && (
         <Dialog
-          id='mikaella'
           open={loadingPostResponse}
           fullWidth
           maxWidth="sm"
@@ -394,7 +591,7 @@ const Bookings: React.FC = () => {
         availableServices={services}
         followers={followers}
         rows={filteredBookings}
-        onSelectionChange={handleSelectionChange} // Pass the selection handler
+        onSelectionChange={handleSelectionChange}
       />
     </Box>
   );
