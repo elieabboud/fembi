@@ -8,9 +8,15 @@ interface MonthViewProps {
   currentDate: Date;
   events: calendarBooking[];
   onDateChange: (date: Date) => void;
+  onEventClick?: (booking: calendarBooking) => void; // Add this prop
 }
 
-const MonthView: React.FC<MonthViewProps> = ({ currentDate, events, onDateChange }) => {
+const MonthView: React.FC<MonthViewProps> = ({ 
+  currentDate, 
+  events, 
+  onDateChange,
+  onEventClick 
+}) => {
   const monthStart = startOfMonth(currentDate);
 
   const getEventsForDay = (day: Date) => {
@@ -77,7 +83,11 @@ const MonthView: React.FC<MonthViewProps> = ({ currentDate, events, onDateChange
 
                   return (
                     <Box
-                      key = {eventIndex}
+                      key={eventIndex}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onEventClick) onEventClick(event);
+                      }}
                       sx={{
                         backgroundColor: event?.color,
                         color: 'white',
@@ -91,6 +101,11 @@ const MonthView: React.FC<MonthViewProps> = ({ currentDate, events, onDateChange
                         position: 'absolute',
                         left: `${leftOffset}%`,
                         width: `${eventWidth}%`,
+                        cursor: 'pointer', // Add this to show it's clickable
+                        '&:hover': {
+                          opacity: 0.8,
+                          boxShadow: '0px 2px 4px rgba(0,0,0,0.2)'
+                        },
                       }}
                     >
                     {event?.start?.dateTime && (

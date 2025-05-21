@@ -8,9 +8,15 @@ interface DayViewProps {
   currentDate: Date;
   events: calendarBooking[];
   onDateChange: (date: Date) => void;
+  onEventClick?: (booking: calendarBooking) => void; // Add this prop
 }
 
-const DayView: React.FC<DayViewProps> = ({ currentDate, events, onDateChange }) => {
+const DayView: React.FC<DayViewProps> = ({ 
+  currentDate, 
+  events, 
+  onDateChange,
+  onEventClick 
+}) => {
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   // Get events for the current day only
@@ -137,6 +143,7 @@ const DayView: React.FC<DayViewProps> = ({ currentDate, events, onDateChange }) 
             return (
               <Paper
                 key={`event-${index}`}
+                onClick={() => onEventClick && onEventClick(event)}
                 sx={{
                   position: 'absolute',
                   top: `${top}px`,
@@ -149,9 +156,9 @@ const DayView: React.FC<DayViewProps> = ({ currentDate, events, onDateChange }) 
                   overflow: 'hidden',
                   borderRadius: 1,
                   zIndex: 10,
+                  cursor: 'pointer', // Add this to show it's clickable
                   '&:hover': {
                     opacity: 0.9,
-                    cursor: 'pointer',
                     boxShadow: 2
                   }
                 }}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Typography, Chip, TextField } from '@mui/material';
+import { Box, Typography, Chip, TextField, CircularProgress } from '@mui/material';
 
 type FollowersProps = {
   editMode? : boolean;
@@ -7,6 +7,7 @@ type FollowersProps = {
   addedFollowers: string[];   // User-added followers that can be removed
   onAddFollower: (follower: string) => void;
   onRemoveFollower: (follower: string) => void;
+  loading?: boolean;
 }
 
 const Followers: React.FC<FollowersProps> = ({
@@ -14,7 +15,8 @@ const Followers: React.FC<FollowersProps> = ({
   addedFollowers,
   onAddFollower,
   onRemoveFollower,
-  editMode = false
+  editMode = false,
+  loading = false
 }) => {
   const [inputValue, setInputValue] = useState('');
 
@@ -38,9 +40,15 @@ const Followers: React.FC<FollowersProps> = ({
         Followers
       </Typography>
 
+      {loading && (
+        <Box sx={{ display: 'flex', justifyContent: 'start', height: 'auto' }}>
+          <CircularProgress size={20} thickness={4} sx={{ my: 1 }} />
+        </Box>
+      )}
+
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
         {/* Display read-only followers (from API) */}
-        {fetchedFollowers.map((email) => (
+        {!loading && fetchedFollowers.map((email) => (
           <Chip
             size="small"
             key={`fetched-${email}`}
@@ -72,13 +80,14 @@ const Followers: React.FC<FollowersProps> = ({
       </Box>
 
       {!editMode && (<TextField
-        variant="filled"
+        variant="outlined"
         label="Add follower"
         placeholder="Type and press Enter"
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleAddFollower}
         fullWidth
+        sx={{mt: '10px'}}
       />)}
     </Box>
   );

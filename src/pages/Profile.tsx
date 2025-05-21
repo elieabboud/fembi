@@ -68,30 +68,30 @@ const Profile: React.FC = () => {
     }
   };
 
-  const fetchFollowers = useCallback(async () => {
+  const fetchFollowers = async () => {
     try {
       const response = await bookingService.getFollowers();
       setFollowers(response);
     } catch (error) {
       console.error('Failed to fetch followers', error);
     }
-  }, []);
+  };
 
-    const fetchGlobalFollowers = useCallback(async () => {
+  const fetchGlobalFollowers = async () => {
     try {
       const response = await bookingService.getGlobalFollowers();
       setGlobalFollowers(response);
     } catch (error) {
       console.error('Failed to fetch global followers', error);
     }
-  }, []);
+  };
 
   useEffect(() => {
     fetchFollowers();
     if (isAdmin) {
       fetchGlobalFollowers();
     }
-  }, [fetchFollowers, fetchGlobalFollowers, isAdmin]);
+  }, []);
 
   return (
     <Box>
@@ -150,7 +150,7 @@ const Profile: React.FC = () => {
                       fullWidth
                       margin="normal"
                       label="Email"
-                      variant='filled'
+                      variant='outlined'
                       name="email"
                       type="email"
                       value={formData.email}
@@ -167,7 +167,7 @@ const Profile: React.FC = () => {
                       fullWidth
                       margin="normal"
                       label="Full Name"
-                      variant='filled'
+                      variant='outlined'
                       name="fullName"
                       value={formData.fullName}
                       onChange={handleChange}
@@ -185,15 +185,6 @@ const Profile: React.FC = () => {
           </Box>
 
           <Divider/>
-
-          {/* <Box>
-            <FollowersInput
-            onChange={setFollowers}
-            followers= {followers}
-            getFollowers={bookingService.getFollowers}
-            setFollowers={bookingService.setFollowers}
-              />
-          </Box> */}
           
           {followers && (<Box>
             <FollowersInput

@@ -9,6 +9,7 @@ import {
   useTheme,
   useMediaQuery,
   Box,
+  CircularProgress,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { StaticDatePicker } from '@mui/x-date-pickers';
@@ -41,14 +42,18 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({ onClose, onSuccess, ini
   const [services, setServices] = useState<BookingService[]>([]);
   const [fetchedFollowers, setFetchedFollowers] = useState<string[]>([]);
   const [addedFollowers, setAddedFollowers] = useState<string[]>([]);
+  const [loadingFollowers, setLoadingFollowers] = useState<boolean>(false);
   const [combinedFollowers, setCombinedFollowers] = useState<string[]>([]);
   const [showLoanDetails, setShowLoanDetails] = useState<boolean>(false);
   const [loanDetails, setLoanDetails] = useState<LoanDetails>();
+  const [loadingLoanDetails, setLoadingLoanDetails] = useState<boolean>(false);
   const [selectedService, setSelectedService] = useState<BookingService>();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+  const [loadingTimeSlots, setLoadingTimeSlots] = useState<boolean>(false);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string>("");
   const [bookingData, setBookingData] = useState<CreateAppointmentRequest>(
   {
     ServiceId: "",
@@ -56,6 +61,9 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({ onClose, onSuccess, ini
     ServicePrice: 0,
     EncompassDetails: {
       EncompassLoanId: "",
+      LoanCloser: "",
+      LoanOfficer: "",
+      dpa: ""
     },
     BorrowerInformation: {
       FirstName: "",
@@ -116,6 +124,26 @@ const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   
   if (isSubmitting) return;
+
+  let newError:string;
+  let hasError = false;
+  
+  if (!bookingData.EncompassDetails.EncompassLoanId
+    || !editMode && !showLoanDetails
+    || !bookingData.ServiceId
+    || !selectedDate
+    || !selectedSlot
+  ) {
+    newError = "There are some missing fields.";
+    hasError = true;
+  }
+  
+  if (hasError) {
+    setError(newError);
+    return;
+  }
+  
+  setError("");
   
   setIsSubmitting(true);
   setLoading?.(true);
@@ -136,6 +164,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       response = await bookingService.updateBooking(updateData);
       console.log('Update API Response:', response);
     } else {
+      debugger;
       response = await bookingService.postBooking(bookingData);
       console.log('Post API Response:', response);
     }
@@ -151,13 +180,21 @@ const handleSubmit = async (e: React.FormEvent) => {
 };
 
   const fetchLoanDetails = async () => {
+    if(isSubmitting) return;
+
     try{
-      const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
+      const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
 
       setLoanDetails(loanDetails);
-
+      
       setBookingData((prev) => ({
         ...prev,
+        EncompassDetails: {
+          EncompassLoanId: loanDetails?.loanId,
+          LoanCloser: loanDetails?.loanCloser,
+          LoanOfficer: loanDetails?.loanOfficer,
+          dpa: loanDetails?.dpa
+        },
         BorrowerInformation: {
           FirstName: loanDetails.borrowerFirstName,
           LastName: loanDetails.borrowerLastName,
@@ -175,6 +212,8 @@ const handleSubmit = async (e: React.FormEvent) => {
       setShowLoanDetails(true);
     }catch (error) {
       console.error('Error fetching Loan Details:', error);
+    }finally{
+      setLoadingLoanDetails(false);
     }
   };
 
@@ -241,6 +280,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     // }
 
     try {
+      setLoadingTimeSlots(true);
       console.log(`Fetching time slots for serviceId: ${"serviceId"} and date: ${selectedDate.toISOString()}`);
       const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
         "8f570373-62ed-4bd3-8158-ac49d13e82ec",
@@ -268,11 +308,14 @@ const handleSubmit = async (e: React.FormEvent) => {
       }
     } catch (error) {
       console.error('Error fetching time slots for selected service:', error);
+    } finally {
+      setLoadingTimeSlots(false);
     }
   }, [selectedService, selectedDate]);
 
   const fetchAllFollowers = useCallback(async () => {
     try {
+      setLoadingFollowers(true);
       // Always fetch regular followers
       const regularFollowersPromise = bookingService.getFollowers();
       
@@ -300,6 +343,8 @@ const handleSubmit = async (e: React.FormEvent) => {
     } catch (error) {
       console.error('Failed to fetch followers', error);
       setFetchedFollowers([]);
+    } finally {
+      setLoadingFollowers(false);
     }
   }, [isAdmin]);
 
@@ -313,37 +358,53 @@ const handleSubmit = async (e: React.FormEvent) => {
 
   // Add this effect after your state declarations
   useEffect(() => {
+  const initializeEditMode = async () => {
     if (editMode && initialData) {
       console.log('Edit mode activated with initial data:', initialData);
       
-      // If initialData is of type calendarBooking, map it to CreateAppointmentRequest
       const formattedData = mapCalendarBookingToFormData(initialData as any);
-      
-      // Populate the booking data state
-      setBookingData(formattedData);
 
-      console.log("after setting:" , bookingData);
-      
-      // Set selected date if available
+      const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
+      setLoanDetails(loanDetails);
+      setShowLoanDetails(true);
+      //setBookingData(formattedData);
+      setBookingData((prev) => ({
+        ...formattedData,
+        BorrowerInformation: {
+          FirstName: loanDetails.borrowerFirstName,
+          LastName: loanDetails.borrowerLastName,
+          Email: loanDetails.borrowerEmail,
+          PhoneNumber: loanDetails.borrowerPhone,
+          Address: {
+            Street: loanDetails.borrowerAddress,
+            City: loanDetails.borrowerCity,
+            State: loanDetails.borrowerState,
+            ZipCode: loanDetails.borrowerZipCode,
+          },
+        },
+      }));
+
+      console.log("after setting:", formattedData); // Use formattedData here
+
       if (formattedData.DateTimeInfo?.SelectedDate) {
         setSelectedDate(new Date(formattedData.DateTimeInfo.SelectedDate));
       }
-      
-      // Show loan details in edit mode
+
       setShowLoanDetails(true);
-      
-      // Set loan details from calendar booking if available
-      if (initialData.loanData) {
-        setLoanDetails(initialData.loanData);
-      }
-      
-      // If there are followers, set them (if your calendarBooking has this info)
+
+      // if (initialData.loanData) {
+      //   setLoanDetails(initialData.loanData);
+      // }
+
       if (formattedData.Followers) {
         const followerArray = formattedData.Followers.split(',');
         setFetchedFollowers(followerArray);
       }
     }
-  }, [editMode, initialData]);
+  };
+
+  initializeEditMode();
+}, [editMode, initialData]);
 
   useEffect(() => {
     fetchAvailableServicesData();
@@ -398,17 +459,26 @@ const handleSubmit = async (e: React.FormEvent) => {
 
         <Grid item xs={12}>
           <Typography variant="h6">Add Client Details</Typography>
-          <Grid sx={{display: 'flex', gap: '4px'}}>
+          <Grid sx={{display: 'flex', gap: '4px', mt: '10px'}}>
             <TextField
               fullWidth
               label="Encompass Loan ID"
-              variant='filled'
+              variant='outlined'
+              required
               value={bookingData.EncompassDetails.EncompassLoanId || ''}
               onChange={handleLoanIdChange}
+              InputProps={{
+                readOnly: editMode,
+              }}
             />
-            {!editMode && (<Button onClick={() => fetchLoanDetails()}>Enter</Button>)}
+            {!editMode && (<Button disabled={!bookingData.EncompassDetails.EncompassLoanId} variant="contained" onClick={() => fetchLoanDetails()}>Enter</Button>)}
           </Grid>
         </Grid>
+        {
+          loadingLoanDetails && (<Box sx={{ display: 'flex', width: '100%', justifyContent: 'center', height: 'auto', my: 2 }}>
+            <CircularProgress size={30} thickness={4} sx={{ my: 1 }} />
+          </Box>)
+        }
         {showLoanDetails && (
         <Box sx={{ width: '100%', padding: '16px' }}>
           <Grid container spacing={2}>
@@ -419,8 +489,8 @@ const handleSubmit = async (e: React.FormEvent) => {
               <TextField
                 fullWidth
                 label="First Name"
-                variant='filled'
-                value={bookingData.BorrowerInformation.FirstName || ''}
+                variant='outlined'
+                value={bookingData.BorrowerInformation.FirstName}
                 InputProps={{
                   readOnly: true,
                 }}
@@ -430,7 +500,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               <TextField
                 fullWidth
                 label="Last Name"
-                variant='filled'
+                variant='outlined'
                 value={bookingData.BorrowerInformation.LastName || ''}
                 InputProps={{
                   readOnly: true,
@@ -441,7 +511,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               <TextField
                 fullWidth
                 label="Email"
-                variant='filled'
+                variant='outlined'
                 value={bookingData.BorrowerInformation.Email || ''}
                 InputProps={{
                   readOnly: true,
@@ -452,7 +522,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               <TextField
                 fullWidth
                 label="Phone Number"
-                variant='filled'
+                variant='outlined'
                 value={bookingData.BorrowerInformation.PhoneNumber || ''}
                 InputProps={{
                   readOnly: true,
@@ -463,7 +533,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               <TextField
                 fullWidth
                 label="Address"
-                variant='filled'
+                variant='outlined'
                 value={bookingData.BorrowerInformation.Address.Street || ''}
                 InputProps={{
                   readOnly: true,
@@ -474,7 +544,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               <TextField
                 fullWidth
                 label="City"
-                variant='filled'
+                variant='outlined'
                 value={bookingData.BorrowerInformation.Address.City || ''}
                 InputProps={{
                   readOnly: true,
@@ -485,7 +555,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               <TextField
               fullWidth
               label="State"
-              variant='filled'
+              variant='outlined'
               value={bookingData.BorrowerInformation.Address.State || ''}
               InputProps={{
                   readOnly: true,
@@ -495,7 +565,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               <TextField
                 fullWidth
                 label="Zip Code"
-                variant='filled'
+                variant='outlined'
                 value={bookingData.BorrowerInformation.Address.ZipCode || ''}
                 InputProps={{
                   readOnly: true,
@@ -509,7 +579,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               <TextField
                 fullWidth
                 label="Loan Number"
-                variant='filled'
+                variant='outlined'
                 value={loanDetails?.loanId || ''}
                 InputProps={{
                   readOnly: true,
@@ -524,13 +594,13 @@ const handleSubmit = async (e: React.FormEvent) => {
               InputProps={{
                 readOnly: true,
               }}
-              variant="filled"/>
+              variant="outlined"/>
             </Grid>
             <Grid item xs={6}>
               <TextField
                 fullWidth
                 label="Loan Amount"
-                variant='filled'
+                variant='outlined'
                 InputProps={{
                   readOnly: true,
                 }}
@@ -539,12 +609,12 @@ const handleSubmit = async (e: React.FormEvent) => {
             <Grid item xs={6}>
             <TextField
               fullWidth
-              value={loanDetails?.loanOfficer || ''}
+              value={loanDetails?.loanCloser || ''}
               label="Loan Closer"
               InputProps={{
                 readOnly: true,
               }}
-              variant="filled"/>
+              variant="outlined"/>
             </Grid>
             {/* to do: check dpa program */}
             <Grid item xs={12}>
@@ -554,8 +624,8 @@ const handleSubmit = async (e: React.FormEvent) => {
                 InputProps={{
                   readOnly: true,
                 }}
-                variant='filled'
-                value={loanDetails?.loanType || ''}
+                variant='outlined'
+                value={loanDetails?.dpa || ''}
               />
             </Grid>
             <Grid item xs={12}>
@@ -567,7 +637,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                 InputProps={{
                   readOnly: true,
                 }}
-                variant='filled'
+                variant='outlined'
                 value={loanDetails?.notes || ''}
               />
             </Grid>
@@ -580,13 +650,15 @@ const handleSubmit = async (e: React.FormEvent) => {
           <TextField
             fullWidth
             value={bookingData.ServiceName || ''}
+            required
             onChange={handleServiceChange}
             select={!editMode}
             label="Service Name"
-            variant="filled"    
+            variant="outlined"    
             InputProps={{
               readOnly: editMode,
             }}
+            sx={{mt: '10px'}}
           >
           {(Array.isArray(services) ? services : []).map((service) => (
             <MenuItem key={service.id} value={service.displayName}>
@@ -598,6 +670,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 
         <Grid item xs={12}>
           <StaticDatePicker
+            disabled= {!selectedService}
             value={selectedDate}
             onChange={(date: Date | null) => setSelectedDate(date)}
             orientation={isMobile ? 'portrait' : 'landscape'}
@@ -608,11 +681,12 @@ const handleSubmit = async (e: React.FormEvent) => {
         </Grid>
 
         <Grid container sx={{display: 'flex', flexDirection: 'column', width: '100%'}}>
-          {(timeSlots.length > 0 || selectedSlot) && (
+          {(timeSlots.length > 0 || selectedSlot || (editMode && selectedDate)) && (
             <TimeSelector
             timeSlots={timeSlots}
             selectedSlot={selectedSlot}
             onSelect={setSelectedSlot}
+            loading= {loadingTimeSlots}
           />)}
           
           <Followers
@@ -620,9 +694,16 @@ const handleSubmit = async (e: React.FormEvent) => {
             fetchedFollowers={fetchedFollowers}
             addedFollowers={addedFollowers}
             onAddFollower={handleAddFollower}
+            loading= {loadingFollowers}
             onRemoveFollower={(followerToRemove) => {
             setAddedFollowers(prev => prev.filter(f => f !== followerToRemove));
         }}/>
+
+        {error.length> 0 && (
+          <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>
+            {error}
+          </Typography>
+        )}
 
           <Grid sx={{display: 'flex', gap: '1rem', mt: '16px'}}>
             <Grid item xs={6}>

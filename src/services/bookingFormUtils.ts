@@ -3,11 +3,6 @@ import { CreateAppointmentRequest } from "../types/CreateAppointmentRequest";
 
 // Add this function to your component
 export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): CreateAppointmentRequest => {
-  // Extract customer info from the first customer if available
-  const primaryCustomer = calendarBooking.customers && calendarBooking.customers.length > 0 
-    ? calendarBooking.customers[0] 
-    : null;
-
   // Extract date and time from start DateTimeInfo
   let selectedDate = "";
   let selectedTime = "";
@@ -26,19 +21,22 @@ export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): 
     // Encompass loan info
     EncompassDetails: {
       EncompassLoanId: calendarBooking.encompassLoanId || "",
+      LoanCloser: calendarBooking.LoanCloser ||  "",
+      LoanOfficer: calendarBooking.LoanOfficer ||  "",
+      dpa: calendarBooking.dpa ||  ""
     },
     
     // Borrower information from customer data
     BorrowerInformation: {
-      FirstName: primaryCustomer?.name.split(' ')[0] || "",
-      LastName: primaryCustomer?.name.split(' ').slice(1).join(' ') || "",
-      Email: primaryCustomer?.emailAddress || calendarBooking.customerEmailAddress || "",
-      PhoneNumber: primaryCustomer?.phone || calendarBooking.customerPhone || "",
+      FirstName: calendarBooking.customerName.split(' ')[0] || "",
+      LastName: calendarBooking.customerName.split(' ').slice(1).join(' ') || "",
+      Email: calendarBooking.customerEmailAddress || "",
+      PhoneNumber: calendarBooking.customerPhone || "",
       Address: {
-        Street: primaryCustomer?.location?.address?.street || "",
-        City: primaryCustomer?.location?.address?.city || "",
-        State: primaryCustomer?.location?.address?.state || "",
-        ZipCode: primaryCustomer?.location?.address?.postalCode || "",
+        Street: calendarBooking.serviceLocation?.address?.street || "",
+        City: calendarBooking.serviceLocation?.address?.city || "",
+        State: calendarBooking.serviceLocation?.address?.state || "",
+        ZipCode: calendarBooking.serviceLocation?.address?.postalCode || "",
       },
     },
     

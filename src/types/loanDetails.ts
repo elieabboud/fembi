@@ -13,5 +13,7 @@ export interface LoanDetails {
     loanAmount: number;
     loanOfficer: string;
     notes: string;
+    loanCloser: string;
+    dpa: string;
   }
   

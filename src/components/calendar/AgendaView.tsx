@@ -7,9 +7,15 @@ interface AgendaViewProps {
   currentDate: Date;
   events: calendarBooking[];
   onDateChange: (date: Date) => void;
+  onEventClick?: (booking: calendarBooking) => void; // Add this prop
 }
 
-const AgendaView: React.FC<AgendaViewProps> = ({ currentDate, events, onDateChange }) => {
+const AgendaView: React.FC<AgendaViewProps> = ({ 
+  currentDate, 
+  events, 
+  onDateChange,
+  onEventClick 
+}) => {
   const groupedEvents = groupEventsByDate(events);
   const sortedDates = Object.keys(groupedEvents).sort();
 
@@ -34,17 +40,20 @@ const AgendaView: React.FC<AgendaViewProps> = ({ currentDate, events, onDateChan
             <List sx={{ mt: 1 }}>
               {groupedEvents[dateKey].map((event) => (
                 <Paper
+                  key={event.bookingId || Math.random().toString(36).substr(2, 9)}
                   elevation={1}
+                  onClick={() => onEventClick && onEventClick(event)}
                   sx={{
                     mb: 1,
                     boxShadow: 0,
+                    cursor: 'pointer', // Add this to show it's clickable
                     '&:hover': {
-                      cursor: 'pointer',
+                      bgcolor: 'rgba(0, 0, 0, 0.04)',
                     },
                   }}
                 >
                   <ListItem>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       {/* Event Time */}
                       <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 'bold', marginRight: 2, width: '150px' }}>
                         {isAllDayEvent(event) ? 'All day' : 
@@ -58,14 +67,16 @@ const AgendaView: React.FC<AgendaViewProps> = ({ currentDate, events, onDateChan
                         backgroundColor: event?.color,
                       }}></Box>
 
-                      <Typography variant="body1" sx={{ fontWeight: 'medium', mx: 2 }}>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium', mx: 2, flexGrow: 1 }}>
                         {event?.serviceName}
                       </Typography>
+                      
+                      {event?.serviceLocation?.displayName && (
+                        <Typography variant="body2" color="textSecondary" sx={{ ml: 'auto' }}>
+                          {event.serviceLocation.displayName}
+                        </Typography>
+                      )}
                     </Box>
-
-                    {event.serviceName && (
-                      <Box>{event.serviceName}</Box>
-                    )}
                   </ListItem>
                 </Paper>
               ))}

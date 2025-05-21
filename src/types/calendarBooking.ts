@@ -11,6 +11,9 @@ export interface DateTimeInfo {
 
 export interface calendarBooking {
   encompassLoanId: string;
+  LoanCloser: string;
+  LoanOfficer: string;
+  dpa: string;
   ownerId: string;
   loanData: LoanDetails;
   bookingId: string;

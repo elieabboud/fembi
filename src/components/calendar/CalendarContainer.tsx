@@ -35,16 +35,21 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   const [currentView, setCurrentView] = useState<CalendarViewType>('month');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [newBooking, setNewBooking] = useState(false);
+  const [showEditBooking, setShowEditBooking] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [loanAgents, setLoanAgents] = useState<User[]>([]);
   const [selectedAgents, setSelectedAgents] = useState<User[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<calendarBooking[]>(bookings);
+  const [selectedRow, setSelectedRow] = useState<calendarBooking | undefined>();
   const [submittedData, setSubmittedData] = useState<CreateAppointmentRequest | null>({
     ServiceId: "svc123",
     ServiceName: "Home Loan Consultation",
     ServicePrice: 150.0,
     EncompassDetails: {
       EncompassLoanId: "loan-abc-123",
+      LoanCloser: "",
+      LoanOfficer: "",
+      dpa: ""
     },
     BorrowerInformation: {
       FirstName: "John",
@@ -86,6 +91,8 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
     loanAmount: 235653,
     loanOfficer: "Maria Torres Botty",
     notes: "",
+    dpa: "",
+    loanCloser: ""
   });
   
   // Track the last applied date/view to prevent unnecessary updates
@@ -154,6 +161,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
     setShowSuccessMessage(true);
     setNewBooking(false);
+    setShowEditBooking(false);
     setSubmittedData(bookingData);
     
     // Fetch loan details
@@ -167,6 +175,12 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
       console.error('Error fetching Loan Details:', error);
     }
   };
+
+  // Handle event click for editing
+  const handleEventClick = useCallback((booking: calendarBooking) => {
+    setSelectedRow(booking);
+    setShowEditBooking(true);
+  }, []);
   
   const renderCalendarView = () => {
     switch (currentView) {
@@ -176,6 +190,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
             currentDate={currentDate} 
             events={filteredBookings} 
             onDateChange={handleDateChange} 
+            onEventClick={handleEventClick}
           />
         );
       case 'day':
@@ -184,6 +199,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
             currentDate={currentDate} 
             events={filteredBookings} 
             onDateChange={handleDateChange} 
+            onEventClick={handleEventClick}
           />
         );
       case 'agenda':
@@ -192,6 +208,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
             currentDate={currentDate} 
             events={filteredBookings} 
             onDateChange={handleDateChange} 
+            onEventClick={handleEventClick}
           />
         );
       case 'month':
@@ -201,6 +218,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
             currentDate={currentDate} 
             events={filteredBookings}
             onDateChange={handleDateChange} 
+            onEventClick={handleEventClick}
           />
         );
     }
@@ -225,11 +243,6 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   };
 
   const applyAgentFiltering = useCallback((agents: User[]) => {
-    //to-do: are all agents selected by default ? 
-    // (loanAgents.length > 0 && 
-    // agents.length === loanAgents.length && 
-    // agents.every(agent => loanAgents.some(la => la.user_id === agent.user_id)))
-    
     if (
       // No agents selected
       !agents || agents.length === 0) {
@@ -238,7 +251,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
     }
     
     const selectedAgentIds = new Set(
-      agents.map(agent => agent.user_id.toString())
+      agents.map(agent => agent.microsoft_id)
     );
     
     const filtered = bookings.filter(booking => {
@@ -310,12 +323,12 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
 
       {/* AGENTS */}
       {
-        isAdmin && (
+        isAdmin && loanAgents.length >0 && (
           <Box sx={{ mt: 4 }}>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
               Loan Agents
             </Typography>
-            <LoanAgentsInput 
+             <LoanAgentsInput 
             agents={loanAgents}
             onChange={handleAgentsChange} 
             label="Select Loan Agents"/>
@@ -335,6 +348,23 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
         <CreateBookingForm
         onSuccess={handleBookingSuccess}
         onClose= {() => setNewBooking(false)}/>
+      </Dialog>
+      
+      {/* EDIT BOOKING DIALOG */}
+      <Dialog
+        open={showEditBooking}
+        onClose={() => setShowEditBooking(false)}
+        fullWidth
+        maxWidth="sm"
+        scroll="paper"
+        aria-labelledby="edit-booking-dialog-title"
+      >
+        <CreateBookingForm
+          onSuccess={handleBookingSuccess}
+          onClose={() => setShowEditBooking(false)}
+          initialData={selectedRow}
+          isEditMode={true}
+        />
       </Dialog>
       
       {/* NEW BOOKING CONFIRMATION */}

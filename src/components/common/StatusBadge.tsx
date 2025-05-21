@@ -31,6 +31,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status, ...props }) => {
       size="small"
       sx={{
         fontWeight: 'medium',
+        textTransform: 'capitalize',
         padding: '4px 8px',
         width: '100%',
         height: '30px',

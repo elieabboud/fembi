@@ -107,7 +107,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
           </Typography>
 
           <Stack spacing={2}>
-            <TextField variant="filled" label="Service Name" value={booking.ServiceName || ''} fullWidth
+            <TextField variant="outlined" label="Service Name" value={booking.ServiceName || ''} fullWidth
             InputProps={{
             readOnly: true,
             sx: {
@@ -116,7 +116,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
             },
             }} />
             <TextField
-              variant="filled"
+              variant="outlined"
               label="Date & Time"
               value={`${booking.DateTimeInfo.SelectedDate|| ''} at ${booking.DateTimeInfo.SelectedTime || ''}`}
               fullWidth
@@ -128,7 +128,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
                 },
               }}
             />
-            <TextField variant="filled" label="Loan Closer" value={loanDetails.loanOfficer || ''} fullWidth
+            <TextField variant="outlined" label="Loan Closer" value={loanDetails.loanOfficer || ''} fullWidth
             InputProps={{
             readOnly: true,
             sx: {
@@ -136,7 +136,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
             pointerEvents: 'none',
             },
             }} />
-            <TextField variant="filled" label="Customer" value={`${booking.BorrowerInformation.FirstName || ''} ${booking.BorrowerInformation.LastName || ''}`} fullWidth
+            <TextField variant="outlined" label="Customer" value={`${booking.BorrowerInformation.FirstName || ''} ${booking.BorrowerInformation.LastName || ''}`} fullWidth
             InputProps={{
             readOnly: true,
             sx: {

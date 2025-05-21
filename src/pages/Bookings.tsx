@@ -53,6 +53,8 @@ const Bookings: React.FC = () => {
     loanAmount: 235653,
     loanOfficer: "Maria Torres Botty",
     notes: "",
+    loanCloser: "",
+    dpa: ""
   });
 
   const [loading, setLoading] = useState(true);
@@ -69,7 +71,6 @@ const Bookings: React.FC = () => {
     { id: 'upcoming', label: 'Upcoming' },
     { id: 'inProgress', label: 'In Progress' },
     { id: 'completed', label: 'Completed' },
-    { id: 'canceled', label: 'Canceled' },
   ];
   const [loanOfficersOptions, setLoanOfficersOptions] = useState<{id: string, label: string}[]>([]);
   const [locationOptions, setLocationOptions] = useState<{ id: string, label: string }[]>([]);
@@ -110,24 +111,6 @@ const fetchBookingsData = useCallback(async () => {
     console.error('Error fetching calendar data:', error);
   }
 }, []);
-
-const fetchAvailableServicesData = useCallback(async () => {
-  try {
-    const response : BookingService[] = await bookingService.getAvailableServices();
-    setServices(response);
-  } catch (error) {
-    console.error('Error fetching available services data:', error);
-  }
-}, []);
-
-const fetchFollowersData = useCallback(async () => {
-  try {
-    const response : string[] = await bookingService.getFollowers();
-    setFollowers(response);
-  } catch (error) {
-    console.error('Error fetching available services data:', error);
-  }
-}, []);
   
   useEffect(() => {
     const fetchAllData = async () => {
@@ -135,11 +118,7 @@ const fetchFollowersData = useCallback(async () => {
       try {
         setLoading(true);
 
-        await Promise.all([
-          fetchAvailableServicesData(),
-          fetchFollowersData(),
-          fetchBookingsData(),
-        ]);
+        await fetchBookingsData();
 
         setDataFetched(true);
 
@@ -151,7 +130,7 @@ const fetchFollowersData = useCallback(async () => {
     };
 
     fetchAllData();
-  }, [dataFetched, fetchAvailableServicesData, fetchFollowersData, fetchBookingsData]);
+  }, [dataFetched, fetchBookingsData]);
   
   // Filter bookings when search query or filter values change
   useEffect(() => {
@@ -339,6 +318,7 @@ const fetchFollowersData = useCallback(async () => {
 
       {loadingPostResponse && (
         <Dialog
+          id='mikaella'
           open={loadingPostResponse}
           fullWidth
           maxWidth="sm"
@@ -346,7 +326,8 @@ const fetchFollowersData = useCallback(async () => {
             style: {
               backgroundColor: 'transparent',
               boxShadow: 'none',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              zIndex: 1000,
             }
           }}
         >

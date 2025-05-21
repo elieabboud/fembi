@@ -27,7 +27,7 @@ const FollowersInput: FC<FollowersInputProps> = ({
     } else {
       setInternalFollowers(followers);
     }
-  }, [followers, getFollowers]);
+  }, [getFollowers]);
 
   const updateFollowersBackend = async (newFollowers: string[]) => {
     if (!setFollowers) return;
@@ -62,7 +62,7 @@ const FollowersInput: FC<FollowersInputProps> = ({
         renderInput={(params) => (
           <TextField
             {...params}
-            variant="filled"
+            variant="outlined"
             label={label}
             placeholder="Type a name and press Enter"
           />

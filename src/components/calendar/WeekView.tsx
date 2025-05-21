@@ -8,9 +8,15 @@ interface WeekViewProps {
   currentDate: Date;
   events: calendarBooking[];
   onDateChange: (date: Date) => void;
+  onEventClick?: (booking: calendarBooking) => void; // Add this prop
 }
 
-const WeekView: React.FC<WeekViewProps> = ({ currentDate, events, onDateChange }) => {
+const WeekView: React.FC<WeekViewProps> = ({ 
+  currentDate, 
+  events, 
+  onDateChange,
+  onEventClick 
+}) => {
   const start = startOfWeek(currentDate, { weekStartsOn: 0 }); // 0 = Sunday
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(start, i));
@@ -152,6 +158,7 @@ const WeekView: React.FC<WeekViewProps> = ({ currentDate, events, onDateChange }
                     return (
                       <Paper
                         key={`${eventIndex}-${event.bookingId || eventIndex}`}
+                        onClick={() => onEventClick && onEventClick(event)}
                         sx={{
                           position: 'absolute',
                           top: `${top}px`,
@@ -163,9 +170,9 @@ const WeekView: React.FC<WeekViewProps> = ({ currentDate, events, onDateChange }
                           p: 0.5,
                           overflow: 'hidden',
                           borderRadius: 1,
+                          cursor: 'pointer', // Add this to show it's clickable
                           '&:hover': {
                             opacity: 0.9,
-                            cursor: 'pointer',
                             boxShadow: 2,
                           },
                         }}

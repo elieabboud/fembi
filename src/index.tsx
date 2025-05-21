@@ -29,6 +29,15 @@ const theme = createTheme({
         },
       },
     },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          background: 'none',
+          boxShadow: 'none',
+          border: 'none',
+        },
+      }
+    }
   },
 });
 

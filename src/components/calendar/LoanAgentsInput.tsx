@@ -47,6 +47,7 @@ const LoanAgentsInput: FC<LoanAgentsInputProps> = ({
   };
 
   return (
+    
     <Box sx={{ flex: 1, width: '100%' }}>
       <Autocomplete
         multiple
@@ -88,14 +89,16 @@ const LoanAgentsInput: FC<LoanAgentsInputProps> = ({
         renderInput={(params) => (
           <TextField
             {...params}
-            variant="filled"
+            variant="outlined"
             label={label}
             placeholder="Select loan agents"
           />
         )}
       />
     </Box>
+    
   );
+
 };
 
 export default LoanAgentsInput;
