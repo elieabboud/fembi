@@ -1,24 +1,25 @@
 export interface BookingService {
-    Id: string;
-    DisplayName: string;
-    DefaultDuration: string;
-    DefaultPrice: number;
-    DefaultPriceType: string;
-    Description: string;
-    LanguageTag: string;
-    IsHiddenFromCustomers: boolean;
-    Notes: string;
-    PreBuffer: string;
-    PostBuffer: string;
-    StaffMemberIds: string[];
-    IsLocationOnline: boolean;
-    SmsNotificationsEnabled: boolean;
-    IsAnonymousJoinEnabled: boolean;
-    WebUrl: string;
-    SchedulingPolicy: SchedulingPolicy;
-    DefaultLocation: ServiceLocation;
-    DefaultReminders: any[]; // Can be typed more strictly if known
-  }
+  id: string;
+  displayName: string;
+  defaultDuration: string;
+  defaultPrice: number;
+  defaultPriceType: string;
+  description: string;
+  languageTag: string;
+  isHiddenFromCustomers: boolean;
+  notes: string;
+  preBuffer: string;
+  postBuffer: string;
+  staffMemberIds: string[];
+  isLocationOnline: boolean;
+  smsNotificationsEnabled: boolean;
+  isAnonymousJoinEnabled: boolean;
+  webUrl: string;
+  schedulingPolicy: SchedulingPolicy;
+  defaultLocation: ServiceLocation;
+  defaultReminders: any[];
+}
+
   
   export interface SchedulingPolicy {
     TimeSlotInterval: string;
@@ -56,10 +57,10 @@ export interface BookingService {
   }
 
   export interface TimeSlot {
-    StartTime: string;     // ISO 8601 format
-    EndTime: string;       // ISO 8601 format
-    DisplayText: string;
-    StaffMemberId: string;
+    startTime: string;     // ISO 8601 format
+    endTime: string;       // ISO 8601 format
+    displayText: string;
+    staffMemberId: string;
   }
   
   

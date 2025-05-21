@@ -6,6 +6,7 @@ import { calendarBooking } from '../types/calendarBooking';
 import { LoanDetails } from '../types/loanDetails';
 import { CreateAppointmentRequest } from '../types/CreateAppointmentRequest';
 import { BookingService } from '../types/service';
+import { UpdateBookingRequest } from '../types/updateBookingRequest';
 
 export const bookingService = {
 
@@ -17,6 +18,11 @@ export const bookingService = {
         endDateTime: end
       },
     });
+    return response.data;
+  },
+
+  async getIsAdminUser() {
+    const response = await api.get('/api/Application/v1/GetIsUserAdmin', {});
     return response.data;
   },
 
@@ -35,7 +41,8 @@ export const bookingService = {
   //get available services
   async getAvailableServices(): Promise<BookingService[]> {
     const response = await api.get('/api/Application/v1/GetAvailableServices');
-    return response.data;
+    const services = response.data.value;
+    return services;
   },
 
   //get loan details
@@ -56,12 +63,35 @@ export const bookingService = {
     return response.data;
   },
 
-  //create appointment
+  //delete appointment
   async deleteBooking(appointmentId: string): Promise<void> {
     const response = await api.delete('/api/Application/v1/DeleteAppointment', {
       params: { appointmentId }
     });
     return response.data;
+  },
+
+  //update appointment
+  updateBooking: async (updateData: UpdateBookingRequest) => {    
+    // Simulate delay for testing
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    console.log(`
+      Booking Update Details:
+      ---------------------
+      Booking ID: ${updateData.id}
+      Selected Date: ${updateData.selectedDate}
+      Selected Time: ${updateData.selectedTime}
+      From Date: ${updateData.fromDate}
+      To Date: ${updateData.toDate}
+      Staff Member IDs: ${updateData.staffMemberIds.join(', ')}
+    `);
+    
+    return {
+      success: true,
+      message: 'Booking updated successfully',
+      data: updateData
+    };
   },
 
   //get followers
@@ -116,7 +146,7 @@ export const bookingService = {
 
   //get users from DB
   async getUsers(getRequestDTO: GetRequestDTO): Promise<GetResponseDTO> {
-    const response = await api.get('/api/Databases/v1/Get');
+    const response = await api.post('/api/Databases/v1/Get', getRequestDTO);
     return response.data;
   },
 

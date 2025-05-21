@@ -16,7 +16,7 @@ export const config = {
     // API Configuration
     apiConfig: {
       baseUrl: "https://localhost:44349", 
-      scopes: ["https://graph.microsoft.com/v1.0/solutions/bookingBusinesses"]
+      scopes: ["https://graph.microsoft.com/.default"]
     },
     // App Configuration
     appConfig: {

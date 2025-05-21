@@ -1,57 +1,77 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Box, Typography, Chip, TextField } from '@mui/material';
-import { bookingService } from '../../services/bookingService';
 
 type FollowersProps = {
-  followers: string[];
-  onChange?: (followers: string[]) => void;
+  editMode? : boolean;
+  fetchedFollowers: string[]; // Read-only followers from API
+  addedFollowers: string[];   // User-added followers that can be removed
+  onAddFollower: (follower: string) => void;
+  onRemoveFollower: (follower: string) => void;
 }
 
-const Followers: React.FC<FollowersProps> = ({followers, onChange}) => 
-  {
-  const [internalFollowers, setInternalFollowers] = useState<string[]>(followers);
+const Followers: React.FC<FollowersProps> = ({
+  fetchedFollowers,
+  addedFollowers,
+  onAddFollower,
+  onRemoveFollower,
+  editMode = false
+}) => {
   const [inputValue, setInputValue] = useState('');
 
   const handleAddFollower = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && inputValue.trim()) {
       e.preventDefault();
       const newFollower = inputValue.trim();
-      if (!followers.includes(newFollower)) {
-        const updated = [...internalFollowers, newFollower];
-        setInternalFollowers(updated);
-        onChange?.(updated);
+      
+      // Check if the follower is already in either list
+      if (!fetchedFollowers.includes(newFollower) && !addedFollowers.includes(newFollower)) {
+        onAddFollower(newFollower);
       }
-      setInputValue('');
+      
+      setInputValue(''); // Clear input regardless
     }
   };
 
-  useEffect(() => {
-    setInternalFollowers(followers);
-  }, [followers]);
-
   return (
-    <Box sx={{ maxWidth: 360, p: '16px', justifySelf: 'start' }}>
+    <Box sx={{ p: '16px', justifySelf: 'start' }}>
       <Typography variant="h6" gutterBottom>
         Followers
       </Typography>
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
-        {internalFollowers.map((email) => (
+        {/* Display read-only followers (from API) */}
+        {fetchedFollowers.map((email) => (
           <Chip
             size="small"
-            key={email}
+            key={`fetched-${email}`}
             label={email}
             sx={{
               textTransform: 'none',
               borderRadius: '16px',
-              backgroundColor: 'grey.400',
+              backgroundColor: 'grey.300', // Different color for read-only
+              color: 'text.primary',
+            }}
+          />
+        ))}
+        
+        {/* Display user-added followers (can be removed) */}
+        {addedFollowers.map((email) => (
+          <Chip
+            size="small"
+            key={`added-${email}`}
+            label={email}
+            onDelete={() => onRemoveFollower(email)}
+            sx={{
+              textTransform: 'none',
+              borderRadius: '16px',
+              backgroundColor: 'primary.light', // Different color for added followers
               color: 'common.white',
             }}
           />
         ))}
       </Box>
 
-      <TextField
+      {!editMode && (<TextField
         variant="filled"
         label="Add follower"
         placeholder="Type and press Enter"
@@ -59,7 +79,7 @@ const Followers: React.FC<FollowersProps> = ({followers, onChange}) =>
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleAddFollower}
         fullWidth
-      />
+      />)}
     </Box>
   );
 };

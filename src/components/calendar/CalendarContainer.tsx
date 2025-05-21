@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Avatar, Box, Button, Chip, Dialog, Paper, Stack, Typography, CircularProgress } from '@mui/material';
 import CalendarViewSelector, { CalendarViewType } from './CalendarViewSelector';
 import WeekView from './WeekView';
@@ -7,7 +7,7 @@ import AgendaView from './AgendaView';
 import MonthView from './MonthView';
 import Confirmation from '../forms/Confirmation';
 import CalendarHeader from './CalendarHeader';
-import { addDays, subDays, addMonths, subMonths, startOfWeek, endOfWeek, format } from 'date-fns';
+import { addDays, subDays, addMonths, subMonths, startOfWeek, endOfWeek, format, isEqual } from 'date-fns';
 import { calendarBooking } from '../../types/calendarBooking';
 import { parseDateTime } from '../../services/calendarUtils';
 import CreateBookingForm from '../forms/NewBookingForm';
@@ -17,6 +17,8 @@ import { CreateAppointmentRequest } from '../../types/CreateAppointmentRequest';
 import { Dns } from '@mui/icons-material';
 import { bookingService } from '../../services/bookingService';
 import { LoanDetails } from '../../types/loanDetails';
+import { User } from '../../types/userModel';
+import LoanAgentsInput from './LoanAgentsInput';
 
 interface CalendarContainerProps {
   bookings: calendarBooking[];
@@ -29,11 +31,14 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   onDateRangeChange,
   isFetchingMore = false
 }) => {
-    const { isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
   const [currentView, setCurrentView] = useState<CalendarViewType>('month');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [newBooking, setNewBooking] = useState(false);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(true);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [loanAgents, setLoanAgents] = useState<User[]>([]);
+  const [selectedAgents, setSelectedAgents] = useState<User[]>([]);
+  const [filteredBookings, setFilteredBookings] = useState<calendarBooking[]>(bookings);
   const [submittedData, setSubmittedData] = useState<CreateAppointmentRequest | null>({
     ServiceId: "svc123",
     ServiceName: "Home Loan Consultation",
@@ -83,21 +88,40 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
     notes: "",
   });
   
-  const handleViewChange = useCallback((view: CalendarViewType) => {
+  // Track the last applied date/view to prevent unnecessary updates
+  const lastAppliedRef = useRef<{ date: Date, view: CalendarViewType } | null>(null);
+  
+  // Centralized function to update date and view with a single API call
+  const updateDateAndView = useCallback((date: Date, view: CalendarViewType) => {
+    // Check if this is actually a change to avoid unnecessary updates
+    if (lastAppliedRef.current && 
+        isEqual(lastAppliedRef.current.date, date) && 
+        lastAppliedRef.current.view === view) {
+      return; // No change, don't update
+    }
+    
+    // Update our tracking of what's been applied
+    lastAppliedRef.current = { date, view };
+    
+    setCurrentDate(date);
     setCurrentView(view);
-    onDateRangeChange(currentDate, view);
-  }, [currentDate, onDateRangeChange]);
+    
+    // Notify parent with a single call
+    onDateRangeChange(date, view);
+  }, [onDateRangeChange]);
+
+  const handleViewChange = useCallback((view: CalendarViewType) => {
+    updateDateAndView(currentDate, view);
+  }, [currentDate, updateDateAndView]);
 
   const handleDateChange = useCallback((date: Date) => {
-    setCurrentDate(date);
-    onDateRangeChange(date, currentView);
-  }, [currentView, onDateRangeChange]);
+    updateDateAndView(date, currentView);
+  }, [currentView, updateDateAndView]);
 
   const handleToday = useCallback(() => {
     const today = new Date();
-    setCurrentDate(today);
-    onDateRangeChange(today, currentView);
-  }, [currentView, onDateRangeChange]);
+    updateDateAndView(today, currentView);
+  }, [currentView, updateDateAndView]);
 
   const handlePrev = useCallback(() => {
     let newDate: Date;
@@ -110,9 +134,8 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
       newDate = subDays(currentDate, 1);
     }
     
-    setCurrentDate(newDate);
-    onDateRangeChange(newDate, currentView);
-  }, [currentDate, currentView, onDateRangeChange]);
+    updateDateAndView(newDate, currentView);
+  }, [currentDate, currentView, updateDateAndView]);
 
   const handleNext = useCallback(() => {
     let newDate: Date;
@@ -125,22 +148,22 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
       newDate = addDays(currentDate, 1);
     }
     
-    setCurrentDate(newDate);
-    onDateRangeChange(newDate, currentView);
-  }, [currentDate, currentView, onDateRangeChange]);
+    updateDateAndView(newDate, currentView);
+  }, [currentDate, currentView, updateDateAndView]);
 
   const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
     setShowSuccessMessage(true);
-    setSubmittedData(bookingData);
     setNewBooking(false);
-    //to-do: refresh the page optionally
-
-    //fetch loan details
-    try{
+    setSubmittedData(bookingData);
+    
+    // Fetch loan details
+    try {
       const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
-
       setLoanDetails(loanDetails);
-    }catch (error) {
+      
+      // Optionally refresh calendar data after successful booking
+      onDateRangeChange(currentDate, currentView);
+    } catch (error) {
       console.error('Error fetching Loan Details:', error);
     }
   };
@@ -151,7 +174,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
         return (
           <WeekView 
             currentDate={currentDate} 
-            events={bookings} 
+            events={filteredBookings} 
             onDateChange={handleDateChange} 
           />
         );
@@ -159,7 +182,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
         return (
           <DayView 
             currentDate={currentDate} 
-            events={bookings} 
+            events={filteredBookings} 
             onDateChange={handleDateChange} 
           />
         );
@@ -167,7 +190,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
         return (
           <AgendaView 
             currentDate={currentDate} 
-            events={bookings} 
+            events={filteredBookings} 
             onDateChange={handleDateChange} 
           />
         );
@@ -176,12 +199,65 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
         return (
           <MonthView
             currentDate={currentDate} 
-            events={bookings}
+            events={filteredBookings}
             onDateChange={handleDateChange} 
           />
         );
     }
   };
+
+  const fetchUsersFromDatabase = async ()=> {
+    try{
+      const response = await bookingService.getUsers({tableName: 'user'});
+
+      const agents = response.result as unknown as User[];
+      setLoanAgents(agents);
+    }catch(error){
+      console.error('Error fetching users from database: ', error);
+    }
+  }
+
+  const handleAgentsChange = (newSelectedAgents: User[]) => {
+    console.log('Selected agents:', newSelectedAgents);
+    setSelectedAgents(newSelectedAgents);
+    
+    applyAgentFiltering(newSelectedAgents);
+  };
+
+  const applyAgentFiltering = useCallback((agents: User[]) => {
+    //to-do: are all agents selected by default ? 
+    // (loanAgents.length > 0 && 
+    // agents.length === loanAgents.length && 
+    // agents.every(agent => loanAgents.some(la => la.user_id === agent.user_id)))
+    
+    if (
+      // No agents selected
+      !agents || agents.length === 0) {
+      setFilteredBookings(bookings);
+      return;
+    }
+    
+    const selectedAgentIds = new Set(
+      agents.map(agent => agent.user_id.toString())
+    );
+    
+    const filtered = bookings.filter(booking => {
+      const ownerIdStr = String(booking.ownerId);
+      return selectedAgentIds.has(ownerIdStr);
+    });
+    
+    setFilteredBookings(filtered);
+  }, [bookings]);
+  
+  useEffect(()=> {
+    fetchUsersFromDatabase();
+    setSelectedAgents(loanAgents);
+    console.log(selectedAgents);
+  }, []);
+
+  useEffect(() => {
+    applyAgentFiltering(selectedAgents);
+  }, [bookings, selectedAgents, applyAgentFiltering, loanAgents]);
 
   return (
     <Box>      
@@ -239,20 +315,10 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
               Loan Agents
             </Typography>
-            {/* to-do: fetch users from db and display as loan agents */}
-            <FollowersInput 
-            followers= {[
-              'Alice Johnson',
-              'Bob Smith',
-              'Charlie Davis',
-              'Diana Evans',
-              'Ethan Brown',
-              'Fiona Clark',
-              'George Harris',
-              'Hannah Lee',
-              'Ian Miller',
-              'Julia Roberts',]}
-              />
+            <LoanAgentsInput 
+            agents={loanAgents}
+            onChange={handleAgentsChange} 
+            label="Select Loan Agents"/>
           </Box>
         )
       }

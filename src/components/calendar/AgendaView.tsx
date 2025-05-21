@@ -63,9 +63,9 @@ const AgendaView: React.FC<AgendaViewProps> = ({ currentDate, events, onDateChan
                       </Typography>
                     </Box>
 
-                    {/* {event.location && (
-                      <Box>{event.location}</Box>
-                    )} */}
+                    {event.serviceName && (
+                      <Box>{event.serviceName}</Box>
+                    )}
                   </ListItem>
                 </Paper>
               ))}

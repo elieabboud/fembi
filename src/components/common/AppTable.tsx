@@ -21,10 +21,14 @@ import {
   Dialog
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { Column } from '../../services/exportToExcel';
 import StatusBadge from './StatusBadge';
 import { BookingService } from '../../types/service';
+import CreateBookingForm from '../forms/NewBookingForm';
+import { bookingService } from '../../services/bookingService';
+import { calendarBooking } from '../../types/calendarBooking';
 
 interface AppTableProps {
   columns: Column[];
@@ -33,7 +37,6 @@ interface AppTableProps {
   availableServices: BookingService[];
   followers : string[];
   onRowClick?: (row: any) => void;
-  onEditClick?: (row: any) => void;
   onSelectionChange?: (selectedRows: any[]) => void;
   showActions?: boolean;
   onActionClick?: (row: any) => void;
@@ -46,7 +49,6 @@ const AppTable: React.FC<AppTableProps> = ({
   availableServices,
   followers,
   onRowClick,
-  onEditClick,
   onSelectionChange,
   showActions = false,
   onActionClick,
@@ -54,10 +56,10 @@ const AppTable: React.FC<AppTableProps> = ({
   const [page, setPage] = React.useState(0);
   const [rowsPerPage, setRowsPerPage] = React.useState(5);
   const [selected, setSelected] = React.useState<string[]>([]);
-  const [selectedRow, setSelectedRow] = useState<any>(null);
+  const [selectedRow, setSelectedRow] = useState<calendarBooking>();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const [openModal, setOpenModal]= useState(false);
+  const [showEditBooking, setShowEditBooking]= useState(false);
   
   const handleChangePage = (_: unknown, newPage: number) => {
     setPage(newPage);
@@ -68,12 +70,17 @@ const AppTable: React.FC<AppTableProps> = ({
     setPage(0);
   };
 
-  const handleClick = (row: any) => {
+  const handleEditClick = (row: any) => {
     setSelectedRow(row);
-    setOpenModal(true);
+    setShowEditBooking(true);
+  };
+  const handleDeleteClick = async (row: any) => {
+    if(!row) return;
+    setSelectedRow(row);
+    const response = await bookingService.deleteBooking(selectedRow.bookingId);
   };
   const handleCloseModal = () => {
-    setOpenModal(false);
+    setShowEditBooking(false);
   };
 
   const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -143,7 +150,7 @@ const AppTable: React.FC<AppTableProps> = ({
                       bgcolor: 'rgba(0, 0, 0, 0.04)'
                     }
                   }}
-                  onClick={() => handleClick(row)}
+                  onClick={() => handleEditClick(row)}
                 >
                   <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
@@ -153,32 +160,26 @@ const AppTable: React.FC<AppTableProps> = ({
                           onClick={(event) => handleSelectClick(event, row.bookingId)}
                         />
                       )}
-                      {(showActions || onEditClick) && (
                         <Box>
-                          {onEditClick && (
                             <IconButton
-                              // onClick={(e) => {
-                              //   e.stopPropagation();
-                              //   handleClick(row);
-                              // }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditClick(row);
+                              }}
                               size="small"
                             >
                               <EditIcon fontSize="small" />
                             </IconButton>
-                          )}
-                          {showActions && (
                             <IconButton
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (onActionClick) onActionClick(row);
+                                handleDeleteClick(row);
                               }}
                               size="small"
                             >
-                              <MoreVertIcon fontSize="small" />
+                              <DeleteIcon fontSize="small" />
                             </IconButton>
-                          )}
                         </Box>
-                      )}
                     </Box>
                     
                     <Stack spacing={1.5}>
@@ -257,7 +258,7 @@ const AppTable: React.FC<AppTableProps> = ({
                   {column.label}
                 </TableCell>
               ))}
-              {(showActions || onEditClick) && <TableCell align="right" style={{ fontWeight: 'bold' }}>Actions</TableCell>}
+              <TableCell align="right" style={{ fontWeight: 'bold' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -270,7 +271,7 @@ const AppTable: React.FC<AppTableProps> = ({
                   <TableRow
                     hover
                     className="custom-row"
-                    onClick={() => handleClick(row)}
+                    onClick={() => handleEditClick(row)}
                     role="checkbox"
                     aria-checked={isItemSelected}
                     tabIndex={-1}
@@ -300,38 +301,32 @@ const AppTable: React.FC<AppTableProps> = ({
                         </TableCell>
                       );
                     })}
-                    {(showActions || onEditClick) && (
                       <TableCell align="right">
-                        <Box>
-                          {onEditClick && (
+                        <Box sx={{display: 'flex', gap: '4px'}}>
                             <Tooltip title="Edit">
                               <IconButton
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleClick(row);
+                                  handleEditClick(row);
                                 }}
                                 size="small"
                               >
                                 <EditIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                          )}
-                          {showActions && (
-                            <Tooltip title="More actions">
+                            <Tooltip title="Delete">
                               <IconButton
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (onActionClick) onActionClick(row);
+                                  handleDeleteClick(row);
                                 }}
                                 size="small"
                               >
-                                <MoreVertIcon fontSize="small" />
+                                <DeleteIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                          )}
                         </Box>
                       </TableCell>
-                    )}
                   </TableRow>
                 );
               })}
@@ -355,6 +350,22 @@ const AppTable: React.FC<AppTableProps> = ({
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
         />
+      )}
+
+      {showEditBooking && (
+      <Dialog
+        open={showEditBooking}
+        onClose={() => setShowEditBooking(false)}
+        fullWidth
+        maxWidth="sm"
+        scroll="paper"
+        aria-labelledby="booking-dialog-title"
+      >
+          <CreateBookingForm
+            onClose={() => setShowEditBooking(false)}
+            initialData={selectedRow}
+            />
+        </Dialog>
       )}
     </Paper>
   );

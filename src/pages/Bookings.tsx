@@ -36,39 +36,8 @@ const Bookings: React.FC = () => {
   const [followers, setFollowers] = useState<string[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<calendarBooking[]>([]);
   const [newBooking, setNewBooking] = useState(false);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(true);
-  const [submittedData, setSubmittedData] = useState<CreateAppointmentRequest | null>({
-    ServiceId: "svc123",
-    ServiceName: "Home Loan Consultation",
-    ServicePrice: 150.0,
-    EncompassDetails: {
-      EncompassLoanId: "loan-abc-123",
-    },
-    BorrowerInformation: {
-      FirstName: "John",
-      LastName: "Doe",
-      Email: "john.doe@example.com",
-      PhoneNumber: "+1234567890",
-      Address: {
-        Street: "123 Main St",
-        City: "Springfield",
-        State: "IL",
-        ZipCode: "62704",
-      },
-    },
-    DateTimeInfo: {
-      SelectedDate: "2025-06-01",
-      SelectedTime: "14:30",
-      FromDate: "2025-06-01T14:30:00Z",
-      ToDate: "2025-06-01T15:30:00Z",
-    },
-    Followers: "manager@example.com,assistant@example.com",
-    Duration: "PT1H",
-    PreBuffer: "PT15M",
-    PostBuffer: "PT10M",
-    PriceType: "Fixed",
-    StaffMemberIds: ["staff001", "staff002"],
-  });
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [submittedData, setSubmittedData] = useState<CreateAppointmentRequest | null>(null);
   const [loanDetails, setLoanDetails] = useState<LoanDetails>({
     loanId: "c91c19fc-df1b-4f26-a664-902f3b05f4ce",
     borrowerFirstName: "Disclose HM",
@@ -87,10 +56,12 @@ const Bookings: React.FC = () => {
   });
 
   const [loading, setLoading] = useState(true);
+  const [loadingPostResponse, setLoadingPostResponse] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<BookingStatus[]>([]);
   const [officersFilter, setOfficersFilter] = useState<string[]>([]);
   const [locationFilter, setLocationFilter] = useState<string>('');
+  const [dataFetched, setDataFetched] = useState(false);
 
   const columns = createBookingColumns();
   
@@ -103,6 +74,17 @@ const Bookings: React.FC = () => {
   const [loanOfficersOptions, setLoanOfficersOptions] = useState<{id: string, label: string}[]>([]);
   const [locationOptions, setLocationOptions] = useState<{ id: string, label: string }[]>([]);
 
+  const handleConfirmationClose = () => {
+    setShowSuccessMessage(false);
+    setTimeout(() => {
+      navigate('/calendar');
+    }, 50);
+  }
+
+    const handleNewBookingClose = () => {
+    setNewBooking(false);
+  }
+
 const fetchBookingsData = useCallback(async () => {
   try {
     const formattedStart = formatDateForApi(dateRange.start);
@@ -112,7 +94,7 @@ const fetchBookingsData = useCallback(async () => {
     
     const bookingsWithStatus = addStatusToBookings(response);
 
-  const filteredBookings = bookingsWithStatus.filter(booking => booking.bookingId !== null);
+    const filteredBookings = bookingsWithStatus.filter(booking => booking.bookingId !== null);
 
     setBookings(filteredBookings);
     setFilteredBookings(filteredBookings);
@@ -149,6 +131,7 @@ const fetchFollowersData = useCallback(async () => {
   
   useEffect(() => {
     const fetchAllData = async () => {
+      if (dataFetched) return;
       try {
         setLoading(true);
 
@@ -158,6 +141,8 @@ const fetchFollowersData = useCallback(async () => {
           fetchBookingsData(),
         ]);
 
+        setDataFetched(true);
+
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -166,7 +151,7 @@ const fetchFollowersData = useCallback(async () => {
     };
 
     fetchAllData();
-  }, []);
+  }, [dataFetched, fetchAvailableServicesData, fetchFollowersData, fetchBookingsData]);
   
   // Filter bookings when search query or filter values change
   useEffect(() => {
@@ -227,14 +212,6 @@ const fetchFollowersData = useCallback(async () => {
     setLocationFilter(value as string);
   };
 
-  const handleNewBooking = () => {
-    navigate('/bookings/new');
-  };
-
-  const handleEditBooking = (booking: Booking) => {
-    navigate(`/bookings/edit/${booking.id}`);
-  };
-
   const handleEmailTo = () => {
   };
 
@@ -247,18 +224,19 @@ const fetchFollowersData = useCallback(async () => {
   }
 
   const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
-    setShowSuccessMessage(true);
-    setSubmittedData(bookingData);
-    setNewBooking(false);
-    //to-do: refresh the page optionally
-
-    //fetch loan details
-    try{
+    try {
+      setNewBooking(false);
+      setLoadingPostResponse(true);
+      setSubmittedData(bookingData);
+      
       const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
-
       setLoanDetails(loanDetails);
-    }catch (error) {
+      
+      setShowSuccessMessage(true);
+    } catch (error) {
       console.error('Error fetching Loan Details:', error);
+    } finally {
+      setLoadingPostResponse(false);
     }
   };
 
@@ -348,21 +326,54 @@ const fetchFollowersData = useCallback(async () => {
     {/* NEW BOOKING DIALOG */}
       <Dialog
         open={newBooking}
-        onClose={() => setNewBooking(false)}
+        onClose={handleNewBookingClose}
         fullWidth
         maxWidth="sm"
         scroll="paper"
         aria-labelledby="booking-dialog-title"
       >
         <CreateBookingForm
-        onClose= {() => setNewBooking(false)}/>
+        onSuccess={handleBookingSuccess}
+        onClose= {handleNewBookingClose}/>
       </Dialog>
 
+      {loadingPostResponse && (
+        <Dialog
+          open={loadingPostResponse}
+          fullWidth
+          maxWidth="sm"
+          PaperProps={{
+            style: {
+              backgroundColor: 'transparent',
+              boxShadow: 'none',
+              overflow: 'hidden'
+            }
+          }}
+        >
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              flexDirection: 'column',
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              p: 3,
+              backgroundColor: 'rgba(255, 255, 255, 0.8)',
+              borderRadius: 2
+            }}
+          >
+            <CircularProgress size={60} />
+            <Typography variant="h6" sx={{ mt: 2 }}>
+              Creating booking...
+            </Typography>
+          </Box>
+        </Dialog>
+      )}
+
       {/* NEW BOOKING CONFIRMATION */}
-      {submittedData && (
+      {showSuccessMessage && submittedData && (
         <Dialog
           open={showSuccessMessage}
-          onClose={() => setShowSuccessMessage(false)}
+          onClose={handleConfirmationClose}
           fullWidth
           maxWidth="sm"
           scroll="paper"
@@ -370,7 +381,7 @@ const fetchFollowersData = useCallback(async () => {
         >
           <Confirmation
             open={showSuccessMessage}
-            onClose={() => setShowSuccessMessage(false)}
+            onClose={handleConfirmationClose}
             booking={submittedData}
             loanDetails={loanDetails}
           />
@@ -383,7 +394,6 @@ const fetchFollowersData = useCallback(async () => {
         availableServices={services}
         followers={followers}
         rows={filteredBookings}
-        onEditClick={handleEditBooking}
       />
     </Box>
   );

@@ -10,15 +10,15 @@ interface TimeSelectorProps {
 
 const TimeSelector: React.FC<TimeSelectorProps> = ({ timeSlots, onSelect, selectedSlot }) => {
   return (
-    <Box sx={{ maxWidth: 360, justifySelf: 'start', p: '16px' }}>
+    <Box sx={{justifySelf: 'start', p: '16px' }}>
       <Typography variant="h6" gutterBottom>
         Select Time
       </Typography>
       <Grid container spacing={2}>
         {timeSlots.map((slot) => {
-          const isSelected = selectedSlot?.StartTime === slot.StartTime;
+          const isSelected = selectedSlot?.startTime === slot.startTime;
           return (
-            <Grid item xs={4} key={slot.StartTime}>
+            <Grid item xs={4} key={slot.startTime}>
               <Button
                 fullWidth
                 variant="contained"
@@ -34,7 +34,7 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({ timeSlots, onSelect, select
                   },
                 }}
               >
-                {slot.DisplayText}
+                {slot.displayText}
               </Button>
             </Grid>
           );

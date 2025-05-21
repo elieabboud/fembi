@@ -2,7 +2,6 @@ import React from 'react';
 import { Box, Button, IconButton, Typography } from '@mui/material';
 import PrevIcon from '@mui/icons-material/ChevronLeft';
 import NextIcon from '@mui/icons-material/ChevronRight';
-import FilterListIcon from '@mui/icons-material/FilterList';
 import { format } from 'date-fns';
 import CalendarViewSelector, { CalendarViewType } from './CalendarViewSelector';
 
@@ -76,7 +75,6 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
         >
           Today
         </Button>
-        <FilterListIcon />
       </Box>
     </Box>
   );

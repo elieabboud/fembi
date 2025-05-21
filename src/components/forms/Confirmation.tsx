@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -46,6 +46,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
     try {
       const emailRequest: EmailRequestDTO = {
         To: [booking.BorrowerInformation.Email],
+        // To: ["kanaanmikaella@gmail.com"],
         Subject: emailSubject,
         Body: emailBody,
         IsHtml: false,
@@ -81,6 +82,8 @@ const Confirmation: React.FC<ConfirmationProps> = ({
           });
   };
 
+  useEffect(()=> {console.log('received booking: ' , booking)}, [])
+
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
@@ -104,7 +107,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
           </Typography>
 
           <Stack spacing={2}>
-            <TextField variant="filled" label="Service Name" value={booking.ServiceName} fullWidth
+            <TextField variant="filled" label="Service Name" value={booking.ServiceName || ''} fullWidth
             InputProps={{
             readOnly: true,
             sx: {
@@ -115,7 +118,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
             <TextField
               variant="filled"
               label="Date & Time"
-              value={`${booking.DateTimeInfo.SelectedDate} at ${booking.DateTimeInfo.SelectedTime}`}
+              value={`${booking.DateTimeInfo.SelectedDate|| ''} at ${booking.DateTimeInfo.SelectedTime || ''}`}
               fullWidth
               InputProps={{
                 readOnly: true,
@@ -125,7 +128,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
                 },
               }}
             />
-            <TextField variant="filled" label="Loan Closer" value={loanDetails.loanOfficer} fullWidth
+            <TextField variant="filled" label="Loan Closer" value={loanDetails.loanOfficer || ''} fullWidth
             InputProps={{
             readOnly: true,
             sx: {
@@ -133,7 +136,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
             pointerEvents: 'none',
             },
             }} />
-            <TextField variant="filled" label="Customer" value={`${booking.BorrowerInformation.FirstName} ${booking.BorrowerInformation.LastName}`} fullWidth
+            <TextField variant="filled" label="Customer" value={`${booking.BorrowerInformation.FirstName || ''} ${booking.BorrowerInformation.LastName || ''}`} fullWidth
             InputProps={{
             readOnly: true,
             sx: {

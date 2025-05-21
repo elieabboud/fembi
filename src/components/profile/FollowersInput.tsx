@@ -53,9 +53,11 @@ const FollowersInput: FC<FollowersInputProps> = ({
         value={internalFollowers}
         onChange={handleFollowersChange}
         renderTags={(value: string[], getTagProps) =>
-          value.map((option: string, index: number) => (
-            <Chip label={option} variant="outlined" {...getTagProps({ index })} />
-          ))
+          value.map((option: string, index: number) => {
+            const tagProps = getTagProps({ index });
+            const { key, ...otherProps } = tagProps;
+            return <Chip key={key} label={option} variant="outlined" {...otherProps} />;
+          })
         }
         renderInput={(params) => (
           <TextField

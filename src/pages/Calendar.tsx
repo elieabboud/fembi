@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import CalendarContainer from '../components/calendar/CalendarContainer';
 import { calendarBooking } from '../types/calendarBooking';
 import { bookingService } from '../services/bookingService';
-import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, addMonths } from 'date-fns';
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, addMonths, isEqual } from 'date-fns';
 import { addColorToBookings, addStatusToBookings } from '../services/bookingsUtils';
 import { formatDateForApi } from '../services/calendarUtils';
 
@@ -16,13 +16,30 @@ function Calendar() {
     view: 'month' as 'month' | 'week' | 'day' | 'agenda'
   });
   const [fetchingMore, setFetchingMore] = useState(false);
+  
+  // Use a ref to track the last fetch parameters to prevent duplicate requests
+  const lastFetchParamsRef = useRef<{ start: string, end: string } | null>(null);
+  
+  // Add a fetch timer to prevent rapid successive calls
+  const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchCalendarData = useCallback(async (start: Date, end: Date) => {
     try {
-      setFetchingMore(true);
-      
+      // Format dates for API
       const formattedStart = formatDateForApi(start);
       const formattedEnd = formatDateForApi(end);
+      
+      // Check if we're already fetching the same date range
+      if (lastFetchParamsRef.current && 
+          lastFetchParamsRef.current.start === formattedStart && 
+          lastFetchParamsRef.current.end === formattedEnd) {
+        return; // Skip duplicate fetches
+      }
+      
+      // Update our tracking of what we're fetching
+      lastFetchParamsRef.current = { start: formattedStart, end: formattedEnd };
+      
+      setFetchingMore(true);
       
       const response = await bookingService.getCalendarData(formattedStart, formattedEnd);
       
@@ -77,20 +94,54 @@ function Calendar() {
   }, []);
 
   const handleDateRangeChange = useCallback((date: Date, view: 'month' | 'week' | 'day' | 'agenda') => {
+    // Clear any pending fetch timer
+    if (fetchTimerRef.current) {
+      clearTimeout(fetchTimerRef.current);
+    }
+    
     const { start, end } = calculateDateRange(date, view);
+    
+    // Check if this is actually a change
+    if (dateRange.view === view && 
+        isEqual(dateRange.start, start) && 
+        isEqual(dateRange.end, end)) {
+      return; // No change, don't update state or fetch
+    }
     
     setDateRange({
       start,
       end,
       view
     });
-  }, [calculateDateRange]);
+    
+    // Debounce the fetch operation
+    fetchTimerRef.current = setTimeout(() => {
+      fetchCalendarData(start, end);
+    }, 300); // 300ms debounce
+  }, [calculateDateRange, dateRange, fetchCalendarData]);
 
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (fetchTimerRef.current) {
+        clearTimeout(fetchTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Initial fetch on component mount
   useEffect(() => {
     const { start, end } = dateRange;
     fetchCalendarData(start, end);
-  }, [dateRange, fetchCalendarData]);
-
+    
+    // Clean up function to cancel any pending fetch on unmount or re-render
+    return () => {
+      if (fetchTimerRef.current) {
+        clearTimeout(fetchTimerRef.current);
+      }
+    };
+  }, []); // Empty dependency array for initial fetch only
+  
   if (loading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
       <CircularProgress size={30} thickness={4} />

@@ -46,7 +46,7 @@ msalInstance.handleRedirectPromise()
     
     // Now render the app with authentication state properly initialized
     root.render(
-      <React.StrictMode>
+      // <React.StrictMode>
         <BrowserRouter>
           <MsalProvider instance={msalInstance}>
             <ThemeProvider theme={theme}>
@@ -55,7 +55,7 @@ msalInstance.handleRedirectPromise()
             </ThemeProvider>
           </MsalProvider>
         </BrowserRouter>
-      </React.StrictMode>
+      // </React.StrictMode>
     );
   })
   .catch(error => {

@@ -19,6 +19,7 @@ export const loginRedirect = async () => {
   }
 };
 
+
 // Function to handle login with popup (keeping for reference)
 export const loginPopup = async () => {
   try {
