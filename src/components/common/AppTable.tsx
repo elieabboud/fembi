@@ -111,7 +111,7 @@ const AppTable: React.FC<AppTableProps> = ({
 
     setSelected(newSelected);
     if (onSelectionChange) {
-      const selectedRows = rows.filter((row) => newSelected.includes(row.id));
+      const selectedRows = rows.filter((row) => newSelected.includes(row.bookingId));
       onSelectionChange(selectedRows);
     }
   };

@@ -35,6 +35,7 @@ const Bookings: React.FC = () => {
   const [services, setServices] = useState<BookingService[]>([]);
   const [followers, setFollowers] = useState<string[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<calendarBooking[]>([]);
+  const [selectedBookings, setSelectedBookings] = useState<calendarBooking[]>([]); // New state for selected rows
   const [newBooking, setNewBooking] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [submittedData, setSubmittedData] = useState<CreateAppointmentRequest | null>(null);
@@ -82,35 +83,40 @@ const Bookings: React.FC = () => {
     }, 50);
   }
 
-    const handleNewBookingClose = () => {
+  const handleNewBookingClose = () => {
     setNewBooking(false);
   }
 
-const fetchBookingsData = useCallback(async () => {
-  try {
-    const formattedStart = formatDateForApi(dateRange.start);
-    const formattedEnd = formatDateForApi(dateRange.end);
-    
-    const response = await bookingService.getCalendarData(formattedStart, formattedEnd);
-    
-    const bookingsWithStatus = addStatusToBookings(response);
+  // New handler for selection change
+  const handleSelectionChange = (selectedRows: calendarBooking[]) => {
+    setSelectedBookings(selectedRows);
+  };
 
-    const filteredBookings = bookingsWithStatus.filter(booking => booking.bookingId !== null);
+  const fetchBookingsData = useCallback(async () => {
+    try {
+      const formattedStart = formatDateForApi(dateRange.start);
+      const formattedEnd = formatDateForApi(dateRange.end);
+      
+      const response = await bookingService.getCalendarData(formattedStart, formattedEnd);
+      
+      const bookingsWithStatus = addStatusToBookings(response);
 
-    setBookings(filteredBookings);
-    setFilteredBookings(filteredBookings);
+      const filteredBookings = bookingsWithStatus.filter(booking => booking.bookingId !== null);
 
-    const uniqueLocations = Array.from(new Set(filteredBookings.map(booking => booking.serviceLocation.displayName)))
-      .map(location => ({ id: location, label: location }));
-    setLocationOptions(uniqueLocations);
-    
-    const loanOfficers = Array.from(new Set(filteredBookings.map(booking => booking.loanData.loanOfficer)))
-      .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
-    setLoanOfficersOptions(loanOfficers);
-  } catch (error) {
-    console.error('Error fetching calendar data:', error);
-  }
-}, []);
+      setBookings(filteredBookings);
+      setFilteredBookings(filteredBookings);
+
+      const uniqueLocations = Array.from(new Set(filteredBookings.map(booking => booking.serviceLocation.displayName)))
+        .map(location => ({ id: location, label: location }));
+      setLocationOptions(uniqueLocations);
+      
+      const loanOfficers = Array.from(new Set(filteredBookings.map(booking => booking.loanData.loanOfficer)))
+        .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
+      setLoanOfficersOptions(loanOfficers);
+    } catch (error) {
+      console.error('Error fetching calendar data:', error);
+    }
+  }, []);
   
   useEffect(() => {
     const fetchAllData = async () => {
@@ -192,6 +198,16 @@ const fetchBookingsData = useCallback(async () => {
   };
 
   const handleEmailTo = () => {
+  };
+
+  // Updated export handler
+  const handleExport = () => {
+    const dataToExport = selectedBookings.length > 0 ? selectedBookings : filteredBookings;
+    const filename = selectedBookings.length > 0 
+      ? `bookings_selected_${selectedBookings.length}_items.xlsx`
+      : 'bookings_export.xlsx';
+    
+    exportBookingsToExcel(dataToExport, columns, filename);
   };
 
   if (loading) {
@@ -281,9 +297,12 @@ const fetchBookingsData = useCallback(async () => {
         <Box sx={{display: 'flex', justifyContent: {sm: 'start',md:'center'}, gap: 2, width: {sm:'100%', md: 'auto'}}}>
           <Button
             variant="contained"
-            onClick={() => exportBookingsToExcel(filteredBookings, columns, 'bookings_export.xlsx')}
+            onClick={handleExport}
           >
-            Export as
+            {selectedBookings.length > 0 
+              ? `Export Selected (${selectedBookings.length})` 
+              : 'Export All'
+            }
           </Button>
   
           <Button
@@ -375,6 +394,7 @@ const fetchBookingsData = useCallback(async () => {
         availableServices={services}
         followers={followers}
         rows={filteredBookings}
+        onSelectionChange={handleSelectionChange} // Pass the selection handler
       />
     </Box>
   );
