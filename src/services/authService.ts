@@ -53,7 +53,6 @@ export const handleRedirectResponse = async () => {
     console.log("Handling redirect response...");
     // Handle the redirect promise
     const response = await msalInstance.handleRedirectPromise();
-    debugger;
     console.log("Redirect response:", response);
     
     // Check if we have a response

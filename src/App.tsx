@@ -2,13 +2,12 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Layout from './components/layout/Layout';
-import ProtectedRoute from './routes/ProtectedRoute';
+import {ProtectedRoute, AdminProtectedRoute} from './routes/ProtectedRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Bookings from './pages/Bookings';
-import Calendar from './pages/Calendar';
-// import Contacts from './pages/Contacts';
 import Profile from './pages/Profile';
+import Calendar from './pages/Calendar';
 
 const App: React.FC = () => {
   return (
@@ -17,14 +16,11 @@ const App: React.FC = () => {
         <Route path="/login" element={<Login />} />
         <Route element={<Layout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/dashboard" element={
+            <AdminProtectedRoute>
+              <Dashboard />
+            </AdminProtectedRoute>
+          } />
           <Route
             path="/bookings"
             element={
@@ -41,14 +37,6 @@ const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
-          {/* <Route
-            path="/contacts"
-            element={
-              <ProtectedRoute>
-                <Contacts />
-              </ProtectedRoute>
-            }
-          />*/}
           <Route
             path="/profile"
             element={

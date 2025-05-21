@@ -3,29 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
-  Container,
-  TextField,
   Typography,
   Paper,
-  Divider,
   CircularProgress,
   Grid,
-  darken,
 } from '@mui/material';
 import { Microsoft as MicrosoftIcon } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import logoImg from '../assets/logo.png';
+import image from '../assets/login.png';
 
 const Login: React.FC = () => {
   const { isAuthenticated, login, loading } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [localLoading, setLocalLoading] = useState(false);
 
-  // Redirect if already authenticated
   useEffect(() => {
-    debugger
     if (isAuthenticated) {
       navigate('/dashboard');
     }
@@ -40,17 +32,6 @@ const Login: React.FC = () => {
     } catch (error) {
       console.error('Login redirect failed:', error);
     }
-  };
-
-  const handleStandardLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // This would normally call your backend API
-    setLocalLoading(true);
-    setTimeout(() => {
-      setLocalLoading(false);
-      // For demo purposes, we'll just use Microsoft login anyway
-      handleMicrosoftLogin();
-    }, 1000);
   };
 
   if (loading) {
@@ -75,7 +56,7 @@ const Login: React.FC = () => {
         {/* Left side - Image */}
         <Grid item xs={12} md={6} sx={{ 
           display: { xs: 'none', md: 'flex' },
-          backgroundImage: 'url(https://images.unsplash.com/photo-1582407947304-fd86f028f716?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2796&q=80)',
+          backgroundImage: `url(${image})`,
           backgroundRepeat: 'no-repeat',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
@@ -94,67 +75,9 @@ const Login: React.FC = () => {
             }}
           >
             <img src={logoImg} alt="FNTIS Logo" style={{ width: '200px', marginBottom: '16px' }} />
-            <Typography component="h1" variant="h5" sx={{ mb: 4, fontWeight: 'bold' }}>
-              WELCOME TO FEMBI BOOKING
+            <Typography component="h1" variant="h5" sx={{ mb: 4, fontWeight: 'bold', textAlign: 'center', textTransform: 'uppercase' }}>
+              welcome to fembi bookings
             </Typography>
-            
-            <Box component="form" onSubmit={handleStandardLogin} sx={{ width: '100%', mt: 1 }}>
-              <Box>
-                <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>Login</Typography>
-                <TextField
-                  required
-                  fullWidth
-                  id="email"
-                  label="Company Email"
-                  name="email"
-                  autoComplete="email"
-                  autoFocus
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      '&.Mui-focused': {
-                        borderColor: 'red', // Change this to your desired color
-                      },
-                    },
-                  }}
-                />
-              </Box>
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>Password</Typography>
-                <TextField
-                  required
-                  fullWidth
-                  name="password"
-                  label="Password"
-                  type="password"
-                  id="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </Box>
-              <Button
-                type="submit"
-                fullWidth
-                variant="contained"
-                sx={{
-                  mt: 3,
-                  mb: 2,
-                  padding: '10px 20px',
-                  backgroundColor: '#D3323A',
-                  '&:hover': {
-                    backgroundColor: darken('#D3323A', 0.2), // Darken the color by 20%
-                  },
-                  color: 'white',
-                }}
-                disabled={localLoading}
-              >
-                {localLoading ? <CircularProgress size={24} /> : 'Login'}
-              </Button>
-            </Box>
-            
-            <Divider sx={{ width: '100%', my: 3 }}> or </Divider>
             
             <Button
               fullWidth
@@ -162,8 +85,7 @@ const Login: React.FC = () => {
               startIcon={<MicrosoftIcon />}
               onClick={handleMicrosoftLogin}
               sx={{ 
-                mt: 1, 
-                mb: 2,
+                mt: '100px',
                 padding: '10px 20px',
               }}
             >

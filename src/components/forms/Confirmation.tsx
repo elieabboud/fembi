@@ -14,24 +14,74 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import EmailIcon from '@mui/icons-material/Email';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import { CreateAppointmentRequest } from '../../types/CreateAppointmentRequest';
+import { LoanDetails } from '../../types/loanDetails';
+import { bookingService } from '../../services/bookingService';
+import { EmailRequestDTO } from '../../types/email';
 
 type ConfirmationProps = {
   open: boolean;
   onClose: () => void;
-  serviceLocation: string;
-  dateTime: Date | null;
-  loanCloser: string;
-  customer: string;
+  booking: CreateAppointmentRequest;
+  loanDetails : LoanDetails
 };
 
 const Confirmation: React.FC<ConfirmationProps> = ({
   open,
   onClose,
-  serviceLocation,
-  dateTime,
-  loanCloser,
-  customer,
+  booking,
+  loanDetails
 }) => {
+  const emailSubject = `Appointment Confirmation: ${booking.ServiceName}`;
+  const emailBody = `
+    Your appointment with ${loanDetails.loanOfficer} has been scheduled successfully.
+    Appointment Details:
+    - Service Name: ${booking.ServiceName}
+    - Date & Time: ${booking.DateTimeInfo.SelectedDate} at ${booking.DateTimeInfo.SelectedTime}
+    - Loan Closer: ${loanDetails.loanOfficer}
+    - Customer: ${booking.BorrowerInformation.FirstName} ${booking.BorrowerInformation.LastName}
+  `;
+
+  const handleSendEmail = async () => {
+    try {
+      const emailRequest: EmailRequestDTO = {
+        To: [booking.BorrowerInformation.Email],
+        Subject: emailSubject,
+        Body: emailBody,
+        IsHtml: false,
+      };
+
+      const response = await bookingService.sendEmail(emailRequest);
+
+      if (response.Success) {
+        alert('Email sent successfully!');
+      } else {
+        alert(`Failed to send email: ${response.Message}`);
+      }
+    } catch (error) {
+      alert('Failed to send email.');
+      console.error(error);
+    }
+  };
+
+  const handleCopyToClipboard = () => {
+    const textToCopy = `
+    ${emailSubject}
+
+    ${emailBody}
+        `.trim();
+
+        navigator.clipboard.writeText(textToCopy)
+          .then(() => {
+            alert('Appointment details copied to clipboard!');
+          })
+          .catch((err) => {
+            alert('Failed to copy to clipboard');
+            console.error(err);
+          });
+  };
+
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <Box sx={{ p: 4, position: 'relative', color: 'gray' }}>
@@ -45,7 +95,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
 
         <DialogContent sx={{ py: 2, px: 0 }}>
           <Typography variant="body1" sx={{ mb: 3 }}>
-            Your appointment with <strong>{customer}</strong> has been scheduled successfully.
+            Your appointment with <strong>{loanDetails.loanOfficer}</strong> has been scheduled successfully.
             A confirmation email has been sent to your inbox.
           </Typography>
 
@@ -54,7 +104,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
           </Typography>
 
           <Stack spacing={2}>
-            <TextField variant="filled" label="Service Location" value={serviceLocation} fullWidth
+            <TextField variant="filled" label="Service Name" value={booking.ServiceName} fullWidth
             InputProps={{
             readOnly: true,
             sx: {
@@ -62,7 +112,20 @@ const Confirmation: React.FC<ConfirmationProps> = ({
             pointerEvents: 'none',
             },
             }} />
-            <TextField variant="filled" label="Date & Time" value={dateTime} fullWidth
+            <TextField
+              variant="filled"
+              label="Date & Time"
+              value={`${booking.DateTimeInfo.SelectedDate} at ${booking.DateTimeInfo.SelectedTime}`}
+              fullWidth
+              InputProps={{
+                readOnly: true,
+                sx: {
+                  userSelect: 'none',
+                  pointerEvents: 'none',
+                },
+              }}
+            />
+            <TextField variant="filled" label="Loan Closer" value={loanDetails.loanOfficer} fullWidth
             InputProps={{
             readOnly: true,
             sx: {
@@ -70,15 +133,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
             pointerEvents: 'none',
             },
             }} />
-            <TextField variant="filled" label="Loan Closer" value={loanCloser} fullWidth
-            InputProps={{
-            readOnly: true,
-            sx: {
-            userSelect: 'none',
-            pointerEvents: 'none',
-            },
-            }} />
-            <TextField variant="filled" label="Customer" value={customer} fullWidth
+            <TextField variant="filled" label="Customer" value={`${booking.BorrowerInformation.FirstName} ${booking.BorrowerInformation.LastName}`} fullWidth
             InputProps={{
             readOnly: true,
             sx: {
@@ -93,10 +148,10 @@ const Confirmation: React.FC<ConfirmationProps> = ({
           </Typography>
 
           <Stack direction="row" width={'100%'} justifyContent={'space-between'} spacing={2}>
-            <Button fullWidth variant="contained" startIcon={<EmailIcon />}>
+            <Button fullWidth variant="contained" startIcon={<EmailIcon />} onClick={handleSendEmail}>
               Send via Email
             </Button>
-            <Button fullWidth variant="contained" startIcon={<ContentCopyIcon />}>
+            <Button fullWidth variant="contained" startIcon={<ContentCopyIcon />} onClick={handleCopyToClipboard}>
               Send to Clipboard
             </Button>
           </Stack>

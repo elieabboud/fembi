@@ -17,7 +17,6 @@ import {
   CalendarMonth as CalendarIcon,
   AccessTime as BookingsIcon,
   Dashboard as DashboardIcon,
-  Contacts as ContactsIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
@@ -49,22 +48,33 @@ interface SidebarProps {
   onClose: () => void;
 }
 
+interface SidebarItem {
+  text: string;
+  icon?: React.ReactNode;
+  path: string;
+  adminOnly?: boolean;
+}
+
 const Sidebar: React.FC<SidebarProps> = ({ open = true, onClose }) => {
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const [ logoutOpen, setLogoutOpen ] = useState(false);
 
-  const menuItems = [
+  const menuItems:SidebarItem[] = [
     { text: 'My Calendar', icon: <CalendarTodayIcon />, path: '/calendar' },
     { text: 'Bookings', icon: <BookingsIcon />, path: '/bookings' },
-    { text: 'Dashboard', icon: <PieChartIcon />, path: '/dashboard' },
-    // { text: 'Contacts', icon: <ContactsIcon />, path: '/contacts' },
-    // { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
+    { text: 'Dashboard', icon: <PieChartIcon />, path: '/dashboard',adminOnly: true },
+    { text: 'Settings', icon: <SettingsIcon />, path: '/profile' },
   ];
 
   const handleLogout = () => {
+    setLogoutOpen(true);
+  }
+
+  const logUserOut = () => {
     console.log('Logging out...');
-    logout(); // Call the logout function from context
+    logout();
+    setLogoutOpen(false);
   }
 
   const handleLogoutClose = () => {
@@ -76,11 +86,15 @@ const Sidebar: React.FC<SidebarProps> = ({ open = true, onClose }) => {
       <Box sx={{ textAlign: 'center', mb: 2 }}>
         <Logo src={logo} alt="First National Title & Insurance Services" />
         <Typography variant="body2" color="text.secondary">
-          Fembi Mortgage
+        First National Title & Insurance Services, Inc.
         </Typography>
       </Box>
       <List>
-        {menuItems.map((item) => (
+        {menuItems.map((item) => {
+          if (item.adminOnly && !isAdmin) {
+            return null;
+          }
+          return(
           <ListItem key={item.text}>
             <ListItemButton
               component={Link}
@@ -90,7 +104,17 @@ const Sidebar: React.FC<SidebarProps> = ({ open = true, onClose }) => {
               <ListItemText primary={item.text} />
             </ListItemButton>
           </ListItem>
-        ))}
+        );
+      }
+        )}
+      <ListItem key="logout">
+        <ListItemButton onClick={handleLogout}>
+          <ListItemIcon style={{ color: 'black' }}>
+            <LogoutIcon />
+          </ListItemIcon>
+          <ListItemText primary="Logout" />
+        </ListItemButton>
+      </ListItem>
       </List>
       <ProfileSection sx={{ bgcolor: '#f5f5f5', borderTop: '1px solid #e0e0e0' }}>
         <Box sx={{ display: 'flex', alignItems: 'center',justifyContent:'start', width: '100%' }}>
@@ -104,14 +128,9 @@ const Sidebar: React.FC<SidebarProps> = ({ open = true, onClose }) => {
               {user?.fullName || 'Sandra Lopez'}
             </Typography>
             <Box sx={{ display: 'flex' }}>
-              <Typography variant="body2" component={Link} to="/profile" sx={{ mr: 2, color: 'text.secondary', textDecoration: 'none' }}>
-                View Profile
+              <Typography variant="body2" sx={{ mr: 2, color: 'text.secondary', textDecoration: 'none' }}>
+                {user?.email}
               </Typography>
-              •
-              <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary', cursor: 'pointer' }} onClick={() => setLogoutOpen(true)}>
-                Logout
-              </Typography>
-              {logoutOpen && (<LogoutDialog open={logoutOpen} onClose={handleLogoutClose} onConfirm={handleLogout}></LogoutDialog>)}
             </Box>
           </Box>
         </Box>

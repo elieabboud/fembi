@@ -31,7 +31,6 @@ const Layout = () => {
           flexGrow: 1,
           p: 3,
           width: { sm: `calc(100% - 250px)` },
-          bgcolor: '#f9f9f9',
           minHeight: '100vh',
         }}
       >

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Table,
   TableBody,
@@ -17,27 +17,21 @@ import {
   Card,
   CardContent,
   Typography,
-  Divider,
   Stack,
-  Chip
+  Dialog
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-
-export interface Column {
-  id: string;
-  label: string;
-  minWidth?: number;
-  align?: 'right' | 'left' | 'center';
-  format?: (value: any, row?: any) => React.ReactNode;
-  hideOnMobile?: boolean;
-  priority?: number;
-}
+import { Column } from '../../services/exportToExcel';
+import StatusBadge from './StatusBadge';
+import { BookingService } from '../../types/service';
 
 interface AppTableProps {
   columns: Column[];
   rows: any[];
   selectable?: boolean;
+  availableServices: BookingService[];
+  followers : string[];
   onRowClick?: (row: any) => void;
   onEditClick?: (row: any) => void;
   onSelectionChange?: (selectedRows: any[]) => void;
@@ -49,6 +43,8 @@ const AppTable: React.FC<AppTableProps> = ({
   columns,
   rows,
   selectable = false,
+  availableServices,
+  followers,
   onRowClick,
   onEditClick,
   onSelectionChange,
@@ -58,9 +54,11 @@ const AppTable: React.FC<AppTableProps> = ({
   const [page, setPage] = React.useState(0);
   const [rowsPerPage, setRowsPerPage] = React.useState(5);
   const [selected, setSelected] = React.useState<string[]>([]);
+  const [selectedRow, setSelectedRow] = useState<any>(null);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
+  const [openModal, setOpenModal]= useState(false);
+  
   const handleChangePage = (_: unknown, newPage: number) => {
     setPage(newPage);
   };
@@ -71,14 +69,16 @@ const AppTable: React.FC<AppTableProps> = ({
   };
 
   const handleClick = (row: any) => {
-    if (onRowClick) {
-      onRowClick(row);
-    }
+    setSelectedRow(row);
+    setOpenModal(true);
+  };
+  const handleCloseModal = () => {
+    setOpenModal(false);
   };
 
   const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
-      const newSelected = rows.map((row) => row.id);
+      const newSelected = rows.map((row) => row.bookingId);
       setSelected(newSelected);
       if (onSelectionChange) {
         onSelectionChange(rows);
@@ -130,11 +130,11 @@ const AppTable: React.FC<AppTableProps> = ({
           {rows
             .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
             .map((row) => {
-              const isItemSelected = isSelected(row.id);
+              const isItemSelected = isSelected(row.bookingId);
               
               return (
                 <Card 
-                  key={row.id} 
+                  key={row.BookingId} 
                   elevation={1}
                   sx={{ 
                     cursor: onRowClick ? 'pointer' : 'default',
@@ -150,17 +150,17 @@ const AppTable: React.FC<AppTableProps> = ({
                       {selectable && (
                         <Checkbox
                           checked={isItemSelected}
-                          onClick={(event) => handleSelectClick(event, row.id)}
+                          onClick={(event) => handleSelectClick(event, row.bookingId)}
                         />
                       )}
                       {(showActions || onEditClick) && (
                         <Box>
                           {onEditClick && (
                             <IconButton
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onEditClick(row);
-                              }}
+                              // onClick={(e) => {
+                              //   e.stopPropagation();
+                              //   handleClick(row);
+                              // }}
                               size="small"
                             >
                               <EditIcon fontSize="small" />
@@ -187,7 +187,7 @@ const AppTable: React.FC<AppTableProps> = ({
                         const displayValue = column.format ? column.format(value, row) : value;
                         
                         return (
-                          <Box key={column.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Box key={column.label} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
                               {column.label}:
                             </Typography>
@@ -250,7 +250,7 @@ const AppTable: React.FC<AppTableProps> = ({
               )}
               {columns.map((column) => (
                 <TableCell
-                  key={column.id}
+                  key={column.label}
                   align={column.align}
                   style={{ minWidth: column.minWidth, fontWeight: 'bold' }}
                 >
@@ -264,7 +264,7 @@ const AppTable: React.FC<AppTableProps> = ({
             {rows
               .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
               .map((row) => {
-                const isItemSelected = isSelected(row.id);
+                const isItemSelected = isSelected(row.bookingId);
 
                 return (
                   <TableRow
@@ -274,23 +274,29 @@ const AppTable: React.FC<AppTableProps> = ({
                     role="checkbox"
                     aria-checked={isItemSelected}
                     tabIndex={-1}
-                    key={row.id}
+                    key={row.bookingId}
                     selected={isItemSelected}
-                    sx={{ cursor: onRowClick ? 'pointer' : 'default' }}
+                    sx={{ cursor: 'default', '&:hover': { cursor: 'pointer' } }}
                   >
                     {selectable && (
                       <TableCell padding="checkbox">
                         <Checkbox
                           checked={isItemSelected}
-                          onClick={(event) => handleSelectClick(event, row.id)}
+                          onClick={(event) => handleSelectClick(event, row.bookingId)}
                         />
                       </TableCell>
                     )}
                     {columns.map((column) => {
                       const value = row[column.id];
                       return (
-                        <TableCell key={column.id} align={column.align} style={{fontWeight: 'light'}}>
-                          {column.format ? column.format(value, row) : value}
+                        <TableCell key={column.label} align={column.align} style={{ fontWeight: 'light' }}>
+                          {column.id === 'status' ? (
+                            <StatusBadge status={value} ></StatusBadge>
+                          ) : column.format ? (
+                            column.format(value, row)
+                          ) : (
+                            value
+                          )}
                         </TableCell>
                       );
                     })}
@@ -302,7 +308,7 @@ const AppTable: React.FC<AppTableProps> = ({
                               <IconButton
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onEditClick(row);
+                                  handleClick(row);
                                 }}
                                 size="small"
                               >

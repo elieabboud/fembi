@@ -1,27 +1,24 @@
 import React from 'react';
 import { Chip, ChipProps } from '@mui/material';
+import { BookingStatus } from '../../types/calendarBooking';
 
 interface StatusBadgeProps extends Omit<ChipProps, 'color'> {
-  status: 'Completed' | 'Scheduled' | 'Cancelled' | 'Active' | 'Pending' | 'Banned' | 'Rejected';
+  status: BookingStatus | string;
 }
 
 const StatusBadge: React.FC<StatusBadgeProps> = ({ status, ...props }) => {
   // Map status to colors and variants
   const getStatusProps = () => {
     switch (status) {
-      case 'Completed':
+      case 'completed':
         return { bgcolor: '#008000', color: '#fff' };
-      case 'Scheduled':
+      case 'upcoming':
         return { bgcolor: '#D3323A', color: '#fff' };
       case 'Cancelled':
         return { bgcolor: '#f44336', color: '#fff' };
-      case 'Active':
+      case 'inProgress':
         return { bgcolor: '#4caf50', color: '#fff' };
-      case 'Pending':
-        return { bgcolor: '#ff9800', color: '#fff' };
-      case 'Banned':
-        return { bgcolor: '#f44336', color: '#fff' };
-      case 'Rejected':
+      case 'canceled':
         return { bgcolor: '#9e9e9e', color: '#fff' };
       default:
         return { bgcolor: '#e0e0e0', color: 'text.primary' };

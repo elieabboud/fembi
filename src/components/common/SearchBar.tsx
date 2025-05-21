@@ -27,30 +27,28 @@ const SearchBar: React.FC<SearchBarProps> = ({
     <Paper
       component="form"
       sx={{
-        p: '2px 4px',
         display: 'flex',
         alignItems: 'center',
         width: '100%',
         borderRadius: 1,
-        height: 70,
-        bgcolor: theme.palette.secondary.main,
+        border: 'solid gray 1px',
+        color: 'black'
       }}
       elevation={0}
       onSubmit={(e) => e.preventDefault()}
     >
-      <IconButton sx={{ p: '10px' }} aria-label="search">
-        <SearchIcon style={{color: 'white'}} />
+      <IconButton sx={{ pr: '10px' }} aria-label="search">
+        <SearchIcon style={{color: 'black'}} />
       </IconButton>
       <InputBase
         sx={{
-          ml: 1,
           flex: 1,
-          fontSize: 20,
+          fontSize: 16,
           '& .MuiInputBase-input': {
-            color: 'white',
+            color: 'black',
           },
           '& .MuiInputBase-input::placeholder': {
-            color: 'white',
+            color: 'gray',
             opacity: 1,
           },
         }}

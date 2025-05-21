@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
@@ -27,6 +27,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+export const AdminProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const { isAuthenticated, isAdmin } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!isAdmin) {
+    // Redirect non-admin users to a different page, e.g., profile
+    return <Navigate to="/calendar" replace />;
   }
 
   return <>{children}</>;

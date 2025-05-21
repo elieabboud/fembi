@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -10,10 +10,11 @@ import {
   Divider,
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
-import { stringify } from 'querystring';
+import FollowersInput from '../components/profile/FollowersInput';
+import { bookingService } from '../services/bookingService';
 
 const Profile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [profileImage, setProfileImage] = useState<string | null>(user?.profilePicture || null);
   
   // Form state
@@ -25,6 +26,21 @@ const Profile: React.FC = () => {
     confirmPassword: '',
     // followers: stringify(user?.followers || 0),
   });
+
+  const [followers, setFollowers] = useState<string[]>([
+    'Alice Johnson',
+    'Bob Smith',
+    'Charlie Davis',
+    'Diana Evans',
+    'Ethan Brown'
+  ]);
+  const [globalFollowers, setGlobalFollowers] = useState<string[]>([
+    'Fiona Clark',
+    'George Harris',
+    'Hannah Lee',
+    'Ian Miller',
+    'Julia Roberts'
+  ]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -51,6 +67,31 @@ const Profile: React.FC = () => {
       reader.readAsDataURL(e.target.files[0]);
     }
   };
+
+  const fetchFollowers = useCallback(async () => {
+    try {
+      const response = await bookingService.getFollowers();
+      setFollowers(response);
+    } catch (error) {
+      console.error('Failed to fetch followers', error);
+    }
+  }, []);
+
+    const fetchGlobalFollowers = useCallback(async () => {
+    try {
+      const response = await bookingService.getGlobalFollowers();
+      setGlobalFollowers(response);
+    } catch (error) {
+      console.error('Failed to fetch global followers', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchFollowers();
+    if (isAdmin) {
+      fetchGlobalFollowers();
+    }
+  }, [fetchFollowers, fetchGlobalFollowers, isAdmin]);
 
   return (
     <Box>
@@ -145,74 +186,34 @@ const Profile: React.FC = () => {
 
           <Divider/>
 
-          <Box sx={{ display: 'flex', flexDirection:{xs: 'column', md:'row'}, justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, width: '100%' }}>
-  
-            {/* Left Part */}
-            <Box
-              component="form"
-              onSubmit={handleSubmit}
-              sx={{ flex: 1, maxWidth: {xs: '100%', md:'50%'} }}
-            >
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    margin="normal"
-                    label="Old Password"
-                    variant="filled"
-                    name="oldPassword"
-                    type="password"
-                    value={formData.oldPassword}
-                    onChange={handleChange}
-                  />
-                  <TextField
-                    fullWidth
-                    margin="normal"
-                    label="New Password"
-                    variant="filled"
-                    name="newPassword"
-                    type="password"
-                    value={formData.newPassword}
-                    onChange={handleChange}
-                  />
-                  <TextField
-                    fullWidth
-                    margin="normal"
-                    label="Confirm Password"
-                    variant="filled"
-                    name="confirmPassword"
-                    type="password"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <Button type="submit" variant="contained" fullWidth>
-                    Update
-                  </Button>
-                </Grid>
-              </Grid>
-            </Box>
+          {/* <Box>
+            <FollowersInput
+            onChange={setFollowers}
+            followers= {followers}
+            getFollowers={bookingService.getFollowers}
+            setFollowers={bookingService.setFollowers}
+              />
+          </Box> */}
+          
+          {followers && (<Box>
+            <FollowersInput
+              onChange={setFollowers}
+              followers= {followers}
+              getFollowers={bookingService.getFollowers}
+              setFollowers={bookingService.setFollowers}
+            />
+          </Box>)}
 
-            <Divider orientation="vertical" flexItem />
-
-            {/* Right Part */}
-            <Box sx={{ flex: 1, width:'100%', maxWidth: {xs: '100%', md:'50%'} }}>
-              <Grid container>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Followers"
-                  variant="filled"
-                  name="followers"
-                  type="text"
-                  // value={}
-                  onChange={handleChange}
-                />
-              </Grid>
-            </Box>
-
-          </Box>
+          {isAdmin && globalFollowers && (<Box>
+            <FollowersInput
+              onChange={setGlobalFollowers}
+              followers= {globalFollowers}
+              getFollowers={bookingService.getGlobalFollowers}
+              setFollowers={bookingService.setGlobalFollowers}
+              label='Global Followers'
+            />
+          </Box>)} 
+         
 
         </Box>
       </Paper>

@@ -1,11 +1,11 @@
 export interface Booking {
   id: string;
-  closingDate: string;
-  closingLocation: string;
-  propertyAddress: string;
+  date: string;           // closing date
+  time: string;           // closing time
+  location: string;       // property address
   borrower: string;
   loanCloser: string;
   loanOfficer: string;
-  lender: string;
-  status: 'Scheduled' | 'Completed' | 'Cancelled';
+  dpaProgram: string;
+  status: 'Scheduled' | 'Completed';
 }
