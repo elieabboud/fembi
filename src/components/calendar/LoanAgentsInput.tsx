@@ -1,61 +1,36 @@
-import React, { FC, SyntheticEvent, useState, useEffect } from 'react';
+import React, { FC, SyntheticEvent } from 'react';
 import { Box, Autocomplete, TextField, Chip, Avatar } from '@mui/material';
 import { User } from '../../types/userModel';
 
 interface LoanAgentsInputProps {
   agents: User[];
-  onChange?: (newSelectedAgents: User[]) => void;
-  setAgents?: (agents: User[]) => Promise<void>;
+  selectedAgents: User[];
+  onChange: (newSelectedAgents: User[]) => void;
   label?: string;
-  initialSelectedAgents?: User[];
 }
 
 const LoanAgentsInput: FC<LoanAgentsInputProps> = ({
   agents,
+  selectedAgents,
   onChange,
-  setAgents,
   label = "Loan Agents"
 }) => {
-  // Initialize selectedAgents with all agents
-  const [selectedAgents, setSelectedAgents] = useState<User[]>(agents);
-
-  // Update onChange when selectedAgents changes
-  useEffect(() => {
-    if (onChange && selectedAgents.length > 0) {
-      onChange(selectedAgents);
-    }
-  }, [selectedAgents]);
-
-  const updateAgentsBackend = async (newSelectedAgents: User[]) => {
-    if (!setAgents) return;
-    try {
-      await setAgents(newSelectedAgents);
-      if (onChange) onChange(newSelectedAgents);
-    } catch (error) {
-      console.error('Failed to update agents:', error);
-    }
-  };
 
   const handleAgentsChange = (_event: SyntheticEvent, newValue: User[]) => {
-    setSelectedAgents(newValue);
-    if (onChange) onChange(newValue);
-    
-    // If there's a backend update function, call it
-    if (setAgents) {
-      updateAgentsBackend(newValue);
-    }
+    console.log('LoanAgentsInput: Selection changed to:', newValue.map(a => a.first_name));
+    onChange(newValue);
   };
 
   return (
-    
     <Box sx={{ flex: 1, width: '100%' }}>
       <Autocomplete
         multiple
         options={agents}
         value={selectedAgents}
         onChange={handleAgentsChange}
-        getOptionLabel={(option) => option.email || ''}
+        getOptionLabel={(option) => `${option.first_name} ${option.last_name}` || option.email || ''}
         isOptionEqualToValue={(option, value) => option.user_id === value.user_id}
+        disableCloseOnSelect
         renderTags={(value: User[], getTagProps) =>
           value.map((option: User, index: number) => {
             const tagProps = getTagProps({ index });
@@ -63,26 +38,57 @@ const LoanAgentsInput: FC<LoanAgentsInputProps> = ({
             return (
               <Chip
                 key={key}
-                label={option.first_name || option.email}
+                label={`${option.first_name} ${option.last_name}` || option.email}
                 variant="outlined"
-                // avatar={option.profilePicture ? <Avatar src={option.profilePicture} /> : undefined}
+                avatar={
+                  option.profile_picture ? 
+                    <Avatar src={option.profile_picture} sx={{ width: 24, height: 24 }} /> : 
+                    <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem' }}>
+                      {(option.first_name?.[0] || '') + (option.last_name?.[0] || '')}
+                    </Avatar>
+                }
                 {...otherProps}
               />
             );
           })
         }
-        renderOption={(props, option) => {
+        renderOption={(props, option, { selected }) => {
           const { key, ...otherProps } = props;
           
           return (
             <Box 
               component="li" 
-              sx={{ display: 'flex', alignItems: 'center', gap: 1 }} 
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 1,
+                '&:hover': {
+                  backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                }
+              }} 
               key={key}
               {...otherProps}
             >
-              <span>{option.first_name}</span>
-              <span style={{ color: 'gray', marginLeft: 'auto', fontSize: '0.8rem' }}>{option.email}</span>
+              {option.profile_picture ? (
+                <Avatar src={option.profile_picture} sx={{ width: 32, height: 32 }} />
+              ) : (
+                <Avatar sx={{ width: 32, height: 32, fontSize: '0.875rem' }}>
+                  {(option.first_name?.[0] || '') + (option.last_name?.[0] || '')}
+                </Avatar>
+              )}
+              <Box sx={{ flexGrow: 1 }}>
+                <div style={{ fontWeight: 500 }}>
+                  {option.first_name} {option.last_name}
+                </div>
+                <div style={{ color: 'gray', fontSize: '0.8rem' }}>
+                  {option.email}
+                </div>
+              </Box>
+              {selected && (
+                <Box sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                  ✓
+                </Box>
+              )}
             </Box>
           );
         }}
@@ -91,14 +97,26 @@ const LoanAgentsInput: FC<LoanAgentsInputProps> = ({
             {...params}
             variant="outlined"
             label={label}
-            placeholder="Select loan agents"
+            placeholder={selectedAgents.length === 0 ? "Select loan agents to filter calendar" : "Add or remove agents"}
+            helperText={`${selectedAgents.length} of ${agents.length} agents selected`}
           />
         )}
+        ChipProps={{
+          size: "medium",
+          variant: "outlined"
+        }}
+        sx={{
+          '& .MuiAutocomplete-tag': {
+            margin: '2px',
+          },
+          '& .MuiAutocomplete-inputRoot': {
+            paddingTop: '8px',
+            paddingBottom: '8px',
+          }
+        }}
       />
     </Box>
-    
   );
-
 };
 
 export default LoanAgentsInput;

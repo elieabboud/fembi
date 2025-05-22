@@ -10,6 +10,8 @@ import {
   useMediaQuery,
   Box,
   CircularProgress,
+  Backdrop,
+  LinearProgress,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { StaticDatePicker } from '@mui/x-date-pickers';
@@ -33,26 +35,37 @@ type BookingFormProps = {
   setLoading?: (loading: boolean) => void;
 }
 
-const CreateBookingForm: React.FC<BookingFormProps> = ({ onClose, onSuccess, initialData, isEditMode = false, setLoading }) => {
+const CreateBookingForm: React.FC<BookingFormProps> = ({ 
+  onClose, 
+  onSuccess, 
+  initialData, 
+  isEditMode = false, 
+  setLoading 
+}) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { isAdmin } = useAuth();
   
+  // Loading states for different operations
+  const [loadingStates, setLoadingStates] = useState({
+    loanDetails: false,
+    services: false,
+    timeSlots: false,
+    followers: false,
+    submitting: false,
+    initializing: false
+  });
   
   const [services, setServices] = useState<BookingService[]>([]);
   const [fetchedFollowers, setFetchedFollowers] = useState<string[]>([]);
   const [addedFollowers, setAddedFollowers] = useState<string[]>([]);
-  const [loadingFollowers, setLoadingFollowers] = useState<boolean>(false);
   const [combinedFollowers, setCombinedFollowers] = useState<string[]>([]);
   const [showLoanDetails, setShowLoanDetails] = useState<boolean>(false);
   const [loanDetails, setLoanDetails] = useState<LoanDetails>();
-  const [loadingLoanDetails, setLoadingLoanDetails] = useState<boolean>(false);
   const [selectedService, setSelectedService] = useState<BookingService>();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
-  const [loadingTimeSlots, setLoadingTimeSlots] = useState<boolean>(false);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [bookingData, setBookingData] = useState<CreateAppointmentRequest>(
   {
@@ -93,6 +106,14 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({ onClose, onSuccess, ini
 
   const editMode = isEditMode || !!initialData;
 
+  // Helper function to update loading states
+  const updateLoadingState = (key: keyof typeof loadingStates, value: boolean) => {
+    setLoadingStates(prev => ({ ...prev, [key]: value }));
+  };
+
+  // Check if any loading is in progress
+  const isAnyLoading = Object.values(loadingStates).some(Boolean);
+
   const handleLoanIdChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string>
   ) => {
@@ -123,7 +144,7 @@ const handleServiceChange = (event: React.ChangeEvent<{ value: unknown }>) => {
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   
-  if (isSubmitting) return;
+  if (loadingStates.submitting) return;
 
   let newError:string;
   let hasError = false;
@@ -145,7 +166,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   
   setError("");
   
-  setIsSubmitting(true);
+  updateLoadingState('submitting', true);
   setLoading?.(true);
 
   try {
@@ -175,13 +196,15 @@ const handleSubmit = async (e: React.FormEvent) => {
   } catch (error) {
     console.error(`Error ${editMode ? 'updating' : 'creating'} booking:`, error);
   } finally {
-    setIsSubmitting(false);
+    updateLoadingState('submitting', false);
+    setLoading?.(false);
   }
 };
 
   const fetchLoanDetails = async () => {
-    if(isSubmitting) return;
+    if (loadingStates.submitting) return;
 
+    updateLoadingState('loanDetails', true);
     try{
       const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
 
@@ -213,11 +236,12 @@ const handleSubmit = async (e: React.FormEvent) => {
     }catch (error) {
       console.error('Error fetching Loan Details:', error);
     }finally{
-      setLoadingLoanDetails(false);
+      updateLoadingState('loanDetails', false);
     }
   };
 
   const fetchAvailableServicesData = useCallback(async () => {
+    updateLoadingState('services', true);
     try {
       const response: BookingService[] = await bookingService.getAvailableServices();
       setServices(response);
@@ -234,8 +258,10 @@ const handleSubmit = async (e: React.FormEvent) => {
     } catch (error) {
       console.error('Error fetching available services data:', error);
       setServices([]);
+    } finally {
+      updateLoadingState('services', false);
     }
-  }, []);
+  }, [editMode, bookingData.ServiceId]);
 
   const handleDateTimeSelect = useCallback(() => {
     if (!selectedSlot || !selectedDate) return;
@@ -261,26 +287,8 @@ const handleSubmit = async (e: React.FormEvent) => {
   const fetchAvailableTimeSlots = useCallback(async () => {     
     if (!selectedDate) return;
 
-    //to-do make this dynamic
-    
-    // In edit mode, use the service ID from bookingData
-    // Otherwise, use the selected service
-    // let serviceId;
-    // if (editMode) {
-    //   serviceId = bookingData.ServiceId;
-    // } else if (selectedService) {
-    //   serviceId = selectedService.id;
-    // } else {
-    //   return; // No service selected yet
-    // }
-
-    // if (!serviceId) {
-    //   console.error("No service ID available for fetching time slots");
-    //   return;
-    // }
-
+    updateLoadingState('timeSlots', true);
     try {
-      setLoadingTimeSlots(true);
       console.log(`Fetching time slots for serviceId: ${"serviceId"} and date: ${selectedDate.toISOString()}`);
       const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
         "8f570373-62ed-4bd3-8158-ac49d13e82ec",
@@ -309,13 +317,13 @@ const handleSubmit = async (e: React.FormEvent) => {
     } catch (error) {
       console.error('Error fetching time slots for selected service:', error);
     } finally {
-      setLoadingTimeSlots(false);
+      updateLoadingState('timeSlots', false);
     }
-  }, [selectedService, selectedDate]);
+  }, [selectedService, selectedDate, editMode, bookingData.DateTimeInfo?.SelectedTime]);
 
   const fetchAllFollowers = useCallback(async () => {
+    updateLoadingState('followers', true);
     try {
-      setLoadingFollowers(true);
       // Always fetch regular followers
       const regularFollowersPromise = bookingService.getFollowers();
       
@@ -344,7 +352,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       console.error('Failed to fetch followers', error);
       setFetchedFollowers([]);
     } finally {
-      setLoadingFollowers(false);
+      updateLoadingState('followers', false);
     }
   }, [isAdmin]);
 
@@ -360,45 +368,47 @@ const handleSubmit = async (e: React.FormEvent) => {
   useEffect(() => {
   const initializeEditMode = async () => {
     if (editMode && initialData) {
+      updateLoadingState('initializing', true);
+      
       console.log('Edit mode activated with initial data:', initialData);
       
       const formattedData = mapCalendarBookingToFormData(initialData as any);
 
-      const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
-      setLoanDetails(loanDetails);
-      setShowLoanDetails(true);
-      //setBookingData(formattedData);
-      setBookingData((prev) => ({
-        ...formattedData,
-        BorrowerInformation: {
-          FirstName: loanDetails.borrowerFirstName,
-          LastName: loanDetails.borrowerLastName,
-          Email: loanDetails.borrowerEmail,
-          PhoneNumber: loanDetails.borrowerPhone,
-          Address: {
-            Street: loanDetails.borrowerAddress,
-            City: loanDetails.borrowerCity,
-            State: loanDetails.borrowerState,
-            ZipCode: loanDetails.borrowerZipCode,
+      try {
+        const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
+        setLoanDetails(loanDetails);
+        setShowLoanDetails(true);
+        
+        setBookingData((prev) => ({
+          ...formattedData,
+          BorrowerInformation: {
+            FirstName: loanDetails.borrowerFirstName,
+            LastName: loanDetails.borrowerLastName,
+            Email: loanDetails.borrowerEmail,
+            PhoneNumber: loanDetails.borrowerPhone,
+            Address: {
+              Street: loanDetails.borrowerAddress,
+              City: loanDetails.borrowerCity,
+              State: loanDetails.borrowerState,
+              ZipCode: loanDetails.borrowerZipCode,
+            },
           },
-        },
-      }));
+        }));
 
-      console.log("after setting:", formattedData); // Use formattedData here
+        console.log("after setting:", formattedData); // Use formattedData here
 
-      if (formattedData.DateTimeInfo?.SelectedDate) {
-        setSelectedDate(new Date(formattedData.DateTimeInfo.SelectedDate));
-      }
+        if (formattedData.DateTimeInfo?.SelectedDate) {
+          setSelectedDate(new Date(formattedData.DateTimeInfo.SelectedDate));
+        }
 
-      setShowLoanDetails(true);
-
-      // if (initialData.loanData) {
-      //   setLoanDetails(initialData.loanData);
-      // }
-
-      if (formattedData.Followers) {
-        const followerArray = formattedData.Followers.split(',');
-        setFetchedFollowers(followerArray);
+        if (formattedData.Followers) {
+          const followerArray = formattedData.Followers.split(',');
+          setFetchedFollowers(followerArray);
+        }
+      } catch (error) {
+        console.error('Error initializing edit mode:', error);
+      } finally {
+        updateLoadingState('initializing', false);
       }
     }
   };
@@ -409,7 +419,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   useEffect(() => {
     fetchAvailableServicesData();
     fetchAllFollowers();
-  }, []);
+  }, [fetchAvailableServicesData, fetchAllFollowers]);
 
   // Update bookingData.Followers whenever either follower list changes
   useEffect(() => {
@@ -436,6 +446,32 @@ const handleSubmit = async (e: React.FormEvent) => {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
+      {/* Loading Backdrop for major operations */}
+      <Backdrop
+        sx={{ 
+          color: '#fff', 
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          position: 'absolute',
+          backdropFilter: 'blur(3px)',
+        }}
+        open={loadingStates.submitting || loadingStates.initializing}
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <CircularProgress color="inherit" size={60} />
+          <Typography variant="h6">
+            {loadingStates.submitting ? (editMode ? 'Updating booking...' : 'Creating booking...') : 
+             loadingStates.initializing ? 'Loading booking details...' : 'Processing...'}
+          </Typography>
+        </Box>
+      </Backdrop>
+
+      {/* Loading Progress Bar */}
+      {isAnyLoading && !loadingStates.submitting && !loadingStates.initializing && (
+        <Box sx={{ width: '100%', position: 'sticky', top: 0, zIndex: 10 }}>
+          <LinearProgress />
+        </Box>
+      )}
+
       <Grid 
       container 
       spacing={2} 
@@ -448,6 +484,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         '&::-webkit-scrollbar': {
           display: 'none',
         },
+        position: 'relative',
       }}
       >
         <Grid item xs={12} sx={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
@@ -471,14 +508,28 @@ const handleSubmit = async (e: React.FormEvent) => {
                 readOnly: editMode,
               }}
             />
-            {!editMode && (<Button disabled={!bookingData.EncompassDetails.EncompassLoanId} variant="contained" onClick={() => fetchLoanDetails()}>Enter</Button>)}
+            {!editMode && (
+              <Button 
+                disabled={!bookingData.EncompassDetails.EncompassLoanId || loadingStates.loanDetails} 
+                variant="contained" 
+                onClick={() => fetchLoanDetails()}
+                sx={{ minWidth: 120 }}
+              >
+                {loadingStates.loanDetails ? <CircularProgress size={24} color="inherit" /> : 'Enter'}
+              </Button>
+            )}
           </Grid>
         </Grid>
-        {
-          loadingLoanDetails && (<Box sx={{ display: 'flex', width: '100%', justifyContent: 'center', height: 'auto', my: 2 }}>
-            <CircularProgress size={30} thickness={4} sx={{ my: 1 }} />
-          </Box>)
-        }
+
+        {loadingStates.loanDetails && (
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
+              <CircularProgress size={24} />
+              <Typography color="text.secondary">Loading loan details...</Typography>
+            </Box>
+          </Grid>
+        )}
+
         {showLoanDetails && (
         <Box sx={{ width: '100%', padding: '16px' }}>
           <Grid container spacing={2}>
@@ -657,6 +708,7 @@ const handleSubmit = async (e: React.FormEvent) => {
             variant="outlined"    
             InputProps={{
               readOnly: editMode,
+              endAdornment: loadingStates.services ? <CircularProgress size={20} /> : null,
             }}
             sx={{mt: '10px'}}
           >
@@ -686,7 +738,7 @@ const handleSubmit = async (e: React.FormEvent) => {
             timeSlots={timeSlots}
             selectedSlot={selectedSlot}
             onSelect={setSelectedSlot}
-            loading= {loadingTimeSlots}
+            loading={loadingStates.timeSlots}
           />)}
           
           <Followers
@@ -694,7 +746,7 @@ const handleSubmit = async (e: React.FormEvent) => {
             fetchedFollowers={fetchedFollowers}
             addedFollowers={addedFollowers}
             onAddFollower={handleAddFollower}
-            loading= {loadingFollowers}
+            loading={loadingStates.followers}
             onRemoveFollower={(followerToRemove) => {
             setAddedFollowers(prev => prev.filter(f => f !== followerToRemove));
         }}/>
@@ -711,6 +763,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                 fullWidth
                 variant="contained"
                 onClick={onClose}
+                disabled={loadingStates.submitting}
                 sx={{
                   backgroundColor: '#D3323A',
                 }}
@@ -723,9 +776,20 @@ const handleSubmit = async (e: React.FormEvent) => {
                 fullWidth
                 variant="contained"
                 onClick={handleSubmit}
+                disabled={isAnyLoading}
                 onMouseDown={(e) => e.preventDefault()}
+                sx={{
+                  position: 'relative',
+                }}
               >
-                {editMode ? 'Update' : 'Schedule'}
+                {loadingStates.submitting ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={20} color="inherit" />
+                    {editMode ? 'Updating...' : 'Scheduling...'}
+                  </Box>
+                ) : (
+                  editMode ? 'Update' : 'Schedule'
+                )}
               </Button>
             </Grid>
           </Grid>

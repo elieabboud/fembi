@@ -39,7 +39,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [loanAgents, setLoanAgents] = useState<User[]>([]);
   const [selectedAgents, setSelectedAgents] = useState<User[]>([]);
-  const [filteredBookings, setFilteredBookings] = useState<calendarBooking[]>(bookings);
+  const [filteredBookings, setFilteredBookings] = useState<calendarBooking[]>([]);
   const [selectedRow, setSelectedRow] = useState<calendarBooking | undefined>();
   const [submittedData, setSubmittedData] = useState<CreateAppointmentRequest | null>({
     ServiceId: "svc123",
@@ -224,53 +224,85 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
     }
   };
 
-  const fetchUsersFromDatabase = async ()=> {
-    try{
-      const response = await bookingService.getUsers({tableName: 'user'});
-
+  const fetchUsersFromDatabase = async () => {
+    try {
+      const response = await bookingService.getUsers({ tableName: 'user' });
       const agents = response.result as unknown as User[];
+      console.log('Fetched agents from database:', agents);
       setLoanAgents(agents);
-    }catch(error){
+    } catch (error) {
       console.error('Error fetching users from database: ', error);
     }
-  }
-
-  const handleAgentsChange = (newSelectedAgents: User[]) => {
-    console.log('Selected agents:', newSelectedAgents);
-    setSelectedAgents(newSelectedAgents);
-    
-    applyAgentFiltering(newSelectedAgents);
   };
 
-  const applyAgentFiltering = useCallback((agents: User[]) => {
-    if (
-      // No agents selected
-      !agents || agents.length === 0) {
-      setFilteredBookings(bookings);
-      return;
-    }
-    
-    const selectedAgentIds = new Set(
-      agents.map(agent => agent.microsoft_id)
-    );
-    
-    const filtered = bookings.filter(booking => {
-      const ownerIdStr = String(booking.ownerId);
-      return selectedAgentIds.has(ownerIdStr);
-    });
-    
-    setFilteredBookings(filtered);
-  }, [bookings]);
-  
-  useEffect(()=> {
-    fetchUsersFromDatabase();
-    setSelectedAgents(loanAgents);
-    console.log(selectedAgents);
+  const handleAgentsChange = useCallback((newSelectedAgents: User[]) => {
+    console.log('Calendar: Agent selection changed to:', newSelectedAgents.map(a => a.first_name));
+    setSelectedAgents(newSelectedAgents);
   }, []);
 
+  const applyAgentFiltering = useCallback(() => {
+    console.log('Applying agent filtering...');
+    console.log('Total bookings:', bookings.length);
+    console.log('Selected agents:', selectedAgents.length);
+    
+    // If no agents are selected, show no bookings (empty filter)
+    if (selectedAgents.length === 0) {
+      console.log('No agents selected - showing no bookings');
+      setFilteredBookings([]);
+      return;
+    }
+
+    // Create a set of selected agent microsoft_ids for efficient lookup
+    const selectedAgentIds = new Set(
+      selectedAgents.map(agent => String(agent.microsoft_id))
+    );
+    
+    console.log('Selected agent microsoft_ids:', Array.from(selectedAgentIds));
+    
+    // Filter bookings where ownerId matches any selected agent's microsoft_id
+    const filtered = bookings.filter(booking => {
+      const ownerIdStr = String(booking.ownerId);
+      const matches = selectedAgentIds.has(ownerIdStr);
+      
+      if (matches) {
+        console.log(`✓ Booking ${booking.bookingId} matches agent ${ownerIdStr}`);
+      }
+      
+      return matches;
+    });
+    
+    console.log(`Filtered result: ${filtered.length} bookings out of ${bookings.length} total`);
+    setFilteredBookings(filtered);
+  }, [bookings, selectedAgents]);
+  
+  // Initialize agents on component mount
   useEffect(() => {
-    applyAgentFiltering(selectedAgents);
-  }, [bookings, selectedAgents, applyAgentFiltering, loanAgents]);
+    if (isAdmin) {
+      fetchUsersFromDatabase();
+    }
+  }, [isAdmin]);
+
+  // Initialize selectedAgents with all agents when agents are first loaded
+  useEffect(() => {
+    if (loanAgents.length > 0 && selectedAgents.length === 0) {
+      console.log('Initializing with all agents selected');
+      const allAgents = [...loanAgents];
+      setSelectedAgents(allAgents);
+    }
+  }, [loanAgents]); // Removed selectedAgents.length dependency
+
+  // Apply filtering whenever bookings or selected agents change
+  useEffect(() => {
+    console.log('Filter effect triggered - bookings:', bookings.length, 'selectedAgents:', selectedAgents.length);
+    applyAgentFiltering();
+  }, [applyAgentFiltering]);
+
+  // If not admin or no bookings, show all bookings without filtering
+  useEffect(() => {
+    if (!isAdmin) {
+      setFilteredBookings(bookings);
+    }
+  }, [bookings, isAdmin]);
 
   return (
     <Box>      
@@ -321,20 +353,30 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
         </Box>
       </Box>
 
-      {/* AGENTS */}
-      {
-        isAdmin && loanAgents.length >0 && (
-          <Box sx={{ mt: 4 }}>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
-              Loan Agents
-            </Typography>
-             <LoanAgentsInput 
+      {/* LOAN AGENTS FILTER */}
+      {isAdmin && loanAgents.length > 0 && (
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
+            Filter by Loan Agents
+          </Typography>
+          <LoanAgentsInput 
             agents={loanAgents}
+            selectedAgents={selectedAgents}
             onChange={handleAgentsChange} 
-            label="Select Loan Agents"/>
+            label="Select Loan Agents"
+          />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              Showing {filteredBookings.length} of {bookings.length} bookings
+              {selectedAgents.length === 0 ? ' (no agents selected)' :
+               selectedAgents.length < loanAgents.length ? 
+                ` (filtered by ${selectedAgents.length} agent${selectedAgents.length !== 1 ? 's' : ''})` :
+                ' (all agents selected)'
+              }
+            </Typography>
           </Box>
-        )
-      }
+        </Box>
+      )}
 
       {/* NEW BOOKING DIALOG */}
       <Dialog
