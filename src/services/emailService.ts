@@ -1,4 +1,5 @@
 import { calendarBooking } from '../types/calendarBooking';
+import { toLocalISOString } from '../utils/general';
 import { Column } from './exportToExcel';
 
 export class EmailService {
@@ -34,7 +35,7 @@ ${htmlBody}
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `bookings-report-${new Date().toISOString().split('T')[0]}.eml`;
+    link.download = `bookings-report-${toLocalISOString(new Date()).split('T')[0]}.eml`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

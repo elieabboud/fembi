@@ -9,6 +9,7 @@ import {
   isWithinInterval
 } from 'date-fns';
 import { CalendarViewType } from '../components/calendar/CalendarViewSelector';
+import { toLocalISOString } from '../utils/general';
 
 export const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -182,7 +183,7 @@ export function shouldFetchNewData(
 }
 
 export function formatDateForApi(date: Date): string {
-  return date.toISOString();
+  return toLocalISOString(date);
 }
 
 export function getDateRangeText(date: Date, view: CalendarViewType): string {

@@ -1,6 +1,18 @@
 import { dashboardResponseDTO } from "../types/dashboardResponseDTO";
 import { dashboardStats } from "../types/dashboardStats";
 
+export function toLocalISOString(date) {
+  const pad = (n) => n.toString().padStart(2, '0');
+  return (
+    date.getFullYear() + '-' +
+    pad(date.getMonth() + 1) + '-' +
+    pad(date.getDate()) + 'T' +
+    pad(date.getHours()) + ':' +
+    pad(date.getMinutes()) + ':' +
+    pad(date.getSeconds())
+  );
+}
+
 export const mapApiResponseToDashboardStats = (apiResponse: dashboardResponseDTO): dashboardStats => {
   const colors = ['#2e7d32', '#ffc107', '#1976d2', '#d32f2f', '#9c27b0', '#ff5722'];
 

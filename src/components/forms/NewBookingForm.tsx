@@ -26,6 +26,7 @@ import { BookingService, TimeSlot } from '../../types/service';
 import { useAuth } from '../../context/AuthContext';
 import { calendarBooking } from '../../types/calendarBooking';
 import { mapCalendarBookingToFormData } from '../../services/bookingFormUtils';
+import { toLocalISOString } from '../../utils/general';
 
 type BookingFormProps = {
   onClose: () => void;
@@ -280,11 +281,11 @@ const handleSubmit = async (e: React.FormEvent) => {
   const handleDateTimeSelect = useCallback(() => {
     if (!selectedSlot || !selectedDate || readOnlyMode) return; // Prevent in view mode
 
-    const dateStr = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
+    const dateStr = toLocalISOString(selectedDate).split('T')[0]; // YYYY-MM-DD
 
     // Extract time "HH:mm" from StartTime ISO string
     const startTime = new Date(selectedSlot.startTime);
-    const time24 = startTime.toISOString().substr(11, 5); // "HH:mm"
+    const time24 = toLocalISOString(startTime).substr(11, 5); // "HH:mm"
 
     setBookingData((prev) => ({
       ...prev,
@@ -303,10 +304,11 @@ const handleSubmit = async (e: React.FormEvent) => {
 
     updateLoadingState('timeSlots', true);
     try {
-      console.log(`Fetching time slots for serviceId: ${"serviceId"} and date: ${selectedDate.toISOString()}`);
+      debugger;
+      console.log(`Fetching time slots for serviceId: ${"serviceId"} and date: ${toLocalISOString(selectedDate)}`);
       const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
-        "8f570373-62ed-4bd3-8158-ac49d13e82ec",
-        selectedDate.toISOString()
+        bookingData?.ServiceId,
+        toLocalISOString(selectedDate)
       );
 
       setTimeSlots(response);
@@ -319,7 +321,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         
         const matchingSlot = response.find(slot => {
           const slotStartTime = new Date(slot.startTime);
-          const slotTime = slotStartTime.toISOString().substr(11, 5); // "HH:mm"
+          const slotTime = toLocalISOString(slotStartTime).substr(11, 5); // "HH:mm"
           return slotTime === timeToMatch;
         });
         
@@ -651,7 +653,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                 fullWidth
                 label="Loan Number"
                 variant='outlined'
-                value={loanDetails?.loanId || ''}
+                value={loanDetails?.loanNumber || ''}
                 InputProps={{
                   readOnly: true,
                 }}

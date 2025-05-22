@@ -1,5 +1,6 @@
 import { calendarBooking } from "../types/calendarBooking";
 import { CreateAppointmentRequest } from "../types/CreateAppointmentRequest";
+import { toLocalISOString } from "../utils/general";
 
 // Add this function to your component
 export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): CreateAppointmentRequest => {
@@ -8,8 +9,8 @@ export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): 
   let selectedTime = "";
   if (calendarBooking.start && calendarBooking.start.dateTime) {
     const startDate = new Date(calendarBooking.start.dateTime);
-    selectedDate = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
-    selectedTime = startDate.toISOString().substr(11, 5); // HH:mm
+    selectedDate = toLocalISOString(startDate).split('T')[0]; // YYYY-MM-DD
+    selectedTime = toLocalISOString(startDate).substr(11, 5); // HH:mm
   }
 
   return {   
