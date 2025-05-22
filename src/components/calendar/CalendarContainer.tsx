@@ -76,24 +76,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
     PriceType: "Fixed",
     StaffMemberIds: ["staff001", "staff002"],
   });
-  const [loanDetails, setLoanDetails] = useState<LoanDetails>({
-    loanId: "c91c19fc-df1b-4f26-a664-902f3b05f4ce",
-    borrowerFirstName: "Disclose HM",
-    borrowerLastName: "Test",
-    borrowerEmail: "hmartinez@fembi.com",
-    borrowerPhone: "305-505-8479",
-    borrowerAddress: "111 RD PALMAR WARD",
-    borrowerCity: "Aguadilla",
-    borrowerState: "PR",
-    borrowerZipCode: "00603",
-    loanNumber: "PR022408123184",
-    loanType: "FHA QM",
-    loanAmount: 235653,
-    loanOfficer: "Maria Torres Botty",
-    notes: "",
-    dpa: "",
-    loanCloser: ""
-  });
+  const [loanDetails, setLoanDetails] = useState<LoanDetails>();
   
   // Track the last applied date/view to prevent unnecessary updates
   const lastAppliedRef = useRef<{ date: Date, view: CalendarViewType } | null>(null);
@@ -159,22 +142,41 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   }, [currentDate, currentView, updateDateAndView]);
 
   const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
-    setShowSuccessMessage(true);
-    setNewBooking(false);
-    setShowEditBooking(false);
-    setSubmittedData(bookingData);
+  setShowSuccessMessage(true);
+  setNewBooking(false);
+  setShowEditBooking(false);
+  setSubmittedData(bookingData);
+  
+  try {
+    // Fetch real loan details using the loan ID from the booking data
+    const realLoanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
+    setLoanDetails(realLoanDetails);
     
-    // Fetch loan details
-    try {
-      const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
-      setLoanDetails(loanDetails);
-      
-      // Optionally refresh calendar data after successful booking
-      onDateRangeChange(currentDate, currentView);
-    } catch (error) {
-      console.error('Error fetching Loan Details:', error);
-    }
-  };
+    // Refresh calendar data after successful booking
+    onDateRangeChange(currentDate, currentView);
+  } catch (error) {
+    console.error('Error fetching Loan Details:', error);
+    const fallbackLoanDetails: LoanDetails = {
+      loanId: bookingData.EncompassDetails.EncompassLoanId,
+      borrowerFirstName: bookingData.BorrowerInformation.FirstName,
+      borrowerLastName: bookingData.BorrowerInformation.LastName,
+      borrowerEmail: bookingData.BorrowerInformation.Email,
+      borrowerPhone: bookingData.BorrowerInformation.PhoneNumber,
+      borrowerAddress: bookingData.BorrowerInformation.Address.Street,
+      borrowerCity: bookingData.BorrowerInformation.Address.City,
+      borrowerState: bookingData.BorrowerInformation.Address.State,
+      borrowerZipCode: bookingData.BorrowerInformation.Address.ZipCode,
+      loanNumber: "N/A",
+      loanType: "N/A",
+      loanAmount: 0,
+      loanOfficer: bookingData.EncompassDetails.LoanOfficer || "N/A",
+      notes: "",
+      loanCloser: bookingData.EncompassDetails.LoanCloser || "N/A",
+      dpa: bookingData.EncompassDetails.dpa || "N/A"
+    };
+    setLoanDetails(fallbackLoanDetails);
+  }
+};
 
   // Handle event click for editing
   const handleEventClick = useCallback((booking: calendarBooking) => {

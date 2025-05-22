@@ -27,20 +27,8 @@ const Profile: React.FC = () => {
     // followers: stringify(user?.followers || 0),
   });
 
-  const [followers, setFollowers] = useState<string[]>([
-    'Alice Johnson',
-    'Bob Smith',
-    'Charlie Davis',
-    'Diana Evans',
-    'Ethan Brown'
-  ]);
-  const [globalFollowers, setGlobalFollowers] = useState<string[]>([
-    'Fiona Clark',
-    'George Harris',
-    'Hannah Lee',
-    'Ian Miller',
-    'Julia Roberts'
-  ]);
+  const [followers, setFollowers] = useState<string[]>([]);
+  const [globalFollowers, setGlobalFollowers] = useState<string[]>([]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;

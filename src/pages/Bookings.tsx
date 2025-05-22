@@ -91,24 +91,7 @@ const Bookings: React.FC = () => {
   const [newBooking, setNewBooking] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [submittedData, setSubmittedData] = useState<CreateAppointmentRequest | null>(null);
-  const [loanDetails, setLoanDetails] = useState<LoanDetails>({
-    loanId: "c91c19fc-df1b-4f26-a664-902f3b05f4ce",
-    borrowerFirstName: "Disclose HM",
-    borrowerLastName: "Test",
-    borrowerEmail: "hmartinez@fembi.com",
-    borrowerPhone: "305-505-8479",
-    borrowerAddress: "111 RD PALMAR WARD",
-    borrowerCity: "Aguadilla",
-    borrowerState: "PR",
-    borrowerZipCode: "00603",
-    loanNumber: "PR022408123184",
-    loanType: "FHA QM",
-    loanAmount: 235653,
-    loanOfficer: "Maria Torres Botty",
-    notes: "",
-    loanCloser: "",
-    dpa: ""
-  });
+  const [loanDetails, setLoanDetails] = useState<LoanDetails>();
 
   const [loading, setLoading] = useState(true);
   const [loadingPostResponse, setLoadingPostResponse] = useState(false);
@@ -322,22 +305,25 @@ const Bookings: React.FC = () => {
     );
   }
 
-  const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
-    try {
-      setNewBooking(false);
-      setLoadingPostResponse(true);
-      setSubmittedData(bookingData);
-      
-      const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
-      setLoanDetails(loanDetails);
-      
-      setShowSuccessMessage(true);
-    } catch (error) {
-      console.error('Error fetching Loan Details:', error);
-    } finally {
-      setLoadingPostResponse(false);
-    }
-  };
+ const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
+  try {
+    setNewBooking(false);
+    setLoadingPostResponse(true);
+    setSubmittedData(bookingData);
+    
+    const realLoanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
+    setLoanDetails(realLoanDetails);
+    
+    setShowSuccessMessage(true);
+    
+    await fetchBookingsData();
+  } catch (error) {
+    console.error('Error fetching Loan Details:', error);
+    setShowSuccessMessage(true);
+  } finally {
+    setLoadingPostResponse(false);
+  }
+};
 
   return (
     <Box sx={{ px: 4, py: 2 }}>

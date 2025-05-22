@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    image: frontend:1.0.0
+    ports:
+      - "${EXPOSED_DOCKER_PORT}:3000"
+    container_name: fbc-frontend
+    networks:
+      - fembi-network
+networks:
+  fembi-network:
+    external: true

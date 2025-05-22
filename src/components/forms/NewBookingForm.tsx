@@ -516,32 +516,34 @@ const handleSubmit = async (e: React.FormEvent) => {
             <CloseIcon sx={{float: 'right', color: 'gray', cursor: 'pointer'}} onClick={onClose} />
         </Grid>
 
-        <Grid item xs={12}>
-          <Typography variant="h6">Client Details</Typography>
-          <Grid sx={{display: 'flex', gap: '4px', mt: '10px'}}>
-            <TextField
-              fullWidth
-              label="Encompass Loan ID"
-              variant='outlined'
-              required
-              value={bookingData.EncompassDetails.EncompassLoanId || ''}
-              onChange={handleLoanIdChange}
-              InputProps={{
-                readOnly: editMode || readOnlyMode,
-              }}
-            />
-            {!editMode && !readOnlyMode && (
-              <Button 
-                disabled={!bookingData.EncompassDetails.EncompassLoanId || loadingStates.loanDetails} 
-                variant="contained" 
-                onClick={() => fetchLoanDetails()}
-                sx={{ minWidth: 120 }}
-              >
-                {loadingStates.loanDetails ? <CircularProgress size={24} color="inherit" /> : 'Enter'}
-              </Button>
-            )}
+        <Box sx={{ width: '100%', padding: '16px' }}>
+          <Grid item xs={12}>
+            <Typography variant="h6">Client Details</Typography>
+            <Grid sx={{display: 'flex', gap: '4px', mt: '10px'}}>
+              <TextField
+                fullWidth
+                label="Encompass Loan ID"
+                variant='outlined'
+                required
+                value={bookingData.EncompassDetails.EncompassLoanId || ''}
+                onChange={handleLoanIdChange}
+                InputProps={{
+                  readOnly: editMode || readOnlyMode,
+                }}
+              />
+              {!editMode && !readOnlyMode && (
+                <Button 
+                  disabled={!bookingData.EncompassDetails.EncompassLoanId || loadingStates.loanDetails} 
+                  variant="contained" 
+                  onClick={() => fetchLoanDetails()}
+                  sx={{ minWidth: 120 }}
+                >
+                  {loadingStates.loanDetails ? <CircularProgress size={24} color="inherit" /> : 'Enter'}
+                </Button>
+              )}
+            </Grid>
           </Grid>
-        </Grid>
+        </Box>
 
         {loadingStates.loanDetails && (
           <Grid item xs={12}>
@@ -748,9 +750,10 @@ const handleSubmit = async (e: React.FormEvent) => {
             onChange={(date: Date | null) => !readOnlyMode && setSelectedDate(date)}
             orientation={isMobile ? 'portrait' : 'landscape'}
             slotProps={{
-              actionBar: { actions: [] },
+              actionBar: { actions: [] }
             }}
             readOnly={readOnlyMode}
+            disablePast
           />
         </Grid>
 
