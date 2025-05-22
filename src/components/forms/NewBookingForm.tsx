@@ -32,6 +32,7 @@ type BookingFormProps = {
   onSuccess?: (bookingData: CreateAppointmentRequest, response: any) => void;
   initialData?: calendarBooking;
   isEditMode?: boolean;
+  isViewMode?: boolean; // New prop for view-only mode
   setLoading?: (loading: boolean) => void;
 }
 
@@ -39,7 +40,8 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   onClose, 
   onSuccess, 
   initialData, 
-  isEditMode = false, 
+  isEditMode = false,
+  isViewMode = false, // New prop
   setLoading 
 }) => {
   const theme = useTheme();
@@ -105,6 +107,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   });
 
   const editMode = isEditMode || !!initialData;
+  const readOnlyMode = isViewMode; // For view-only mode
 
   // Helper function to update loading states
   const updateLoadingState = (key: keyof typeof loadingStates, value: boolean) => {
@@ -114,9 +117,18 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   // Check if any loading is in progress
   const isAnyLoading = Object.values(loadingStates).some(Boolean);
 
+  // Get the title based on mode
+  const getFormTitle = () => {
+    if (isViewMode) return 'View Appointment';
+    if (editMode) return 'Edit Booking';
+    return 'Schedule a New Booking';
+  };
+
   const handleLoanIdChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string>
   ) => {
+    if (readOnlyMode) return; // Prevent changes in view mode
+    
     const loanId = event.target.value;
     setBookingData((prev) => ({
       ...prev,
@@ -128,6 +140,8 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   };
 
 const handleServiceChange = (event: React.ChangeEvent<{ value: unknown }>) => {
+  if (readOnlyMode) return; // Prevent changes in view mode
+  
   const selectedValue = event.target.value as string;
   const selectedService = services.find(s => s.displayName === selectedValue);
   if (selectedService) {
@@ -144,7 +158,7 @@ const handleServiceChange = (event: React.ChangeEvent<{ value: unknown }>) => {
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   
-  if (loadingStates.submitting) return;
+  if (readOnlyMode || loadingStates.submitting) return; // Prevent submit in view mode
 
   let newError:string;
   let hasError = false;
@@ -202,7 +216,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 };
 
   const fetchLoanDetails = async () => {
-    if (loadingStates.submitting) return;
+    if (loadingStates.submitting || readOnlyMode) return; // Prevent in view mode
 
     updateLoadingState('loanDetails', true);
     try{
@@ -264,7 +278,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   }, [editMode, bookingData.ServiceId]);
 
   const handleDateTimeSelect = useCallback(() => {
-    if (!selectedSlot || !selectedDate) return;
+    if (!selectedSlot || !selectedDate || readOnlyMode) return; // Prevent in view mode
 
     const dateStr = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
 
@@ -282,7 +296,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       },
       StaffMemberIds: [selectedSlot.staffMemberId],
     }));
-  }, [selectedSlot, selectedDate]);
+  }, [selectedSlot, selectedDate, readOnlyMode]);
 
   const fetchAvailableTimeSlots = useCallback(async () => {     
     if (!selectedDate) return;
@@ -358,6 +372,8 @@ const handleSubmit = async (e: React.FormEvent) => {
 
     // Handle adding a new follower
   const handleAddFollower = (newFollower: string) => {
+    if (readOnlyMode) return; // Prevent in view mode
+    
     // Only add if not already in either list
     if (!fetchedFollowers.includes(newFollower) && !addedFollowers.includes(newFollower)) {
       setAddedFollowers(prev => [...prev, newFollower]);
@@ -437,12 +453,16 @@ const handleSubmit = async (e: React.FormEvent) => {
   }, [fetchedFollowers, addedFollowers]);
 
   useEffect(() => {
-    fetchAvailableTimeSlots();
-  }, [selectedService, selectedDate, fetchAvailableTimeSlots]);
+    if (!readOnlyMode) { // Only fetch time slots if not in view mode
+      fetchAvailableTimeSlots();
+    }
+  }, [selectedService, selectedDate, fetchAvailableTimeSlots, readOnlyMode]);
 
   useEffect(() => {
-    handleDateTimeSelect();
-  }, [selectedSlot, selectedDate, handleDateTimeSelect]);
+    if (!readOnlyMode) { // Only handle date/time select if not in view mode
+      handleDateTimeSelect();
+    }
+  }, [selectedSlot, selectedDate, handleDateTimeSelect, readOnlyMode]);
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -489,13 +509,13 @@ const handleSubmit = async (e: React.FormEvent) => {
       >
         <Grid item xs={12} sx={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
             <Typography sx={{fontSize: '30px', fontWeight: 'bold', color: 'black'}}>
-              {editMode ? 'Edit Booking' : 'Schedule a New Booking'}
+              {getFormTitle()}
             </Typography>
             <CloseIcon sx={{float: 'right', color: 'gray', cursor: 'pointer'}} onClick={onClose} />
         </Grid>
 
         <Grid item xs={12}>
-          <Typography variant="h6">Add Client Details</Typography>
+          <Typography variant="h6">Client Details</Typography>
           <Grid sx={{display: 'flex', gap: '4px', mt: '10px'}}>
             <TextField
               fullWidth
@@ -505,10 +525,10 @@ const handleSubmit = async (e: React.FormEvent) => {
               value={bookingData.EncompassDetails.EncompassLoanId || ''}
               onChange={handleLoanIdChange}
               InputProps={{
-                readOnly: editMode,
+                readOnly: editMode || readOnlyMode,
               }}
             />
-            {!editMode && (
+            {!editMode && !readOnlyMode && (
               <Button 
                 disabled={!bookingData.EncompassDetails.EncompassLoanId || loadingStates.loanDetails} 
                 variant="contained" 
@@ -667,7 +687,6 @@ const handleSubmit = async (e: React.FormEvent) => {
               }}
               variant="outlined"/>
             </Grid>
-            {/* to do: check dpa program */}
             <Grid item xs={12}>
               <TextField
                 fullWidth
@@ -697,22 +716,22 @@ const handleSubmit = async (e: React.FormEvent) => {
       )}
 
         <Grid item xs={12}>
-          <Typography variant="h6">Select Service</Typography>
+          <Typography variant="h6">Service Details</Typography>
           <TextField
             fullWidth
             value={bookingData.ServiceName || ''}
             required
             onChange={handleServiceChange}
-            select={!editMode}
+            select={!editMode && !readOnlyMode}
             label="Service Name"
             variant="outlined"    
             InputProps={{
-              readOnly: editMode,
+              readOnly: editMode || readOnlyMode,
               endAdornment: loadingStates.services ? <CircularProgress size={20} /> : null,
             }}
             sx={{mt: '10px'}}
           >
-          {(Array.isArray(services) ? services : []).map((service) => (
+          {!readOnlyMode && (Array.isArray(services) ? services : []).map((service) => (
             <MenuItem key={service.id} value={service.displayName}>
               {service.displayName}
             </MenuItem>
@@ -722,13 +741,14 @@ const handleSubmit = async (e: React.FormEvent) => {
 
         <Grid item xs={12}>
           <StaticDatePicker
-            disabled= {!selectedService}
+            disabled={!selectedService || readOnlyMode}
             value={selectedDate}
-            onChange={(date: Date | null) => setSelectedDate(date)}
+            onChange={(date: Date | null) => !readOnlyMode && setSelectedDate(date)}
             orientation={isMobile ? 'portrait' : 'landscape'}
             slotProps={{
               actionBar: { actions: [] },
             }}
+            readOnly={readOnlyMode}
           />
         </Grid>
 
@@ -737,62 +757,82 @@ const handleSubmit = async (e: React.FormEvent) => {
             <TimeSelector
             timeSlots={timeSlots}
             selectedSlot={selectedSlot}
-            onSelect={setSelectedSlot}
+            onSelect={!readOnlyMode ? setSelectedSlot : () => {}}
             loading={loadingStates.timeSlots}
+            readOnly={readOnlyMode}
           />)}
           
           <Followers
-            editMode={editMode}
+            editMode={editMode || readOnlyMode}
             fetchedFollowers={fetchedFollowers}
             addedFollowers={addedFollowers}
             onAddFollower={handleAddFollower}
             loading={loadingStates.followers}
             onRemoveFollower={(followerToRemove) => {
-            setAddedFollowers(prev => prev.filter(f => f !== followerToRemove));
-        }}/>
+              if (!readOnlyMode) {
+                setAddedFollowers(prev => prev.filter(f => f !== followerToRemove));
+              }
+            }}
+          />
 
-        {error.length> 0 && (
+        {error.length > 0 && !readOnlyMode && (
           <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>
             {error}
           </Typography>
         )}
 
-          <Grid sx={{display: 'flex', gap: '1rem', mt: '16px'}}>
-            <Grid item xs={6}>
+          {!readOnlyMode && (
+            <Grid sx={{display: 'flex', gap: '1rem', mt: '16px'}}>
+              <Grid item xs={6}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={onClose}
+                  disabled={loadingStates.submitting}
+                  sx={{
+                    backgroundColor: '#D3323A',
+                  }}
+                >
+                  Cancel
+                </Button>
+              </Grid>
+              <Grid item xs={6}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={handleSubmit}
+                  disabled={isAnyLoading}
+                  onMouseDown={(e) => e.preventDefault()}
+                  sx={{
+                    position: 'relative',
+                  }}
+                >
+                  {loadingStates.submitting ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CircularProgress size={20} color="inherit" />
+                      {editMode ? 'Updating...' : 'Scheduling...'}
+                    </Box>
+                  ) : (
+                    editMode ? 'Update' : 'Schedule'
+                  )}
+                </Button>
+              </Grid>
+            </Grid>
+          )}
+
+          {readOnlyMode && (
+            <Grid sx={{display: 'flex', justifyContent: 'center', mt: '16px'}}>
               <Button
-                fullWidth
                 variant="contained"
                 onClick={onClose}
-                disabled={loadingStates.submitting}
                 sx={{
-                  backgroundColor: '#D3323A',
+                  minWidth: 150,
                 }}
               >
-                Cancel
+                Close
               </Button>
             </Grid>
-            <Grid item xs={6}>
-              <Button
-                fullWidth
-                variant="contained"
-                onClick={handleSubmit}
-                disabled={isAnyLoading}
-                onMouseDown={(e) => e.preventDefault()}
-                sx={{
-                  position: 'relative',
-                }}
-              >
-                {loadingStates.submitting ? (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <CircularProgress size={20} color="inherit" />
-                    {editMode ? 'Updating...' : 'Scheduling...'}
-                  </Box>
-                ) : (
-                  editMode ? 'Update' : 'Schedule'
-                )}
-              </Button>
-            </Grid>
-          </Grid>
+          )}
         </Grid>
       </Grid>
     </LocalizationProvider>

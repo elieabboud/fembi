@@ -22,7 +22,7 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import { Column } from '../../services/exportToExcel';
 import StatusBadge from './StatusBadge';
 import { BookingService } from '../../types/service';
@@ -59,7 +59,9 @@ const AppTable: React.FC<AppTableProps> = ({
   const [selectedRow, setSelectedRow] = useState<calendarBooking>();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const [showEditBooking, setShowEditBooking]= useState(false);
+  const [showEditBooking, setShowEditBooking] = useState(false);
+  const [showViewBooking, setShowViewBooking] = useState(false);
+  const [dialogMode, setDialogMode] = useState<'edit' | 'view'>('edit');
   
   const handleChangePage = (_: unknown, newPage: number) => {
     setPage(newPage);
@@ -72,15 +74,30 @@ const AppTable: React.FC<AppTableProps> = ({
 
   const handleEditClick = (row: any) => {
     setSelectedRow(row);
+    setDialogMode('edit');
     setShowEditBooking(true);
   };
+
+  const handleViewClick = (row: any) => {
+    setSelectedRow(row);
+    setDialogMode('view');
+    setShowViewBooking(true);
+  };
+
   const handleDeleteClick = async (row: any) => {
     if(!row) return;
     setSelectedRow(row);
     const response = await bookingService.deleteBooking(selectedRow.bookingId);
   };
+
   const handleCloseModal = () => {
     setShowEditBooking(false);
+    setShowViewBooking(false);
+  };
+
+  // Check if appointment is upcoming (can be edited/deleted)
+  const isUpcoming = (row: any) => {
+    return row.status === 'upcoming';
   };
 
   const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -138,6 +155,7 @@ const AppTable: React.FC<AppTableProps> = ({
             .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
             .map((row) => {
               const isItemSelected = isSelected(row.bookingId);
+              const canModify = isUpcoming(row);
               
               return (
                 <Card 
@@ -150,7 +168,7 @@ const AppTable: React.FC<AppTableProps> = ({
                       bgcolor: 'rgba(0, 0, 0, 0.04)'
                     }
                   }}
-                  onClick={() => handleEditClick(row)}
+                  onClick={() => handleViewClick(row)}
                 >
                   <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
@@ -160,26 +178,45 @@ const AppTable: React.FC<AppTableProps> = ({
                           onClick={(event) => handleSelectClick(event, row.bookingId)}
                         />
                       )}
-                        <Box>
-                            <IconButton
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditClick(row);
-                              }}
-                              size="small"
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteClick(row);
-                              }}
-                              size="small"
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                        </Box>
+                      <Box>
+                        <Tooltip title="View">
+                          <IconButton
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewClick(row);
+                            }}
+                            size="small"
+                          >
+                            <VisibilityIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        {canModify && (
+                          <>
+                            <Tooltip title="Edit">
+                              <IconButton
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditClick(row);
+                                }}
+                                size="small"
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                              <IconButton
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteClick(row);
+                                }}
+                                size="small"
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </>
+                        )}
+                      </Box>
                     </Box>
                     
                     <Stack spacing={1.5}>
@@ -266,12 +303,13 @@ const AppTable: React.FC<AppTableProps> = ({
               .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
               .map((row) => {
                 const isItemSelected = isSelected(row.bookingId);
+                const canModify = isUpcoming(row);
 
                 return (
                   <TableRow
                     hover
                     className="custom-row"
-                    onClick={() => handleEditClick(row)}
+                    onClick={() => handleViewClick(row)}
                     role="checkbox"
                     aria-checked={isItemSelected}
                     tabIndex={-1}
@@ -292,7 +330,7 @@ const AppTable: React.FC<AppTableProps> = ({
                       return (
                         <TableCell key={column.label} align={column.align} style={{ fontWeight: 'light' }}>
                           {column.id === 'status' ? (
-                            <StatusBadge status={value} ></StatusBadge>
+                            <StatusBadge status={value} />
                           ) : column.format ? (
                             column.format(value, row)
                           ) : (
@@ -301,8 +339,21 @@ const AppTable: React.FC<AppTableProps> = ({
                         </TableCell>
                       );
                     })}
-                      <TableCell align="right">
-                        <Box sx={{display: 'flex', gap: '4px'}}>
+                    <TableCell align="right">
+                      <Box sx={{display: 'flex', gap: '4px'}}>
+                        <Tooltip title="View">
+                          <IconButton
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewClick(row);
+                            }}
+                            size="small"
+                          >
+                            <VisibilityIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        {canModify && (
+                          <>
                             <Tooltip title="Edit">
                               <IconButton
                                 onClick={(e) => {
@@ -321,12 +372,15 @@ const AppTable: React.FC<AppTableProps> = ({
                                   handleDeleteClick(row);
                                 }}
                                 size="small"
+                                color="error"
                               >
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                        </Box>
-                      </TableCell>
+                          </>
+                        )}
+                      </Box>
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -352,19 +406,40 @@ const AppTable: React.FC<AppTableProps> = ({
         />
       )}
 
+      {/* Edit Booking Dialog */}
       {showEditBooking && (
-      <Dialog
-        open={showEditBooking}
-        onClose={() => setShowEditBooking(false)}
-        fullWidth
-        maxWidth="sm"
-        scroll="paper"
-        aria-labelledby="booking-dialog-title"
-      >
+        <Dialog
+          open={showEditBooking}
+          onClose={() => setShowEditBooking(false)}
+          fullWidth
+          maxWidth="sm"
+          scroll="paper"
+          aria-labelledby="edit-booking-dialog-title"
+        >
           <CreateBookingForm
             onClose={() => setShowEditBooking(false)}
             initialData={selectedRow}
-            />
+            isEditMode={true}
+          />
+        </Dialog>
+      )}
+
+      {/* View Booking Dialog */}
+      {showViewBooking && (
+        <Dialog
+          open={showViewBooking}
+          onClose={() => setShowViewBooking(false)}
+          fullWidth
+          maxWidth="sm"
+          scroll="paper"
+          aria-labelledby="view-booking-dialog-title"
+        >
+          <CreateBookingForm
+            onClose={() => setShowViewBooking(false)}
+            initialData={selectedRow}
+            isEditMode={true}
+            isViewMode={true}
+          />
         </Dialog>
       )}
     </Paper>
