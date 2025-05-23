@@ -62,19 +62,29 @@ export const groupEventsByDate = (events: calendarBooking[]): { [key: string]: c
     }
   });
   
+  // Sort events within each date by start time
   Object.keys(grouped).forEach(date => {
     grouped[date].sort((a, b) => {
       if (!a?.start?.dateTime) return 1;
       if (!b?.start?.dateTime) return -1;
       
-      const dateA = TimezoneService.convertBackendTimeToLocal(a.start.dateTime);
-      const dateB = TimezoneService.convertBackendTimeToLocal(b.start.dateTime);
-      
-      if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
+      try {
+        const dateA = TimezoneService.convertBackendTimeToLocal(a.start.dateTime);
+        const dateB = TimezoneService.convertBackendTimeToLocal(b.start.dateTime);
+        
+        if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
+          return 0;
+        }
+        
+        // Sort by time (hour and minute)
+        const timeA = dateA.getHours() * 60 + dateA.getMinutes();
+        const timeB = dateB.getHours() * 60 + dateB.getMinutes();
+        
+        return timeA - timeB;
+      } catch (error) {
+        console.error('Error sorting events:', error);
         return 0;
       }
-      
-      return dateA.getTime() - dateB.getTime();
     });
   });
   

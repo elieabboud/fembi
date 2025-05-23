@@ -27,6 +27,7 @@ import { useAuth } from '../../context/AuthContext';
 import { calendarBooking } from '../../types/calendarBooking';
 import { mapCalendarBookingToFormData } from '../../services/bookingFormUtils';
 import { toLocalISOString } from '../../utils/general';
+import { TimezoneService } from '../../services/timezoneUtils';
 
 type BookingFormProps = {
   onClose: () => void;
@@ -300,42 +301,53 @@ const handleSubmit = async (e: React.FormEvent) => {
   }, [selectedSlot, selectedDate, readOnlyMode]);
 
   const fetchAvailableTimeSlots = useCallback(async () => {     
-    if (!selectedDate) return;
+  if (!selectedDate || !bookingData?.ServiceId) return;
 
-    updateLoadingState('timeSlots', true);
-    try {
-      debugger;
-      console.log(`Fetching time slots for serviceId: ${"serviceId"} and date: ${toLocalISOString(selectedDate)}`);
-      const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
-        bookingData?.ServiceId,
-        toLocalISOString(selectedDate)
-      );
+  updateLoadingState('timeSlots', true);
+  try {
+    console.log(`Fetching time slots for serviceId: ${bookingData.ServiceId} and date: ${toLocalISOString(selectedDate)}`);
+    const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
+      bookingData.ServiceId,
+      toLocalISOString(selectedDate)
+    );
 
-      setTimeSlots(response);
+    setTimeSlots(response);
 
-      // IMPORTANT: Only set the selectedSlot if we're in edit mode AND we don't already have a selected slot
-      // This prevents overriding user selections
-      if (editMode && bookingData.DateTimeInfo?.SelectedTime) {
-        const timeToMatch = bookingData.DateTimeInfo.SelectedTime;
-        console.log("Looking for time slot matching:", timeToMatch);
-        
-        const matchingSlot = response.find(slot => {
-          const slotStartTime = new Date(slot.startTime);
-          const slotTime = toLocalISOString(slotStartTime).substr(11, 5); // "HH:mm"
-          return slotTime === timeToMatch;
-        });
-        
-        if (matchingSlot) {
-          console.log("Found matching time slot:", matchingSlot);
-          setSelectedSlot(matchingSlot);
-        }
+    // Set the selected slot if we're in edit mode AND we have the time data
+    if (editMode && bookingData.DateTimeInfo?.SelectedTime && !selectedSlot) {
+      const timeToMatch = bookingData.DateTimeInfo.SelectedTime; // This should be in HH:mm format
+      console.log("Looking for time slot matching:", timeToMatch);
+      console.log("Available slots:", response.map(slot => ({
+        startTime: slot.startTime,
+        displayText: slot.displayText || 'No display text'
+      })));
+      
+      const matchingSlot = response.find(slot => {
+        // Convert the slot's start time to user timezone and extract HH:mm
+        const userSlotTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
+        const slotTime = toLocalISOString(userSlotTime).substr(11, 5); // "HH:mm"
+        console.log(`Comparing slot time ${slotTime} with target ${timeToMatch}`);
+        return slotTime === timeToMatch;
+      });
+      
+      if (matchingSlot) {
+        console.log("Found matching time slot:", matchingSlot);
+        setSelectedSlot(matchingSlot);
+      } else {
+        console.log("No matching time slot found. Available times:", 
+          response.map(slot => {
+            const userTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
+            return toLocalISOString(userTime).substr(11, 5);
+          })
+        );
       }
-    } catch (error) {
-      console.error('Error fetching time slots for selected service:', error);
-    } finally {
-      updateLoadingState('timeSlots', false);
     }
-  }, [selectedService, selectedDate, editMode, bookingData.DateTimeInfo?.SelectedTime]);
+  } catch (error) {
+    console.error('Error fetching time slots for selected service:', error);
+  } finally {
+    updateLoadingState('timeSlots', false);
+  }
+}, [selectedService, selectedDate, editMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, selectedSlot]);
 
   const fetchAllFollowers = useCallback(async () => {
     updateLoadingState('followers', true);
@@ -455,10 +467,11 @@ const handleSubmit = async (e: React.FormEvent) => {
   }, [fetchedFollowers, addedFollowers]);
 
   useEffect(() => {
-    if (!readOnlyMode) { // Only fetch time slots if not in view mode
+    if (!readOnlyMode && selectedDate && bookingData.ServiceId) {
       fetchAvailableTimeSlots();
     }
-  }, [selectedService, selectedDate, fetchAvailableTimeSlots, readOnlyMode]);
+  }, [selectedDate, bookingData.ServiceId, fetchAvailableTimeSlots, readOnlyMode]);
+
 
   useEffect(() => {
     if (!readOnlyMode) { // Only handle date/time select if not in view mode

@@ -3,6 +3,7 @@ import { Box, Typography, Paper } from '@mui/material';
 import { format, addDays, startOfWeek, isSameDay } from 'date-fns';
 import { calendarBooking } from '../../types/calendarBooking';
 import { formatEventTime, isToday, parseDateTime } from '../../services/calendarUtils';
+import { TimezoneService } from '../../services/timezoneUtils';
 
 interface WeekViewProps {
   currentDate: Date;
@@ -24,12 +25,31 @@ const WeekView: React.FC<WeekViewProps> = ({
 
   // Fixed function to properly filter events by day
   const getEventsByDay = (day: Date) => {
-    return events.filter(event => {
-      if (!event.start?.dateTime) return false;
-      const eventStart = parseDateTime(event.start);
-      return eventStart && isSameDay(eventStart, day);
-    });
-  };
+  const dayEvents = events.filter(event => {
+    if (!event.start?.dateTime) return false;
+    const eventStart = parseDateTime(event.start);
+    return eventStart && isSameDay(eventStart, day);
+  });
+
+  // Sort events by start time for the day
+  return dayEvents.sort((a, b) => {
+    if (!a?.start?.dateTime || !b?.start?.dateTime) return 0;
+    
+    try {
+      const timeA = TimezoneService.convertBackendTimeToLocal(a.start.dateTime);
+      const timeB = TimezoneService.convertBackendTimeToLocal(b.start.dateTime);
+      
+      // Compare by time (hours and minutes)
+      const minutesA = timeA.getHours() * 60 + timeA.getMinutes();
+      const minutesB = timeB.getHours() * 60 + timeB.getMinutes();
+      
+      return minutesA - minutesB;
+    } catch (error) {
+      console.error('Error sorting day events:', error);
+      return 0;
+    }
+  });
+};
 
   useEffect(() => {
     weekDays.forEach(day => {

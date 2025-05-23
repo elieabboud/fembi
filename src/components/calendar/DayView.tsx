@@ -3,6 +3,7 @@ import { Box, Typography, Paper } from '@mui/material';
 import { isSameDay } from 'date-fns';
 import { calendarBooking } from '../../types/calendarBooking';
 import { formatEventTime, isToday, parseDateTime } from '../../services/calendarUtils';
+import { TimezoneService } from '../../services/timezoneUtils';
 
 interface DayViewProps {
   currentDate: Date;
@@ -20,11 +21,29 @@ const DayView: React.FC<DayViewProps> = ({
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   // Get events for the current day only
-  const eventsForDay = events.filter(event => {
-    if (!event.start?.dateTime) return false;
-    const eventStart = parseDateTime(event?.start);
-    return eventStart && isSameDay(eventStart, currentDate);
-  });
+  const eventsForDay = events
+    .filter(event => {
+      if (!event.start?.dateTime) return false;
+      const eventStart = parseDateTime(event?.start);
+      return eventStart && isSameDay(eventStart, currentDate);
+    })
+    .sort((a, b) => {
+      if (!a?.start?.dateTime || !b?.start?.dateTime) return 0;
+      
+      try {
+        const timeA = TimezoneService.convertBackendTimeToLocal(a.start.dateTime);
+        const timeB = TimezoneService.convertBackendTimeToLocal(b.start.dateTime);
+        
+        // Sort by start time (hour and minute)
+        const minutesA = timeA.getHours() * 60 + timeA.getMinutes();
+        const minutesB = timeB.getHours() * 60 + timeB.getMinutes();
+        
+        return minutesA - minutesB;
+      } catch (error) {
+        console.error('Error sorting events in day view:', error);
+        return 0;
+      }
+    });
 
   // Group overlapping events
   const groupOverlappingEvents = (events: calendarBooking[]) => {

@@ -102,16 +102,15 @@ export const bookingService = {
     };
 
     
-    console.log(`
-      Booking Update Details (converted to backend timezone):
-      ---------------------
-      Booking ID: ${backendUpdateData.id}
-      Selected Date: ${backendUpdateData.selectedDate}
-      Selected Time: ${backendUpdateData.selectedTime}
-      From Date: ${backendUpdateData.fromDate}
-      To Date: ${backendUpdateData.toDate}
-      Staff Member IDs: ${backendUpdateData.staffMemberIds.join(', ')}
-    `);
+    const response = await api.post(`/api/Application/v1/UpdateAppointment?appointmentId=${backendUpdateData.id}`, {
+      DateTimeInfo: {
+        SelectedDate: backendUpdateData.selectedDate,
+        SelectedTime: backendUpdateData.selectedTime,
+        FromDate: backendUpdateData.fromDate,
+        ToDate: backendUpdateData.toDate,
+      }
+    });
+
     
     return {
       success: true,

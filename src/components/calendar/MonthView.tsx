@@ -3,6 +3,7 @@ import { Box, Grid, Paper, Typography } from '@mui/material';
 import { format, startOfMonth, isSameMonth, isToday } from 'date-fns';
 import { calendarBooking } from '../../types/calendarBooking';
 import { weekdays, formatEventTime, parseDateTime } from '../../services/calendarUtils';
+import { TimezoneService } from '../../services/timezoneUtils';
 
 interface MonthViewProps {
   currentDate: Date;
@@ -20,16 +21,35 @@ const MonthView: React.FC<MonthViewProps> = ({
   const monthStart = startOfMonth(currentDate);
 
   const getEventsForDay = (day: Date) => {
-    return events.filter((event) => {
-      if (!event.start?.dateTime) return false;
-      const eventDate = parseDateTime(event.start);
-      return (
-        eventDate.getDate() === day.getDate() &&
-        eventDate.getMonth() === day.getMonth() &&
-        eventDate.getFullYear() === day.getFullYear()
-      );
-    });
-  };
+  const dayEvents = events.filter((event) => {
+    if (!event.start?.dateTime) return false;
+    const eventDate = parseDateTime(event.start);
+    return (
+      eventDate.getDate() === day.getDate() &&
+      eventDate.getMonth() === day.getMonth() &&
+      eventDate.getFullYear() === day.getFullYear()
+    );
+  });
+
+  // Sort events by start time for the day
+  return dayEvents.sort((a, b) => {
+    if (!a?.start?.dateTime || !b?.start?.dateTime) return 0;
+    
+    try {
+      const timeA = TimezoneService.convertBackendTimeToLocal(a.start.dateTime);
+      const timeB = TimezoneService.convertBackendTimeToLocal(b.start.dateTime);
+      
+      // Sort by start time (hour and minute)
+      const minutesA = timeA.getHours() * 60 + timeA.getMinutes();
+      const minutesB = timeB.getHours() * 60 + timeB.getMinutes();
+      
+      return minutesA - minutesB;
+    } catch (error) {
+      console.error('Error sorting events in month view:', error);
+      return 0;
+    }
+  });
+};
 
 
   const getMaxEventsForDay = (day: Date) => {
