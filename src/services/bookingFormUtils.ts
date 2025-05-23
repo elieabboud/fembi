@@ -1,16 +1,16 @@
 import { calendarBooking } from "../types/calendarBooking";
 import { CreateAppointmentRequest } from "../types/CreateAppointmentRequest";
-import { toLocalISOString } from "../utils/general";
+import { TimezoneService } from "./timezoneUtils";
 
-// Add this function to your component
+// Updated function to handle timezone conversion
 export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): CreateAppointmentRequest => {
-  // Extract date and time from start DateTimeInfo
+  // Convert backend times to user's local timezone for form display
   let selectedDate = "";
   let selectedTime = "";
   if (calendarBooking.start && calendarBooking.start.dateTime) {
-    const startDate = new Date(calendarBooking.start.dateTime);
-    selectedDate = toLocalISOString(startDate).split('T')[0]; // YYYY-MM-DD
-    selectedTime = toLocalISOString(startDate).substr(11, 5); // HH:mm
+    const userStartDate = TimezoneService.convertBackendTimeToLocal(calendarBooking.start.dateTime);
+    selectedDate = userStartDate.toISOString().split('T')[0]; // YYYY-MM-DD in user's timezone
+    selectedTime = userStartDate.toTimeString().substr(0, 5); // HH:mm in user's timezone
   }
 
   return {   
@@ -41,12 +41,12 @@ export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): 
       },
     },
     
-    // Date and time information
+    // Date and time information (in user's timezone for form display)
     DateTimeInfo: {
       SelectedDate: selectedDate,
       SelectedTime: selectedTime,
-      FromDate: calendarBooking.start?.dateTime || "",
-      ToDate: calendarBooking.end?.dateTime || "",
+      FromDate: calendarBooking.start?.dateTime || "", // Keep original backend time for API
+      ToDate: calendarBooking.end?.dateTime || "", // Keep original backend time for API
     },
     
     // Additional booking details

@@ -1,8 +1,10 @@
 import { dashboardResponseDTO } from "../types/dashboardResponseDTO";
 import { dashboardStats } from "../types/dashboardStats";
+import { TimezoneService } from "../services/timezoneUtils";
 
-export function toLocalISOString(date) {
-  const pad = (n) => n.toString().padStart(2, '0');
+// Updated to handle timezone conversion
+export function toLocalISOString(date: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, '0');
   return (
     date.getFullYear() + '-' +
     pad(date.getMonth() + 1) + '-' +
@@ -11,6 +13,26 @@ export function toLocalISOString(date) {
     pad(date.getMinutes()) + ':' +
     pad(date.getSeconds())
   );
+}
+
+// New function to convert user's local date/time to backend timezone for API calls
+export function toBackendISOString(date: Date): string {
+  return TimezoneService.convertLocalTimeToBackend(date);
+}
+
+// New function to convert backend time to user's local time
+export function fromBackendISOString(isoString: string): Date {
+  return TimezoneService.convertBackendTimeToLocal(isoString);
+}
+
+// Format time for display in user's timezone
+export function formatTimeForDisplay(backendTime: string, formatString: string = 'h:mm a'): string {
+  return TimezoneService.formatTimeForUser(backendTime, formatString);
+}
+
+// Format date for display in user's timezone
+export function formatDateForDisplay(backendTime: string, formatString: string = 'MMM d, yyyy'): string {
+  return TimezoneService.formatDateForUser(backendTime, formatString);
 }
 
 export const mapApiResponseToDashboardStats = (apiResponse: dashboardResponseDTO): dashboardStats => {

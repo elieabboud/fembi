@@ -7,17 +7,21 @@ import { LoanDetails } from '../types/loanDetails';
 import { CreateAppointmentRequest } from '../types/CreateAppointmentRequest';
 import { BookingService } from '../types/service';
 import { UpdateBookingRequest } from '../types/updateBookingRequest';
+import { TimezoneService } from './timezoneUtils';
 
 export const bookingService = {
 
   //get calendar data
-  async getCalendarData( start: string, end: string): Promise<calendarBooking[]> {
+  async getCalendarData(start: string, end: string): Promise<calendarBooking[]> {
+    // The start and end dates are already converted to backend timezone in formatDateForApi
     const response = await api.get('/api/Application/v1/GetCalendarData', {
       params: {
         startDateTime: start,
         endDateTime: end
       },
     });
+    
+    // Note: The backend returns times in EST, they will be converted to user timezone in the UI components
     return response.data;
   },
 
@@ -28,13 +32,18 @@ export const bookingService = {
 
   //get available time slots
   async getAvailableTimeSlots(serviceId: string, selectedDateTime: string): Promise<TimeSlot[]> {
+    // Convert the selected date from user's timezone to backend timezone
+    const backendDateTime = TimezoneService.convertLocalTimeToBackend(new Date(selectedDateTime));
+    
     const response = await api.get('/api/Application/v1/GetAvailableTimeSlots', {
       params: {
         serviceId,
-        selectedDateTime
+        selectedDateTime: backendDateTime
       }
     });
   
+    // The response contains time slots in backend timezone (EST)
+    // They will be converted to user timezone in the TimeSelector component
     return response.data;
   },
   
@@ -46,7 +55,7 @@ export const bookingService = {
   },
 
   //get loan details
-  async getLoanDetails(loanId : string): Promise<LoanDetails>{
+  async getLoanDetails(loanId: string): Promise<LoanDetails>{
     const response = await api.get('/api/Encompass/v1/GetLoanDetails', {
       params: {
         loanId: loanId
@@ -57,8 +66,19 @@ export const bookingService = {
   },
 
   //create appointment
-  async postBooking (appointmentData : CreateAppointmentRequest) : Promise<void> {
-    const response = await api.post('/api/Application/v1/CreateAppointment', appointmentData);
+  async postBooking(appointmentData: CreateAppointmentRequest): Promise<void> {
+    // Convert date/time fields from user timezone to backend timezone
+    const backendAppointmentData = {
+      ...appointmentData,
+      DateTimeInfo: {
+        ...appointmentData.DateTimeInfo,
+        FromDate: TimezoneService.convertLocalTimeToBackend(new Date(appointmentData.DateTimeInfo.FromDate)),
+        ToDate: TimezoneService.convertLocalTimeToBackend(new Date(appointmentData.DateTimeInfo.ToDate)),
+        // SelectedDate and SelectedTime can remain as is since they're used for display
+      }
+    };
+
+    const response = await api.post('/api/Application/v1/CreateAppointment', backendAppointmentData);
     console.log(response);
     return response.data;
   },
@@ -73,24 +93,31 @@ export const bookingService = {
 
   //update appointment
   updateBooking: async (updateData: UpdateBookingRequest) => {    
+    // Convert times from user timezone to backend timezone
+    const backendUpdateData = {
+      ...updateData,
+      fromDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.fromDate)),
+      toDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.toDate)),
+    };
+
     // Simulate delay for testing
     await new Promise(resolve => setTimeout(resolve, 300));
     
     console.log(`
-      Booking Update Details:
+      Booking Update Details (converted to backend timezone):
       ---------------------
-      Booking ID: ${updateData.id}
-      Selected Date: ${updateData.selectedDate}
-      Selected Time: ${updateData.selectedTime}
-      From Date: ${updateData.fromDate}
-      To Date: ${updateData.toDate}
-      Staff Member IDs: ${updateData.staffMemberIds.join(', ')}
+      Booking ID: ${backendUpdateData.id}
+      Selected Date: ${backendUpdateData.selectedDate}
+      Selected Time: ${backendUpdateData.selectedTime}
+      From Date: ${backendUpdateData.fromDate}
+      To Date: ${backendUpdateData.toDate}
+      Staff Member IDs: ${backendUpdateData.staffMemberIds.join(', ')}
     `);
     
     return {
       success: true,
       message: 'Booking updated successfully',
-      data: updateData
+      data: backendUpdateData
     };
   },
 
@@ -106,7 +133,7 @@ export const bookingService = {
     await api.post(`/api/Application/v1/SetFollowers?followers=${query}`);
   },
 
-  async updateFollowers (newFollowers: string[]) {
+  async updateFollowers(newFollowers: string[]) {
     try {
       const existingFollowers = await this.getFollowers();
       const allFollowers = Array.from(new Set([...existingFollowers, ...newFollowers]));
@@ -133,7 +160,7 @@ export const bookingService = {
   },
 
   // update global followers
-  async updateGlobalFollowers (newFollowers: string[]) {
+  async updateGlobalFollowers(newFollowers: string[]) {
     try {
       const existing = await this.getGlobalFollowers();
       const all = Array.from(new Set([...existing, ...newFollowers]));
@@ -155,4 +182,3 @@ export const bookingService = {
     return response.data;
   },
 }
-

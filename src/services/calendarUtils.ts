@@ -10,6 +10,7 @@ import {
 } from 'date-fns';
 import { CalendarViewType } from '../components/calendar/CalendarViewSelector';
 import { toLocalISOString } from '../utils/general';
+import { TimezoneService } from './timezoneUtils';
 
 export const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -22,16 +23,17 @@ export const formatEventTime = (event: { start: DateTimeInfo; end: DateTimeInfo 
     return false;
   }
 
-  const start = new Date(event.start.dateTime);
-  const end = new Date(event.end.dateTime);
+  // Convert backend times to user's timezone for display
+  const startTimeUser = TimezoneService.formatTimeForUser(event.start.dateTime, 'h:mm a');
+  const endTimeUser = TimezoneService.formatTimeForUser(event.end.dateTime, 'h:mm a');
 
-  return `${format(start, 'h:mm a')} - ${format(end, 'h:mm a')}`;
+  return `${startTimeUser} - ${endTimeUser}`;
 };
 
 export const getFormattedDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return isToday(date) ? 'Today' : format(date, 'EEEE, MMMM d, yyyy');
-  };
+  const date = new Date(dateStr);
+  return isToday(date) ? 'Today' : format(date, 'EEEE, MMMM d, yyyy');
+};
 
 export const groupEventsByDate = (events: calendarBooking[]): { [key: string]: calendarBooking[] } => {
   const grouped: { [key: string]: calendarBooking[] } = {};
@@ -40,14 +42,15 @@ export const groupEventsByDate = (events: calendarBooking[]): { [key: string]: c
     if (!event?.start?.dateTime) return;
     
     try {
-      const startDate = new Date(event.start.dateTime);
+      // Convert backend time to user's timezone for grouping by date
+      const userDate = TimezoneService.convertBackendTimeToLocal(event.start.dateTime);
       
-      if (isNaN(startDate.getTime())) {
+      if (isNaN(userDate.getTime())) {
         console.warn('Invalid date encountered:', event.start.dateTime);
         return;
       }
       
-      const dateKey = format(startDate, 'yyyy-MM-dd');
+      const dateKey = format(userDate, 'yyyy-MM-dd');
       
       if (!grouped[dateKey]) {
         grouped[dateKey] = [];
@@ -64,8 +67,8 @@ export const groupEventsByDate = (events: calendarBooking[]): { [key: string]: c
       if (!a?.start?.dateTime) return 1;
       if (!b?.start?.dateTime) return -1;
       
-      const dateA = new Date(a.start.dateTime);
-      const dateB = new Date(b.start.dateTime);
+      const dateA = TimezoneService.convertBackendTimeToLocal(a.start.dateTime);
+      const dateB = TimezoneService.convertBackendTimeToLocal(b.start.dateTime);
       
       if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
         return 0;
@@ -83,36 +86,35 @@ export const isAllDayEvent = (event: { start: DateTimeInfo; end: DateTimeInfo })
     return false;
   }
 
-  const start = new Date(event.start.dateTime);
-  const end = new Date(event.end.dateTime);
+  // Convert to user's timezone to check if it's all day
+  const start = TimezoneService.convertBackendTimeToLocal(event.start.dateTime);
+  const end = TimezoneService.convertBackendTimeToLocal(event.end.dateTime);
 
   const isSameDay = start.toDateString() === end.toDateString();
-
   const isStartMidnight = start.getHours() === 0 && start.getMinutes() === 0 && start.getSeconds() === 0;
 
   return isSameDay && isStartMidnight;
 };
 
-
 export function parseDateTime(dateTimeInfo: { dateTime?: string } | undefined): Date {
   if (!dateTimeInfo || !dateTimeInfo.dateTime) {
     console.warn('Invalid dateTime provided to parseDateTime', dateTimeInfo);
-    return new Date(); // Return current date as fallback
+    return new Date();
   }
   
   try {
-    const date = new Date(dateTimeInfo.dateTime);
+    // Convert backend time to user's timezone
+    const userDate = TimezoneService.convertBackendTimeToLocal(dateTimeInfo.dateTime);
     
-    // Validate the parsed date
-    if (isNaN(date.getTime())) {
+    if (isNaN(userDate.getTime())) {
       console.warn('Invalid date parsed from:', dateTimeInfo.dateTime);
-      return new Date(); // Return current date as fallback
+      return new Date();
     }
     
-    return date;
+    return userDate;
   } catch (error) {
     console.error('Error parsing date:', error);
-    return new Date(); // Return current date as fallback
+    return new Date();
   }
 }
 
@@ -183,7 +185,8 @@ export function shouldFetchNewData(
 }
 
 export function formatDateForApi(date: Date): string {
-  return toLocalISOString(date);
+  // Convert user's local time to backend timezone before sending to API
+  return TimezoneService.convertLocalTimeToBackend(date);
 }
 
 export function getDateRangeText(date: Date, view: CalendarViewType): string {
@@ -211,8 +214,9 @@ export function filterEventsByDateRange(
         return false;
       }
       
-      const eventStart = new Date(event.start.dateTime);
-      const eventEnd = new Date(event.end.dateTime);
+      // Convert backend times to user's timezone for filtering
+      const eventStart = TimezoneService.convertBackendTimeToLocal(event.start.dateTime);
+      const eventEnd = TimezoneService.convertBackendTimeToLocal(event.end.dateTime);
       
       // Event starts within range, ends within range, or spans the range
       return (
