@@ -1,6 +1,7 @@
 import React from 'react';
 import { calendarBooking, DateTimeInfo, BookingStatus } from "../types/calendarBooking";
 import * as XLSX from 'xlsx';
+import { TimezoneService } from './timezoneUtils';
 
 export interface Column<T = calendarBooking> {
   id: keyof T | string;
@@ -19,8 +20,8 @@ export const createBookingColumns = (): Column[] => {
       label: 'Closing Date',
       format: (value: DateTimeInfo | null | undefined, row) => {
         if (!value || !value.dateTime) return '-';
-        const date = new Date(value.dateTime);
-        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        // Convert backend time to user's timezone for display
+        return TimezoneService.formatDateForUser(value.dateTime, 'MMMM d, yyyy');
       },
       priority: 1
     },
@@ -29,8 +30,8 @@ export const createBookingColumns = (): Column[] => {
       label: 'Closing Time',
       format: (value: DateTimeInfo | null | undefined, row) => {
         if (!value || !value.dateTime) return '-';
-        const date = new Date(value.dateTime);
-        return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        // Convert backend time to user's timezone for display
+        return TimezoneService.formatTimeForUser(value.dateTime, 'h:mm a');
       },
       priority: 2
     },
@@ -122,13 +123,13 @@ export const exportBookingsToExcel = (
         value = row.loanData?.loanType;
       } else if (id === 'start' && col.label === 'Closing Date') {
         if (row.start?.dateTime) {
-          const date = new Date(row.start.dateTime);
-          value = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+          // Use timezone conversion for Excel export
+          value = TimezoneService.formatDateForUser(row.start.dateTime, 'MMMM d, yyyy');
         }
       } else if (id === 'start' && col.label === 'Closing Time') {
         if (row.start?.dateTime) {
-          const date = new Date(row.start.dateTime);
-          value = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+          // Use timezone conversion for Excel export
+          value = TimezoneService.formatTimeForUser(row.start.dateTime, 'h:mm a');
         }
       } else if (id === 'serviceLocation') {
         value = row.serviceLocation?.displayName;

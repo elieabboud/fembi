@@ -1,6 +1,7 @@
 import { calendarBooking } from '../types/calendarBooking';
 import { toLocalISOString } from '../utils/general';
 import { Column } from './exportToExcel';
+import { TimezoneService } from './timezoneUtils';
 
 export class EmailService {
   
@@ -96,6 +97,8 @@ ${htmlBody}
    * Generate HTML table for email body
    */
   private static generateHTMLTable(bookings: calendarBooking[], columns: Column[]): string {
+    const userTimezone = TimezoneService.getUserTimezoneDisplay();
+    
     const tableRows = bookings.map(booking => {
       const cells = columns.map(column => {
         let value = this.getCellValue(booking, column);
@@ -117,6 +120,7 @@ ${htmlBody}
     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
     th { background-color: #f2f2f2; font-weight: bold; }
     .header { margin-bottom: 20px; }
+    .timezone-info { background-color: #e3f2fd; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
   </style>
 </head>
 <body>
@@ -124,6 +128,12 @@ ${htmlBody}
     <h2>Bookings Report</h2>
     <p>Generated on: ${new Date().toLocaleString()}</p>
     <p>Total Records: ${bookings.length}</p>
+  </div>
+  
+  <div class="timezone-info">
+    <strong>📍 Timezone Information:</strong><br>
+    All times are displayed in: <strong>${userTimezone}</strong><br>
+    <em>Times have been automatically converted from Eastern Time (EST/EDT)</em>
   </div>
   
   <table>
@@ -137,6 +147,7 @@ ${htmlBody}
   
   <div style="margin-top: 20px; font-size: 12px; color: #666;">
     <p>This report was generated from the FEMBI Bookings System.</p>
+    <p>Times automatically converted to ${userTimezone}</p>
   </div>
 </body>
 </html>`;
@@ -146,10 +157,15 @@ ${htmlBody}
    * Generate plain text table for email body
    */
   private static generatePlainTextTable(bookings: calendarBooking[], columns: Column[]): string {
+    const userTimezone = TimezoneService.getUserTimezoneDisplay();
     const separator = '-'.repeat(80);
     const header = `BOOKINGS REPORT
 Generated: ${new Date().toLocaleString()}
 Total Records: ${bookings.length}
+
+TIMEZONE INFORMATION:
+All times displayed in: ${userTimezone}
+(Automatically converted from Eastern Time)
 
 ${separator}`;
 
@@ -164,7 +180,9 @@ ${bookingData}
 ${separator}`;
     }).join('\n\n');
 
-    return `${header}\n\n${tableData}`;
+    return `${header}\n\n${tableData}
+
+Note: All times have been converted to your local timezone (${userTimezone}) from Eastern Time.`;
   }
 
   /**
@@ -188,13 +206,13 @@ ${separator}`;
       value = booking.loanData?.loanType;
     } else if (id === 'start' && column.label === 'Closing Date') {
       if (booking.start?.dateTime) {
-        const date = new Date(booking.start.dateTime);
-        value = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        // Use timezone conversion for email
+        value = TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy');
       }
     } else if (id === 'start' && column.label === 'Closing Time') {
       if (booking.start?.dateTime) {
-        const date = new Date(booking.start.dateTime);
-        value = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        // Use timezone conversion for email
+        value = TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a');
       }
     } else if (id === 'serviceLocation') {
       value = booking.serviceLocation?.displayName;

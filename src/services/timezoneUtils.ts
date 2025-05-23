@@ -19,21 +19,19 @@ export class TimezoneService {
     if (!backendTime) return new Date();
     
     try {
-      // Parse the backend time assuming it's in EST
-      const date = parseISO(backendTime);
+      // Parse the backend time
+      const backendDate = parseISO(backendTime);
       
-      // Create a new date that represents the same moment in time
-      // but we need to adjust for the timezone difference
-      const estOffset = this.getTimezoneOffset(this.BACKEND_TIMEZONE);
-      const localOffset = this.getTimezoneOffset(this.getUserTimezone());
+      // Calculate timezone offsets dynamically
+      const offsetDifference = this.calculateTimezoneOffsetDifference();
       
-      // Calculate the difference and adjust
-      const offsetDifference = (localOffset - estOffset) * 60 * 1000;
+      // Apply the offset difference
+      const userTime = new Date(backendDate.getTime() + offsetDifference);
       
-      return new Date(date.getTime() + offsetDifference);
+      return userTime;
     } catch (error) {
       console.error('Error converting backend time to local:', error);
-      return new Date();
+      return parseISO(backendTime);
     }
   }
 
@@ -46,15 +44,13 @@ export class TimezoneService {
     if (!localTime) return new Date().toISOString();
     
     try {
-      const userTz = this.getUserTimezone();
-      const estOffset = this.getTimezoneOffset(this.BACKEND_TIMEZONE);
-      const localOffset = this.getTimezoneOffset(userTz);
+      // Calculate timezone offsets dynamically and reverse the conversion
+      const offsetDifference = this.calculateTimezoneOffsetDifference();
       
-      // Calculate the difference and adjust
-      const offsetDifference = (estOffset - localOffset) * 60 * 1000;
-      const adjustedTime = new Date(localTime.getTime() + offsetDifference);
+      // Apply the reverse offset
+      const estTime = new Date(localTime.getTime() - offsetDifference);
       
-      return adjustedTime.toISOString();
+      return estTime.toISOString();
     } catch (error) {
       console.error('Error converting local time to backend:', error);
       return localTime.toISOString();
@@ -71,7 +67,7 @@ export class TimezoneService {
     if (!backendTime) return '';
     
     try {
-      // Convert backend time to user's local time first, then format
+      // Convert backend time to user's timezone first, then format
       const userDate = this.convertBackendTimeToLocal(backendTime);
       return format(userDate, formatString);
     } catch (error) {
@@ -90,7 +86,7 @@ export class TimezoneService {
     if (!backendTime) return '';
     
     try {
-      // Convert backend time to user's local time first, then format
+      // Convert backend time to user's timezone first, then format
       const userDate = this.convertBackendTimeToLocal(backendTime);
       return format(userDate, formatString);
     } catch (error) {
@@ -100,15 +96,38 @@ export class TimezoneService {
   }
 
   /**
-   * Get timezone offset in minutes
-   * @param timezone - IANA timezone string
-   * @returns offset in minutes
+   * Calculate the timezone offset difference between user's timezone and backend timezone
+   * @returns offset difference in milliseconds
    */
-  private static getTimezoneOffset(timezone: string): number {
-    const now = new Date();
-    const utc = new Date(now.getTime() + (now.getTimezoneOffset() * 60000));
-    const targetTime = new Date(utc.toLocaleString('en-US', { timeZone: timezone }));
-    return (utc.getTime() - targetTime.getTime()) / (1000 * 60);
+  private static calculateTimezoneOffsetDifference(): number {
+    try {
+      // Create a reference date (current time)
+      const now = new Date();
+      
+      // Get the time in EST timezone
+      const estTime = new Date(now.toLocaleString('en-US', {
+        timeZone: this.BACKEND_TIMEZONE
+      }));
+      
+      // Get the time in user's timezone
+      const userTime = new Date(now.toLocaleString('en-US', {
+        timeZone: this.getUserTimezone()
+      }));
+      
+      // Calculate the difference in milliseconds
+      const offsetDifference = userTime.getTime() - estTime.getTime();
+      
+      console.log('Timezone offset calculation:');
+      console.log('- EST time:', estTime);
+      console.log('- User time:', userTime);
+      console.log('- Offset difference (ms):', offsetDifference);
+      console.log('- Offset difference (hours):', offsetDifference / (1000 * 60 * 60));
+      
+      return offsetDifference;
+    } catch (error) {
+      console.error('Error calculating timezone offset:', error);
+      return 0;
+    }
   }
 
   /**
@@ -117,17 +136,29 @@ export class TimezoneService {
    * @returns TimeSlot with times converted to user's timezone
    */
   static convertTimeSlotToLocal(timeSlot: any): any {
-    const convertedStartTime = this.convertBackendTimeToLocal(timeSlot.startTime);
-    const convertedEndTime = this.convertBackendTimeToLocal(timeSlot.endTime);
-    
-    return {
-      ...timeSlot,
-      startTime: convertedStartTime.toISOString(),
-      endTime: convertedEndTime.toISOString(),
-      displayText: format(convertedStartTime, 'h:mm a') + 
-                   ' - ' + 
-                   format(convertedEndTime, 'h:mm a')
-    };
+    try {
+      console.log('Converting time slot:', timeSlot);
+      
+      // Convert backend times to user's timezone
+      const userStartDate = this.convertBackendTimeToLocal(timeSlot.startTime);
+      const userEndDate = this.convertBackendTimeToLocal(timeSlot.endTime);
+      
+      console.log('Original start:', timeSlot.startTime);
+      console.log('Converted start:', userStartDate);
+      console.log('Formatted start:', format(userStartDate, 'h:mm a'));
+      
+      return {
+        ...timeSlot,
+        startTime: userStartDate.toISOString(),
+        endTime: userEndDate.toISOString(),
+        displayText: format(userStartDate, 'h:mm a') + 
+                     ' - ' + 
+                     format(userEndDate, 'h:mm a')
+      };
+    } catch (error) {
+      console.error('Error converting time slot:', error);
+      return timeSlot;
+    }
   }
 
   /**
@@ -179,5 +210,31 @@ export class TimezoneService {
   static shouldShowTimezoneWarning(): boolean {
     const userTz = this.getUserTimezone();
     return userTz !== this.BACKEND_TIMEZONE;
+  }
+
+  /**
+   * Debug method to test timezone conversion
+   * @param testTime - time to test (e.g., "2025-01-15T09:00:00")
+   */
+  static debugTimezoneConversion(testTime: string): void {
+    console.log('=== Timezone Conversion Debug ===');
+    console.log('Input (Backend EST):', testTime);
+    console.log('User Timezone:', this.getUserTimezone());
+    console.log('Backend Timezone:', this.BACKEND_TIMEZONE);
+    
+    // Test the dynamic conversion approach
+    const backendDate = parseISO(testTime);
+    console.log('Parsed backend date:', backendDate);
+    
+    const offsetDifference = this.calculateTimezoneOffsetDifference();
+    console.log('Calculated offset difference (hours):', offsetDifference / (1000 * 60 * 60));
+    
+    const userTime = this.convertBackendTimeToLocal(testTime);
+    console.log('Converted to User Time:', userTime);
+    console.log('Formatted for User:', this.formatTimeForUser(testTime, 'h:mm a'));
+    
+    const backToBackend = this.convertLocalTimeToBackend(userTime);
+    console.log('Back to Backend:', backToBackend);
+    console.log('==================================');
   }
 }

@@ -38,7 +38,7 @@ export const bookingService = {
     const response = await api.get('/api/Application/v1/GetAvailableTimeSlots', {
       params: {
         serviceId,
-        selectedDateTime: backendDateTime
+        selectedDateTime: selectedDateTime
       }
     });
   
@@ -96,12 +96,11 @@ export const bookingService = {
     // Convert times from user timezone to backend timezone
     const backendUpdateData = {
       ...updateData,
+      
       fromDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.fromDate)),
       toDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.toDate)),
     };
 
-    // Simulate delay for testing
-    await new Promise(resolve => setTimeout(resolve, 300));
     
     console.log(`
       Booking Update Details (converted to backend timezone):
