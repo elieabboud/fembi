@@ -10,7 +10,6 @@ import {
 } from 'date-fns';
 import { CalendarViewType } from '../components/calendar/CalendarViewSelector';
 import { TimezoneService } from './timezoneUtils';
-import { format as formatTz } from 'date-fns-tz';
 
 export const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -18,19 +17,24 @@ export const isToday = (date: Date) => {
   return isSameDay(date, new Date());
 };
 
+// 🔥 FIXED: Use TimezoneService for event time formatting
 export const formatEventTime = (event: { start: DateTimeInfo; end: DateTimeInfo }) => {
   if (!event?.start || !event?.end || !event.start.dateTime || !event.end.dateTime) {
     return '';
   }
 
   try {
-    // Convert backend times to user's timezone for display
+    console.log('🕐 Formatting event time:', event.start.dateTime, '->', event.end.dateTime);
+    
+    // Use TimezoneService to format times in user's timezone
     const startTimeUser = TimezoneService.formatTimeForUser(event.start.dateTime, 'h:mm a');
     const endTimeUser = TimezoneService.formatTimeForUser(event.end.dateTime, 'h:mm a');
 
-    return `${startTimeUser} - ${endTimeUser}`;
+    const result = `${startTimeUser} - ${endTimeUser}`;
+    console.log('🕐 Formatted event time result:', result);
+    return result;
   } catch (error) {
-    console.error('Error formatting event time:', error);
+    console.error('❌ Error formatting event time:', error);
     return 'Time unavailable';
   }
 };
@@ -45,6 +49,7 @@ export const getFormattedDate = (dateStr: string) => {
   }
 };
 
+// 🔥 FIXED: Use TimezoneService for grouping events
 export const groupEventsByDate = (events: calendarBooking[]): { [key: string]: calendarBooking[] } => {
   const grouped: { [key: string]: calendarBooking[] } = {};
   
@@ -52,11 +57,15 @@ export const groupEventsByDate = (events: calendarBooking[]): { [key: string]: c
     if (!event?.start?.dateTime) return;
     
     try {
-      // Parse backend time and convert to user's timezone
-      const userDate = TimezoneService.convertBackendTimeToLocal(event.start.dateTime);
+      console.log('🗓️ Grouping event:', event.start.dateTime);
+      
+      // Convert backend time to user's timezone
+      const userDate = TimezoneService.convertBackendTimeToLocalReliable(event.start.dateTime);
       
       // Format date in user's timezone
       const dateKey = format(userDate, 'yyyy-MM-dd');
+      
+      console.log('🗓️ Event grouped under date:', dateKey);
       
       if (!grouped[dateKey]) {
         grouped[dateKey] = [];
@@ -74,8 +83,8 @@ export const groupEventsByDate = (events: calendarBooking[]): { [key: string]: c
       if (!a?.start?.dateTime || !b?.start?.dateTime) return 0;
       
       try {
-        const userDateA = TimezoneService.convertBackendTimeToLocal(a.start.dateTime);
-        const userDateB = TimezoneService.convertBackendTimeToLocal(b.start.dateTime);
+        const userDateA = TimezoneService.convertBackendTimeToLocalReliable(a.start.dateTime);
+        const userDateB = TimezoneService.convertBackendTimeToLocalReliable(b.start.dateTime);
         
         // Get times in user's timezone for comparison
         const timeA = format(userDateA, 'HHmm');
@@ -98,8 +107,9 @@ export const isAllDayEvent = (event: { start: DateTimeInfo; end: DateTimeInfo })
   }
 
   try {
-    const userStartDate = TimezoneService.convertBackendTimeToLocal(event.start.dateTime);
-    const userEndDate = TimezoneService.convertBackendTimeToLocal(event.end.dateTime);
+    // Convert to user's timezone before checking
+    const userStartDate = TimezoneService.convertBackendTimeToLocalReliable(event.start.dateTime);
+    const userEndDate = TimezoneService.convertBackendTimeToLocalReliable(event.end.dateTime);
     
     // Check if it's the same day and starts at midnight in user's timezone
     const startDateStr = format(userStartDate, 'yyyy-MM-dd');
@@ -116,6 +126,7 @@ export const isAllDayEvent = (event: { start: DateTimeInfo; end: DateTimeInfo })
   }
 };
 
+// 🔥 FIXED: Use TimezoneService for parsing date time
 export function parseDateTime(dateTimeInfo: { dateTime?: string } | undefined): Date {
   if (!dateTimeInfo || !dateTimeInfo.dateTime) {
     console.warn('Invalid dateTime provided to parseDateTime', dateTimeInfo);
@@ -123,7 +134,6 @@ export function parseDateTime(dateTimeInfo: { dateTime?: string } | undefined): 
   }
   
   try {
-    // Parse the backend time and convert to user's timezone
     const backendDate = parseISO(dateTimeInfo.dateTime);
     
     if (isNaN(backendDate.getTime())) {
@@ -131,8 +141,13 @@ export function parseDateTime(dateTimeInfo: { dateTime?: string } | undefined): 
       return new Date();
     }
     
-    // Return the date converted to user's timezone for display
-    return TimezoneService.convertBackendTimeToLocal(dateTimeInfo.dateTime);
+    console.log('🗓️ Parsing dateTime:', dateTimeInfo.dateTime);
+    
+    // Use TimezoneService to convert backend time to user's timezone
+    const userDate = TimezoneService.convertBackendTimeToLocalReliable(dateTimeInfo.dateTime);
+    
+    console.log('🗓️ Parsed to user timezone:', userDate.toLocaleString());
+    return userDate;
   } catch (error) {
     console.error('Error parsing date:', error);
     return new Date();
@@ -205,6 +220,7 @@ export function shouldFetchNewData(
   return !isWithinCurrentRange;
 }
 
+// 🔥 FIXED: Use TimezoneService for API date formatting
 export function formatDateForApi(date: Date): string {
   try {
     // Convert user's local time to backend timezone (EST/EDT) for API calls
@@ -245,9 +261,9 @@ export function filterEventsByDateRange(
         return false;
       }
       
-      // Parse backend times and convert to user timezone
-      const eventStartUser = TimezoneService.convertBackendTimeToLocal(event.start.dateTime);
-      const eventEndUser = TimezoneService.convertBackendTimeToLocal(event.end.dateTime);
+      // Convert backend times to user timezone for filtering
+      const eventStartUser = TimezoneService.convertBackendTimeToLocalReliable(event.start.dateTime);
+      const eventEndUser = TimezoneService.convertBackendTimeToLocalReliable(event.end.dateTime);
       
       // Event starts within range, ends within range, or spans the range
       return (

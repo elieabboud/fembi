@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { format } from 'date-fns';
 import {
   TextField,
   MenuItem,
@@ -281,35 +282,56 @@ const handleSubmit = async (e: React.FormEvent) => {
   }, [editMode]);
 
   const handleDateTimeSelect = useCallback(() => {
-    if (!selectedSlot || !selectedDate || readOnlyMode) return; // Prevent in view mode
+  if (!selectedSlot || !selectedDate || readOnlyMode) return;
 
-    const dateStr = toLocalISOString(selectedDate).split('T')[0]; // YYYY-MM-DD
+  console.log('🕐 Handling date/time selection:', { selectedSlot, selectedDate });
 
-    // Extract time "HH:mm" from StartTime ISO string
-    const startTime = new Date(selectedSlot.startTime);
-    const time24 = toLocalISOString(startTime).substr(11, 5); // "HH:mm"
+  // Format date for display (user timezone)
+  const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
-    setBookingData((prev) => ({
-      ...prev,
-      DateTimeInfo: {
-        SelectedDate: dateStr,
-        SelectedTime: time24,
-        FromDate: selectedSlot.startTime,
-        ToDate: selectedSlot.endTime,
-      },
-      StaffMemberIds: [selectedSlot.staffMemberId],
-    }));
-  }, [selectedSlot, selectedDate, readOnlyMode]);
+  // Convert slot times using TimezoneService
+  const startTimeUser = TimezoneService.convertBackendTimeToLocalReliable(selectedSlot.startTime);
+  const endTimeUser = TimezoneService.convertBackendTimeToLocalReliable(selectedSlot.endTime);
+  
+  // Format time for display (user timezone)
+  const time24 = format(startTimeUser, 'HH:mm');
+
+  console.log('🕐 Date/time selection result:', {
+    dateStr,
+    time24,
+    originalSlotStart: selectedSlot.startTime,
+    originalSlotEnd: selectedSlot.endTime
+  });
+
+  setBookingData((prev) => ({
+    ...prev,
+    DateTimeInfo: {
+      SelectedDate: dateStr,
+      SelectedTime: time24,
+      // Keep original backend times for API communication
+      FromDate: selectedSlot.startTime,
+      ToDate: selectedSlot.endTime,
+    },
+    StaffMemberIds: [selectedSlot.staffMemberId],
+  }));
+}, [selectedSlot, selectedDate, readOnlyMode]);
 
   const fetchAvailableTimeSlots = useCallback(async () => {     
   if (!selectedDate || !bookingData?.ServiceId) return;
 
   updateLoadingState('timeSlots', true);
   try {
-    console.log(`Fetching time slots for serviceId: ${bookingData.ServiceId} and date: ${toLocalISOString(selectedDate)}`);
+    // 🔥 IMPORTANT: Convert user's selected date to backend format
+    console.log('🕐 Fetching time slots for user date:', selectedDate);
+    
+    // Use TimezoneService to format the date for the backend
+    const backendDateString = TimezoneService.convertLocalTimeToBackend(selectedDate);
+    console.log('🕐 Backend date string:', backendDateString);
+
+    console.log(`Fetching time slots for serviceId: ${bookingData.ServiceId} and date: ${backendDateString}`);
     const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
       bookingData.ServiceId,
-      toLocalISOString(selectedDate)
+      backendDateString
     );
 
     setTimeSlots(response);
@@ -317,28 +339,28 @@ const handleSubmit = async (e: React.FormEvent) => {
     // Set the selected slot if we're in edit mode AND we have the time data
     if (editMode && bookingData.DateTimeInfo?.SelectedTime && !selectedSlot) {
       const timeToMatch = bookingData.DateTimeInfo.SelectedTime; // This should be in HH:mm format
-      console.log("Looking for time slot matching:", timeToMatch);
-      console.log("Available slots:", response.map(slot => ({
+      console.log("🕐 Looking for time slot matching:", timeToMatch);
+      console.log("🕐 Available slots:", response.map(slot => ({
         startTime: slot.startTime,
         displayText: slot.displayText || 'No display text'
       })));
       
       const matchingSlot = response.find(slot => {
         // Convert the slot's start time to user timezone and extract HH:mm
-        const userSlotTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
-        const slotTime = toLocalISOString(userSlotTime).substr(11, 5); // "HH:mm"
-        console.log(`Comparing slot time ${slotTime} with target ${timeToMatch}`);
+        const userSlotTime = TimezoneService.convertBackendTimeToLocalReliable(slot.startTime);
+        const slotTime = format(userSlotTime, 'HH:mm');
+        console.log(`🕐 Comparing slot time ${slotTime} with target ${timeToMatch}`);
         return slotTime === timeToMatch;
       });
       
       if (matchingSlot) {
-        console.log("Found matching time slot:", matchingSlot);
+        console.log("✅ Found matching time slot:", matchingSlot);
         setSelectedSlot(matchingSlot);
       } else {
-        console.log("No matching time slot found. Available times:", 
+        console.log("❌ No matching time slot found. Available times:", 
           response.map(slot => {
-            const userTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
-            return toLocalISOString(userTime).substr(11, 5);
+            const userTime = TimezoneService.convertBackendTimeToLocalReliable(slot.startTime);
+            return format(userTime, 'HH:mm');
           })
         );
       }

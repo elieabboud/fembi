@@ -18,15 +18,29 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
   loading = false,
   readOnly = false 
 }) => {
-  // Convert time slots to user's timezone
+  // 🔥 KEY FIX: Convert all time slots to user's timezone
   const convertedTimeSlots = useMemo(() => {
-    return timeSlots.map(slot => TimezoneService.convertTimeSlotToLocal(slot));
+    console.log('🕐 TimeSelector: Converting time slots to user timezone...');
+    console.log('🕐 Raw time slots:', timeSlots);
+    
+    const converted = timeSlots.map(slot => {
+      const convertedSlot = TimezoneService.convertTimeSlotToLocal(slot);
+      console.log(`🕐 Converted: ${slot.startTime} -> ${convertedSlot.displayText}`);
+      return convertedSlot;
+    });
+    
+    console.log('🕐 All converted slots:', converted);
+    return converted;
   }, [timeSlots]);
 
-  // Convert selected slot to user's timezone
+  // Convert selected slot to user's timezone for display
   const convertedSelectedSlot = useMemo(() => {
     if (!selectedSlot) return null;
-    return TimezoneService.convertTimeSlotToLocal(selectedSlot);
+    
+    console.log('🕐 Converting selected slot:', selectedSlot);
+    const converted = TimezoneService.convertTimeSlotToLocal(selectedSlot);
+    console.log('🕐 Selected slot converted:', converted);
+    return converted;
   }, [selectedSlot]);
 
   const showTimezoneWarning = TimezoneService.shouldShowTimezoneWarning();
@@ -93,18 +107,21 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
       ) : !readOnly ? (
         // Show all time slots for selection in edit mode
         <Grid container spacing={2}>
-          {convertedTimeSlots.map((slot, index) => {
-            // Find the original slot for comparison
+          {convertedTimeSlots.map((convertedSlot, index) => {
+            // Find the original slot for comparison and selection
             const originalSlot = timeSlots[index];
             const isSelected = selectedSlot?.startTime === originalSlot?.startTime;
             
             return (
-              <Grid item xs={4} key={slot.startTime}>
+              <Grid item xs={4} key={originalSlot.startTime}>
                 <Button
                   fullWidth
                   variant="contained"
                   size="small"
-                  onClick={() => onSelect(originalSlot)} // Pass the original slot back
+                  onClick={() => {
+                    console.log('🕐 Slot selected:', originalSlot);
+                    onSelect(originalSlot); // Pass the original slot back to maintain backend compatibility
+                  }}
                   sx={{
                     textTransform: 'none',
                     borderRadius: '24px',
@@ -115,7 +132,7 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
                     },
                   }}
                 >
-                  {slot.displayText}
+                  {convertedSlot.displayText}
                 </Button>
               </Grid>
             );

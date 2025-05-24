@@ -3,7 +3,7 @@ import { CreateAppointmentRequest } from "../types/CreateAppointmentRequest";
 import { TimezoneService } from "./timezoneUtils";
 import { parseISO, format } from "date-fns";
 
-// Updated function to handle timezone conversion properly
+// 🔥 FIXED: Updated function to handle timezone conversion properly
 export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): CreateAppointmentRequest => {
   console.log('🔄 Mapping calendar booking to form data:', calendarBooking);
   
@@ -13,7 +13,9 @@ export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): 
   
   if (calendarBooking.start && calendarBooking.start.dateTime) {
     try {
-      // Format date and time in user's timezone for form display
+      console.log('🔄 Converting backend time for form:', calendarBooking.start.dateTime);
+      
+      // Use TimezoneService to format date and time in user's timezone for form display
       selectedDate = TimezoneService.formatDateForUser(calendarBooking.start.dateTime, 'yyyy-MM-dd');
       selectedTime = TimezoneService.formatTimeForUser(calendarBooking.start.dateTime, 'HH:mm');
       
@@ -24,7 +26,7 @@ export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): 
         userTimezone: TimezoneService.getUserTimezone()
       });
     } catch (error) {
-      console.error('Error converting times for form:', error);
+      console.error('❌ Error converting times for form:', error);
       // Fallback to current date/time
       const now = new Date();
       selectedDate = format(now, 'yyyy-MM-dd');

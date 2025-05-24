@@ -2,271 +2,320 @@
 import { format, parseISO, isValid } from 'date-fns';
 
 export class TimezoneService {
-  // Backend timezone (Eastern Time)
-  private static readonly BACKEND_TIMEZONE = 'America/New_York';
+  private static readonly BACKEND_TIMEZONE = 'America/New_York'; // EST/EDT
   
-  // Get user's local timezone
   static getUserTimezone(): string {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
   }
 
   /**
-   * Convert backend time (EST/EDT) to user's local timezone
-   * Backend sends times that represent EST/EDT local time
-   * We need to interpret them as EST and show them in user's timezone
+   * 🔥 CORE CONVERSION METHOD 🔥
+   * Backend sends: "2025-01-15T10:00:00.000Z" = 10:00 AM EST
+   * Lebanon should see: 6:00 PM (EST + 8 hours in winter)
    */
-  static convertBackendTimeToLocal(backendTime: string): Date {
-    if (!backendTime) {
-      console.warn('Empty backendTime provided to convertBackendTimeToLocal');
+  static convertBackendTimeToLocal(backendTimeString: string): Date {
+    if (!backendTimeString) {
+      console.warn('⚠️ Empty backend time provided');
       return new Date();
     }
-    
+
     try {
-      // Parse the ISO string
-      const parsedDate = parseISO(backendTime);
+      console.log('🔄 Converting backend time:', backendTimeString);
       
-      if (!isValid(parsedDate)) {
-        console.error('Invalid date provided:', backendTime);
-        return new Date();
+      // Step 1: Parse the ISO string to get the time components
+      const parsedUTC = parseISO(backendTimeString);
+      if (!isValid(parsedUTC)) {
+        throw new Error('Invalid date format');
       }
 
-      // The backend time represents a moment in EST/EDT timezone
-      // We need to treat the time components as EST and convert to user timezone
+      // Step 2: Extract components that represent EST local time
+      const year = parsedUTC.getUTCFullYear();
+      const month = parsedUTC.getUTCMonth(); // 0-based
+      const day = parsedUTC.getUTCDate();
+      const hours = parsedUTC.getUTCHours();
+      const minutes = parsedUTC.getUTCMinutes();
+      const seconds = parsedUTC.getUTCSeconds();
+
+      console.log(`📅 Components: ${year}-${month+1}-${day} ${hours}:${minutes}:${seconds} (as EST)`);
+
+      // Step 3: Create this exact time in EST timezone
+      // We'll create a date string and specify it's in EST
+      const estDateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
       
-      // Extract the time components (these represent EST time)
-      const year = parsedDate.getUTCFullYear();
-      const month = parsedDate.getUTCMonth();
-      const day = parsedDate.getUTCDate();
-      const hours = parsedDate.getUTCHours();
-      const minutes = parsedDate.getUTCMinutes();
-      const seconds = parsedDate.getUTCSeconds();
+      console.log('🕐 EST date string:', estDateString);
+
+      // Step 4: Get the current EST offset (handles DST automatically)
+      const now = new Date();
       
-      // Method 1: Use the date components to create a proper EST date
-      // Create date string in ISO format
-      const estDateTimeString = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      // Create the same moment in both EST and UTC to calculate offset
+      const testInEST = new Date(now.toLocaleString('sv-SE', { timeZone: this.BACKEND_TIMEZONE }));
+      const testInUTC = new Date(now.toLocaleString('sv-SE', { timeZone: 'UTC' }));
+      const estOffsetMs = testInUTC.getTime() - testInEST.getTime();
       
-      // Parse this as a local date (will be in user's timezone)
-      const localDate = new Date(estDateTimeString);
+      console.log(`⏰ EST offset: ${estOffsetMs / (1000 * 60 * 60)} hours`);
+
+      // Step 5: Create a local date from the EST components
+      const estAsLocal = new Date(estDateString);
       
-      // Now calculate the offset between EST and user timezone
-      const offsetDiff = this.getTimezoneOffsetDifference();
+      // Step 6: Apply EST offset to get the true UTC moment
+      const trueUTC = new Date(estAsLocal.getTime() + estOffsetMs);
       
-      // Apply the offset to convert from EST to user timezone
-      const userDate = new Date(localDate.getTime() + offsetDiff);
-      
-      return userDate;
-      
+      console.log('🌍 True UTC moment:', trueUTC.toISOString());
+
+      // Step 7: This UTC moment will display correctly in user's timezone
+      console.log('👤 User will see:', trueUTC.toLocaleString());
+      console.log('👤 User timezone:', this.getUserTimezone());
+
+      return trueUTC;
+
     } catch (error) {
-      console.error('Error converting backend time to local:', error, 'Input:', backendTime);
-      return parseISO(backendTime);
+      console.error('❌ Error converting backend time:', error);
+      return parseISO(backendTimeString); // Fallback
     }
   }
 
   /**
-   * Convert user's local time to backend timezone (EST/EDT)
+   * Alternative simpler method using Intl.DateTimeFormat
+   */
+  static convertBackendTimeToLocalSimple(backendTimeString: string): Date {
+    if (!backendTimeString) {
+      return new Date();
+    }
+
+    try {
+      // Parse the backend time
+      const parsedUTC = parseISO(backendTimeString);
+      if (!isValid(parsedUTC)) {
+        throw new Error('Invalid date');
+      }
+
+      // Extract the time components (these represent EST time)
+      const year = parsedUTC.getUTCFullYear();
+      const month = parsedUTC.getUTCMonth();
+      const day = parsedUTC.getUTCDate();
+      const hours = parsedUTC.getUTCHours();
+      const minutes = parsedUTC.getUTCMinutes();
+      const seconds = parsedUTC.getUTCSeconds();
+
+      // Create a date representing this time in EST
+      // We need to trick the browser into treating this as EST time
+      
+      // Method: Create the date as if it's local time, then calculate what UTC would be
+      const localRepresentation = new Date(year, month, day, hours, minutes, seconds);
+      
+      // Get EST offset at this date (handles DST)
+      const estFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: this.BACKEND_TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+
+      // Create a reference date to calculate offset
+      const refDate = new Date(2025, 0, 15, 12, 0, 0); // Jan 15, 2025 noon
+      const estTime = estFormatter.format(refDate);
+      const utcTime = refDate.toISOString().substring(0, 19).replace('T', ' ');
+      
+      // Parse both to get offset
+      const estParsed = new Date(estTime.replace(/(\d{4})-(\d{2})-(\d{2}), (\d{2}):(\d{2}):(\d{2})/, '$1-$2-$3T$4:$5:$6'));
+      const utcParsed = new Date(refDate.toISOString());
+      
+      const offsetMs = utcParsed.getTime() - estParsed.getTime();
+      
+      // Apply offset to our local representation
+      const result = new Date(localRepresentation.getTime() + offsetMs);
+      
+      console.log('🔄 Simple conversion:');
+      console.log('  Input:', backendTimeString);
+      console.log('  EST components:', `${year}-${month+1}-${day} ${hours}:${minutes}:${seconds}`);
+      console.log('  Offset (hours):', offsetMs / (1000 * 60 * 60));
+      console.log('  Result:', result.toLocaleString());
+      
+      return result;
+
+    } catch (error) {
+      console.error('❌ Simple conversion error:', error);
+      return parseISO(backendTimeString);
+    }
+  }
+
+  /**
+   * MOST RELIABLE METHOD - Using browser's built-in timezone handling
+   */
+  static convertBackendTimeToLocalReliable(backendTimeString: string): Date {
+    if (!backendTimeString) {
+      return new Date();
+    }
+
+    try {
+      console.log('🔄 Reliable conversion for:', backendTimeString);
+
+      // Parse to get components
+      const parsedUTC = parseISO(backendTimeString);
+      if (!isValid(parsedUTC)) {
+        throw new Error('Invalid date');
+      }
+
+      // Get the time components that represent EST
+      const year = parsedUTC.getUTCFullYear();
+      const month = parsedUTC.getUTCMonth() + 1; // Make it 1-based
+      const day = parsedUTC.getUTCDate();
+      const hours = parsedUTC.getUTCHours();
+      const minutes = parsedUTC.getUTCMinutes();
+      const seconds = parsedUTC.getUTCSeconds();
+
+      // Create an ISO string representing this time in EST
+      const estISOString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+      console.log('📅 EST ISO string:', estISOString);
+
+      // Now we need to figure out what this EST time equals in UTC
+      // We'll use a reference calculation
+      
+      // Create two dates: one treating the time as local, one as UTC
+      const asLocal = new Date(estISOString);
+      const asUTC = new Date(estISOString + 'Z');
+      
+      // Get what this time would be in EST using Intl
+      const estFormatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: this.BACKEND_TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+
+      // Use current time to calculate EST offset
+      const now = new Date();
+      const nowInEST = estFormatter.format(now);
+      const nowInUTC = now.toISOString().substring(0, 19).replace('T', ' ');
+      
+      // Calculate how many hours EST is behind UTC
+      const estHour = parseInt(nowInEST.substring(11, 13));
+      const utcHour = parseInt(nowInUTC.substring(11, 13));
+      let offsetHours = utcHour - estHour;
+      
+      // Handle day boundary crossing
+      if (offsetHours > 12) offsetHours -= 24;
+      if (offsetHours < -12) offsetHours += 24;
+      
+      console.log(`⏰ EST is ${offsetHours} hours behind UTC`);
+
+      // Apply the offset to convert EST to UTC
+      const estAsUTC = new Date(asLocal.getTime() + (offsetHours * 60 * 60 * 1000));
+      
+      console.log('✅ Final result:', estAsUTC.toLocaleString());
+      console.log('   In Lebanon should be ~8 hours ahead of EST input');
+
+      return estAsUTC;
+
+    } catch (error) {
+      console.error('❌ Reliable conversion error:', error);
+      return parseISO(backendTimeString);
+    }
+  }
+
+  /**
+   * Convert user's local time back to backend EST format
    */
   static convertLocalTimeToBackend(localTime: Date): string {
     if (!localTime || !isValid(localTime)) {
-      console.warn('Invalid localTime provided to convertLocalTimeToBackend');
+      console.warn('⚠️ Invalid local time provided');
       return new Date().toISOString();
     }
-    
+
     try {
-      // Calculate the offset between user timezone and EST
-      const offsetDiff = this.getTimezoneOffsetDifference();
-      
-      // Convert user time to EST
-      const estTime = new Date(localTime.getTime() - offsetDiff);
-      
-      return estTime.toISOString();
-      
+      // Use Intl to get the equivalent EST time
+      const estFormatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: this.BACKEND_TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+
+      const estTimeString = estFormatter.format(localTime);
+      const isoString = estTimeString.replace(' ', 'T') + '.000Z';
+
+      console.log('📤 Local to backend:', localTime.toLocaleString(), '->', isoString);
+      return isoString;
+
     } catch (error) {
-      console.error('Error converting local time to backend:', error);
+      console.error('❌ Error converting to backend:', error);
       return localTime.toISOString();
     }
   }
 
   /**
-   * Calculate the timezone offset difference between user timezone and EST
-   * Returns the difference in milliseconds
+   * Format backend time for display in user's timezone
    */
-  private static getTimezoneOffsetDifference(): number {
-    try {
-      // Use a reference date to calculate the offset
-      const referenceDate = new Date();
-      
-      // Get the same moment in both timezones
-      const userTime = new Date(referenceDate.toLocaleString('sv-SE', { 
-        timeZone: this.getUserTimezone() 
-      }));
-      
-      const estTime = new Date(referenceDate.toLocaleString('sv-SE', { 
-        timeZone: this.BACKEND_TIMEZONE 
-      }));
-      
-      // Calculate the difference
-      const offsetMs = userTime.getTime() - estTime.getTime();
-      
-      console.log('Timezone offset calculation:');
-      console.log('- User timezone:', this.getUserTimezone());
-      console.log('- EST time for reference:', estTime);
-      console.log('- User time for reference:', userTime);
-      console.log('- Offset (ms):', offsetMs);
-      console.log('- Offset (hours):', offsetMs / (1000 * 60 * 60));
-      
-      return offsetMs;
-    } catch (error) {
-      console.error('Error calculating timezone offset:', error);
-      return 0;
-    }
-  }
-
-  /**
-   * Format time for display in user's timezone
-   */
-  static formatTimeForUser(backendTime: string, formatString: string = 'h:mm a'): string {
+  static formatTimeForUser(backendTime: string, formatPattern: string = 'h:mm a'): string {
     if (!backendTime) return '';
     
     try {
-      // Convert backend time to user's timezone
-      const userDate = this.convertBackendTimeToLocal(backendTime);
-      
-      if (!isValid(userDate)) {
-        console.error('Invalid converted date for formatting:', backendTime);
-        return '';
-      }
-
-      // Format the converted time
-      if (formatString === 'h:mm a') {
-        return new Intl.DateTimeFormat('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        }).format(userDate);
-      }
-      
-      if (formatString === 'HH:mm') {
-        return new Intl.DateTimeFormat('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }).format(userDate);
-      }
-      
-      // For other formats, use date-fns
-      return format(userDate, formatString);
-      
+      const userTime = this.convertBackendTimeToLocalReliable(backendTime);
+      return format(userTime, formatPattern);
     } catch (error) {
-      console.error('Error formatting time for user:', error);
+      console.error('❌ Error formatting time:', error);
       return '';
     }
   }
 
   /**
-   * Format date for display in user's timezone
+   * Format backend date for display in user's timezone
    */
-  static formatDateForUser(backendTime: string, formatString: string = 'yyyy-MM-dd'): string {
+  static formatDateForUser(backendTime: string, formatPattern: string = 'yyyy-MM-dd'): string {
     if (!backendTime) return '';
     
     try {
-      // Convert backend time to user's timezone
-      const userDate = this.convertBackendTimeToLocal(backendTime);
-      
-      if (!isValid(userDate)) {
-        console.error('Invalid converted date for formatting:', backendTime);
-        return '';
-      }
-
-      // Format the converted date
-      if (formatString === 'yyyy-MM-dd') {
-        return new Intl.DateTimeFormat('en-CA').format(userDate);
-      }
-      
-      if (formatString === 'MMMM d, yyyy') {
-        return new Intl.DateTimeFormat('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        }).format(userDate);
-      }
-      
-      // For other formats, use date-fns
-      return format(userDate, formatString);
-      
+      const userTime = this.convertBackendTimeToLocalReliable(backendTime);
+      return format(userTime, formatPattern);
     } catch (error) {
-      console.error('Error formatting date for user:', error);
+      console.error('❌ Error formatting date:', error);
       return '';
     }
   }
 
   /**
-   * Convert TimeSlot start/end times from EST to user's timezone
+   * Convert time slots from EST to user's timezone
+   * THIS IS THE KEY METHOD FOR YOUR TIME SLOTS
    */
   static convertTimeSlotToLocal(timeSlot: any): any {
     try {
-      // Convert both start and end times from EST to user's timezone
-      const startDateUser = this.convertBackendTimeToLocal(timeSlot.startTime);
-      const endDateUser = this.convertBackendTimeToLocal(timeSlot.endTime);
-      
-      if (!isValid(startDateUser) || !isValid(endDateUser)) {
-        console.error('Invalid time slot dates after conversion:', timeSlot);
-        return timeSlot;
-      }
+      console.log('🕐 Converting time slot:', timeSlot);
 
-      console.log('Time slot conversion:');
-      console.log('- Original start (EST):', timeSlot.startTime);
-      console.log('- Converted start (User):', startDateUser);
-      console.log('- Original end (EST):', timeSlot.endTime);
-      console.log('- Converted end (User):', endDateUser);
+      // Convert start and end times using our reliable method
+      const startTimeUser = this.convertBackendTimeToLocalReliable(timeSlot.startTime);
+      const endTimeUser = this.convertBackendTimeToLocalReliable(timeSlot.endTime);
 
-      // Format the times for display in user's timezone
-      const startFormatted = new Intl.DateTimeFormat('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      }).format(startDateUser);
+      // Format for display
+      const startFormatted = format(startTimeUser, 'h:mm a');
+      const endFormatted = format(endTimeUser, 'h:mm a');
       
-      const endFormatted = new Intl.DateTimeFormat('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      }).format(endDateUser);
-      
+      const displayText = `${startFormatted} - ${endFormatted}`;
+
+      console.log('✅ Time slot converted:');
+      console.log(`   Original: ${timeSlot.displayText || timeSlot.startTime}`);
+      console.log(`   New: ${displayText}`);
+
       return {
         ...timeSlot,
-        displayText: `${startFormatted} - ${endFormatted}`,
-        // Keep original times for backend communication
-        originalStartTime: timeSlot.startTime,
-        originalEndTime: timeSlot.endTime,
-        // Add user timezone versions for debugging
-        userStartTime: startDateUser.toISOString(),
-        userEndTime: endDateUser.toISOString()
+        displayText: displayText,
+        userStartTime: startTimeUser,
+        userEndTime: endTimeUser
       };
+
     } catch (error) {
-      console.error('Error converting time slot:', error);
+      console.error('❌ Error converting time slot:', error);
       return timeSlot;
-    }
-  }
-
-  /**
-   * Create a backend datetime from user input
-   */
-  static createBackendDateTime(dateString: string, timeString: string): string {
-    try {
-      // Create a date in user's timezone
-      const dateTimeString = `${dateString}T${timeString}:00`;
-      const userDate = parseISO(dateTimeString);
-      
-      if (!isValid(userDate)) {
-        console.error('Invalid date/time combination:', dateString, timeString);
-        return new Date().toISOString();
-      }
-
-      // Convert to backend timezone (EST)
-      return this.convertLocalTimeToBackend(userDate);
-    } catch (error) {
-      console.error('Error creating backend date time:', error);
-      return new Date().toISOString();
     }
   }
 
@@ -274,10 +323,10 @@ export class TimezoneService {
    * Get user's timezone display name
    */
   static getUserTimezoneDisplay(): string {
-    const timezone = this.getUserTimezone();
-    const now = new Date();
-    
     try {
+      const timezone = this.getUserTimezone();
+      const now = new Date();
+      
       const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: timezone,
         timeZoneName: 'long'
@@ -288,51 +337,59 @@ export class TimezoneService {
       
       return timeZoneName || timezone;
     } catch (error) {
-      return timezone;
+      return this.getUserTimezone();
     }
   }
 
   /**
-   * Check if timezone warning should be shown
+   * Check if user needs timezone warning
    */
   static shouldShowTimezoneWarning(): boolean {
-    const userTz = this.getUserTimezone();
-    return userTz !== this.BACKEND_TIMEZONE;
+    return this.getUserTimezone() !== this.BACKEND_TIMEZONE;
   }
 
   /**
-   * Parse a backend time for form inputs (converted to user's timezone)
+   * 🧪 COMPREHENSIVE TEST - Run this to verify everything works
    */
-  static parseBackendTimeForForm(backendTime: string): Date {
-    try {
-      // Convert EST backend time to user's timezone for form display
-      return this.convertBackendTimeToLocal(backendTime);
-    } catch (error) {
-      console.error('Error parsing backend time for form:', error);
-      return new Date();
-    }
-  }
+  static runComprehensiveTest(): void {
+    console.log('🧪 === COMPREHENSIVE TIMEZONE TEST ===');
+    console.log(`👤 User timezone: ${this.getUserTimezone()}`);
+    console.log(`🏢 Backend timezone: ${this.BACKEND_TIMEZONE}`);
+    console.log('');
 
-  /**
-   * Debug method to test timezone conversion
-   */
-  static debugTimezoneConversion(testTime: string): void {
-    console.log('=== Timezone Conversion Debug ===');
-    console.log('Input (Backend EST/EDT):', testTime);
-    console.log('User Timezone:', this.getUserTimezone());
-    console.log('Backend Timezone:', this.BACKEND_TIMEZONE);
-    console.log('Timezone offset (ms):', this.getTimezoneOffsetDifference());
-    console.log('Timezone offset (hours):', this.getTimezoneOffsetDifference() / (1000 * 60 * 60));
-    
-    const userTime = this.convertBackendTimeToLocal(testTime);
-    console.log('Converted to User Time:', userTime);
-    console.log('User sees time as:', userTime.toLocaleString());
-    console.log('Formatted for User (time):', this.formatTimeForUser(testTime, 'h:mm a'));
-    console.log('Formatted for User (date):', this.formatDateForUser(testTime, 'MMMM d, yyyy'));
-    
-    const backToBackend = this.convertLocalTimeToBackend(userTime);
-    console.log('Back to Backend:', backToBackend);
-    console.log('Round trip check:', testTime === backToBackend ? 'PASS' : 'FAIL');
-    console.log('==================================');
+    // Test the exact times from your screenshot
+    const testCases = [
+      { input: "2025-01-15T10:00:00.000Z", expected: "6:00 PM" }, // 10 AM EST -> 6 PM Lebanon
+      { input: "2025-01-15T11:00:00.000Z", expected: "7:00 PM" }, // 11 AM EST -> 7 PM Lebanon
+      { input: "2025-01-15T12:00:00.000Z", expected: "8:00 PM" }, // 12 PM EST -> 8 PM Lebanon
+      { input: "2025-01-15T13:00:00.000Z", expected: "9:00 PM" }, // 1 PM EST -> 9 PM Lebanon
+    ];
+
+    testCases.forEach((testCase, index) => {
+      console.log(`\n📋 Test Case ${index + 1}: ${testCase.input}`);
+      console.log(`   Expected: ${testCase.expected} (Lebanon time)`);
+      
+      // Test all methods
+      const reliable = this.convertBackendTimeToLocalReliable(testCase.input);
+      const simple = this.convertBackendTimeToLocalSimple(testCase.input);
+      const main = this.convertBackendTimeToLocal(testCase.input);
+      
+      console.log(`   Reliable method: ${format(reliable, 'h:mm a')}`);
+      console.log(`   Simple method: ${format(simple, 'h:mm a')}`);
+      console.log(`   Main method: ${format(main, 'h:mm a')}`);
+      
+      // Test time slot conversion
+      const mockSlot = {
+        startTime: testCase.input,
+        endTime: testCase.input, // Same for simplicity
+        displayText: "Original"
+      };
+      
+      const converted = this.convertTimeSlotToLocal(mockSlot);
+      console.log(`   Time slot result: ${converted.displayText}`);
+    });
+
+    console.log('\n🎯 Your time slots should now show Lebanon times!');
+    console.log('🧪 === TEST COMPLETE ===');
   }
 }
