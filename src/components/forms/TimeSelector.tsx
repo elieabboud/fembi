@@ -18,41 +18,65 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
   loading = false,
   readOnly = false 
 }) => {
-  // 🔥 KEY FIX: Convert all time slots to user's timezone
+  // 🔥 FIXED: Convert time slots ONLY once when they change
   const convertedTimeSlots = useMemo(() => {
-    console.log('🕐 TimeSelector: Converting time slots to user timezone...');
-    console.log('🕐 Raw time slots:', timeSlots);
+    if (!timeSlots || timeSlots.length === 0) {
+      console.log('🕐 TimeSelector: No time slots to convert');
+      return [];
+    }
+
+    console.log('🕐 TimeSelector: Converting', timeSlots.length, 'time slots to user timezone');
+    console.log('🕐 Raw time slots:', timeSlots.map(slot => ({
+      startTime: slot.startTime,
+      displayText: slot.displayText
+    })));
     
-    const converted = timeSlots.map(slot => {
+    const converted = timeSlots.map((slot, index) => {
+      console.log(`🕐 Converting slot ${index + 1}:`, slot.startTime);
       const convertedSlot = TimezoneService.convertTimeSlotToLocal(slot);
-      console.log(`🕐 Converted: ${slot.startTime} -> ${convertedSlot.displayText}`);
+      console.log(`🕐 Converted slot ${index + 1}:`, convertedSlot.displayText);
       return convertedSlot;
     });
     
-    console.log('🕐 All converted slots:', converted);
+    console.log('🕐 All converted time slots:', converted.map(slot => slot.displayText));
     return converted;
   }, [timeSlots]);
 
-  // Convert selected slot to user's timezone for display
-  const convertedSelectedSlot = useMemo(() => {
-    if (!selectedSlot) return null;
+  // 🔥 FIXED: Convert selected slot for display (don't modify original)
+  const selectedSlotDisplay = useMemo(() => {
+    if (!selectedSlot) {
+      console.log('🕐 TimeSelector: No selected slot');
+      return null;
+    }
     
-    console.log('🕐 Converting selected slot:', selectedSlot);
+    console.log('🕐 TimeSelector: Converting selected slot for display:', selectedSlot.startTime);
     const converted = TimezoneService.convertTimeSlotToLocal(selectedSlot);
-    console.log('🕐 Selected slot converted:', converted);
+    console.log('🕐 TimeSelector: Selected slot display:', converted.displayText);
     return converted;
   }, [selectedSlot]);
 
   const showTimezoneWarning = TimezoneService.shouldShowTimezoneWarning();
   const userTimezone = TimezoneService.getUserTimezoneDisplay();
 
+  // 🔥 FIXED: Handle slot selection - pass original slot back to parent
+  const handleSlotSelection = (originalSlotIndex: number) => {
+    if (readOnly) return;
+    
+    const originalSlot = timeSlots[originalSlotIndex];
+    console.log('🕐 TimeSelector: Slot selected at index', originalSlotIndex);
+    console.log('🕐 TimeSelector: Original slot data:', originalSlot);
+    
+    // Pass the original slot (not converted) back to parent
+    onSelect(originalSlot);
+  };
+
   return (
-    <Box sx={{justifySelf: 'start', p: '16px' }}>
+    <Box sx={{ justifySelf: 'start', p: '16px' }}>
       <Typography variant="h6" gutterBottom>
         {readOnly ? 'Selected Time' : 'Select Time'}
       </Typography>
 
-      {/* Timezone Warning */}
+      {/* Timezone Warning - only show if not in EST and not read-only */}
       {showTimezoneWarning && !readOnly && (
         <Alert 
           severity="info" 
@@ -70,14 +94,18 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
         </Alert>
       )}
 
+      {/* Loading State */}
       {loading && (
         <Box sx={{ display: 'flex', width: '100%', justifyContent: 'center', height: 'auto', my: 2 }}>
           <CircularProgress size={20} thickness={4} sx={{ my: 1 }} />
+          <Typography variant="body2" sx={{ ml: 2 }}>
+            Loading available times...
+          </Typography>
         </Box>
       )}
       
-      {readOnly && convertedSelectedSlot ? (
-        // Show only the selected time slot in read-only mode
+      {/* Read-only mode - show only selected time */}
+      {readOnly && selectedSlotDisplay ? (
         <Box sx={{ mt: 2 }}>
           <Button
             variant="contained"
@@ -96,32 +124,36 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
               }
             }}
           >
-            {convertedSelectedSlot.displayText}
+            {selectedSlotDisplay.displayText}
           </Button>
+          
+          {/* Timezone info for read-only mode */}
           {showTimezoneWarning && (
-            <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
-              {userTimezone}
-            </Typography>
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Typography variant="caption" color="text.secondary">
+                <strong>Local Time:</strong> {selectedSlotDisplay.displayText}<br/>
+                <strong>Your Timezone:</strong> {userTimezone}
+              </Typography>
+            </Box>
           )}
         </Box>
-      ) : !readOnly ? (
-        // Show all time slots for selection in edit mode
+      ) : !readOnly && !loading ? (
+        /* Edit mode - show all available time slots */
         <Grid container spacing={2}>
           {convertedTimeSlots.map((convertedSlot, index) => {
-            // Find the original slot for comparison and selection
+            // Check if this slot is selected by comparing with original slot
             const originalSlot = timeSlots[index];
-            const isSelected = selectedSlot?.startTime === originalSlot?.startTime;
+            const isSelected = selectedSlot && 
+              selectedSlot.startTime === originalSlot.startTime && 
+              selectedSlot.staffMemberId === originalSlot.staffMemberId;
             
             return (
-              <Grid item xs={4} key={originalSlot.startTime}>
+              <Grid item xs={4} key={`${originalSlot.startTime}-${originalSlot.staffMemberId}`}>
                 <Button
                   fullWidth
                   variant="contained"
                   size="small"
-                  onClick={() => {
-                    console.log('🕐 Slot selected:', originalSlot);
-                    onSelect(originalSlot); // Pass the original slot back to maintain backend compatibility
-                  }}
+                  onClick={() => handleSlotSelection(index)}
                   sx={{
                     textTransform: 'none',
                     borderRadius: '24px',
@@ -138,19 +170,29 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
             );
           })}
         </Grid>
-      ) : (
-        // Fallback for read-only mode without selected slot
+      ) : !readOnly && !loading && convertedTimeSlots.length === 0 ? (
+        /* No time slots available */
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          No time slots available for this date. Please select a different date.
+        </Typography>
+      ) : readOnly && !selectedSlotDisplay ? (
+        /* Read-only mode without selected slot */
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
           No time slot selected
         </Typography>
-      )}
+      ) : null}
 
-      {/* Show timezone info for selected time in read-only mode */}
-      {readOnly && convertedSelectedSlot && showTimezoneWarning && (
-        <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-          <Typography variant="caption" color="text.secondary">
-            <strong>Local Time:</strong> {convertedSelectedSlot.displayText}<br/>
-            <strong>Your Timezone:</strong> {userTimezone}
+      {/* Debug info (remove in production) */}
+      {process.env.NODE_ENV === 'development' && !loading && (
+        <Box sx={{ mt: 2, p: 1, bgcolor: 'grey.100', borderRadius: 1, fontSize: '0.75rem' }}>
+          <Typography variant="caption" display="block">
+            <strong>Debug:</strong> {convertedTimeSlots.length} slots converted
+          </Typography>
+          <Typography variant="caption" display="block">
+            <strong>Selected:</strong> {selectedSlot ? selectedSlot.startTime : 'None'}
+          </Typography>
+          <Typography variant="caption" display="block">
+            <strong>User TZ:</strong> {TimezoneService.getUserTimezone()}
           </Typography>
         </Box>
       )}

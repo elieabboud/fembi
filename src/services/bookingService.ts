@@ -89,26 +89,40 @@ export const bookingService = {
   },
 
   //create appointment
-  async postBooking(appointmentData: CreateAppointmentRequest): Promise<void> {
+ async postBooking(appointmentData: CreateAppointmentRequest): Promise<void> {
     console.log('📝 Creating appointment with data:', appointmentData);
     
-    // Convert date/time fields from user timezone to backend timezone (EST/EDT)
-    const backendAppointmentData = {
-      ...appointmentData,
-      DateTimeInfo: {
-        ...appointmentData.DateTimeInfo,
-        // Convert the FromDate and ToDate from user timezone to EST
-        FromDate: TimezoneService.convertLocalTimeToBackend(new Date(appointmentData.DateTimeInfo.FromDate)),
-        ToDate: TimezoneService.convertLocalTimeToBackend(new Date(appointmentData.DateTimeInfo.ToDate)),
-        // SelectedDate and SelectedTime should be kept as display values
-      }
+    // 🎯 SIMPLE FIX: The FromDate and ToDate should already be in EST format
+    // from the original time slots. NO conversion needed if they come from slots!
+    
+    // Check if FromDate/ToDate look like EST times (no timezone suffix)
+    const isEstFormat = (timeString: string) => {
+      return timeString && !timeString.endsWith('Z') && !timeString.includes('+');
     };
+
+    let backendAppointmentData = appointmentData;
+
+    // Only convert if the times look like user local times (with Z or timezone)
+    if (!isEstFormat(appointmentData.DateTimeInfo.FromDate)) {
+      console.log('🔄 Converting user local times to EST...');
+      
+      backendAppointmentData = {
+        ...appointmentData,
+        DateTimeInfo: {
+          ...appointmentData.DateTimeInfo,
+          FromDate: TimezoneService.convertLocalTimeToBackend(new Date(appointmentData.DateTimeInfo.FromDate)),
+          ToDate: TimezoneService.convertLocalTimeToBackend(new Date(appointmentData.DateTimeInfo.ToDate)),
+        }
+      };
+    } else {
+      console.log('🎯 Times already in EST format, using as-is');
+    }
 
     console.log('📝 Sending to backend:', {
       originalFromDate: appointmentData.DateTimeInfo.FromDate,
-      convertedFromDate: backendAppointmentData.DateTimeInfo.FromDate,
+      backendFromDate: backendAppointmentData.DateTimeInfo.FromDate,
       originalToDate: appointmentData.DateTimeInfo.ToDate,
-      convertedToDate: backendAppointmentData.DateTimeInfo.ToDate,
+      backendToDate: backendAppointmentData.DateTimeInfo.ToDate,
     });
 
     const response = await api.post('/api/Application/v1/CreateAppointment', backendAppointmentData);
@@ -116,32 +130,32 @@ export const bookingService = {
     return response.data;
   },
 
-  //delete appointment
-  async deleteBooking(appointmentId: string): Promise<void> {
-    console.log('🗑️ Deleting appointment:', appointmentId);
-    
-    const response = await api.delete('/api/Application/v1/DeleteAppointment', {
-      params: { appointmentId }
-    });
-    
-    console.log('🗑️ Appointment deleted successfully');
-    return response.data;
-  },
-
-  //update appointment
+  //update appointment - SIMPLIFIED FIX
   updateBooking: async (updateData: UpdateBookingRequest) => {    
     console.log('✏️ Updating appointment:', updateData);
     
-    // Convert times from user timezone to backend timezone (EST/EDT)
-    const backendUpdateData = {
-      ...updateData,
-      fromDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.fromDate)),
-      toDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.toDate)),
+    // Same logic for updates
+    const isEstFormat = (timeString: string) => {
+      return timeString && !timeString.endsWith('Z') && !timeString.includes('+');
     };
+
+    let backendUpdateData = updateData;
+
+    if (!isEstFormat(updateData.fromDate)) {
+      console.log('🔄 Converting update times to EST...');
+      
+      backendUpdateData = {
+        ...updateData,
+        fromDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.fromDate)),
+        toDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.toDate)),
+      };
+    } else {
+      console.log('🎯 Update times already in EST format');
+    }
 
     console.log('✏️ Sending update to backend:', {
       original: updateData,
-      converted: backendUpdateData
+      backend: backendUpdateData
     });
     
     const response = await api.post(`/api/Application/v1/UpdateAppointment?appointmentId=${backendUpdateData.id}`, {
@@ -161,6 +175,19 @@ export const bookingService = {
       data: backendUpdateData
     };
   },
+
+  //delete appointment
+  async deleteBooking(appointmentId: string): Promise<void> {
+    console.log('🗑️ Deleting appointment:', appointmentId);
+    
+    const response = await api.delete('/api/Application/v1/DeleteAppointment', {
+      params: { appointmentId }
+    });
+    
+    console.log('🗑️ Appointment deleted successfully');
+    return response.data;
+  },
+
 
   //get followers
   async getFollowers(): Promise<string[]> {

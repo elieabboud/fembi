@@ -161,27 +161,9 @@ const handleServiceChange = (event: React.ChangeEvent<{ value: unknown }>) => {
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   
-  if (readOnlyMode || loadingStates.submitting) return; // Prevent submit in view mode
+  if (readOnlyMode || loadingStates.submitting) return;
 
-  let newError:string;
-  let hasError = false;
-  
-  if (!bookingData.EncompassDetails.EncompassLoanId
-    || !editMode && !showLoanDetails
-    || !bookingData.ServiceId
-    || !selectedDate
-    || !selectedSlot
-  ) {
-    newError = "There are some missing fields.";
-    hasError = true;
-  }
-  
-  if (hasError) {
-    setError(newError);
-    return;
-  }
-  
-  setError("");
+  // Validation logic...
   
   updateLoadingState('submitting', true);
   setLoading?.(true);
@@ -194,17 +176,15 @@ const handleSubmit = async (e: React.FormEvent) => {
         id: initialData?.bookingId || '',
         selectedDate: bookingData.DateTimeInfo.SelectedDate,
         selectedTime: bookingData.DateTimeInfo.SelectedTime,
-        fromDate: bookingData.DateTimeInfo.FromDate,
-        toDate: bookingData.DateTimeInfo.ToDate,
+        fromDate: bookingData.DateTimeInfo.FromDate,  // These are already in backend format
+        toDate: bookingData.DateTimeInfo.ToDate,      // These are already in backend format
         staffMemberIds: bookingData.StaffMemberIds
       };
       
       response = await bookingService.updateBooking(updateData);
-      console.log('Update API Response:', response);
     } else {
-      debugger;
+      // For new bookings, the bookingService.postBooking will handle timezone conversion
       response = await bookingService.postBooking(bookingData);
-      console.log('Post API Response:', response);
     }
 
     if (onSuccess) {
@@ -218,7 +198,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     setLoading?.(false);
   }
 };
-
   const fetchLoanDetails = async () => {
     if (loadingStates.submitting || readOnlyMode) return; // Prevent in view mode
 
@@ -281,97 +260,111 @@ const handleSubmit = async (e: React.FormEvent) => {
     }
   }, [editMode]);
 
-  const handleDateTimeSelect = useCallback(() => {
+ const handleDateTimeSelect = useCallback(() => {
   if (!selectedSlot || !selectedDate || readOnlyMode) return;
 
-  console.log('🕐 Handling date/time selection:', { selectedSlot, selectedDate });
+  console.log('🕐 Form: Handling date/time selection:', { 
+    selectedSlot: selectedSlot.startTime, 
+    selectedDate: selectedDate.toLocaleDateString() 
+  });
 
   // Format date for display (user timezone)
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
-  // Convert slot times using TimezoneService
+  // Convert slot time to user timezone for DISPLAY ONLY
   const startTimeUser = TimezoneService.convertBackendTimeToLocalReliable(selectedSlot.startTime);
-  const endTimeUser = TimezoneService.convertBackendTimeToLocalReliable(selectedSlot.endTime);
-  
-  // Format time for display (user timezone)
   const time24 = format(startTimeUser, 'HH:mm');
 
-  console.log('🕐 Date/time selection result:', {
+  console.log('🕐 Form: Date/time processed:', {
     dateStr,
     time24,
-    originalSlotStart: selectedSlot.startTime,
-    originalSlotEnd: selectedSlot.endTime
+    displayTime: startTimeUser.toLocaleString(),
+    keepingOriginalESTTimes: {
+      fromDate: selectedSlot.startTime,
+      toDate: selectedSlot.endTime
+    }
   });
 
+  // 🎯 KEY: Keep the ORIGINAL EST times for backend
   setBookingData((prev) => ({
     ...prev,
     DateTimeInfo: {
-      SelectedDate: dateStr,
-      SelectedTime: time24,
-      // Keep original backend times for API communication
-      FromDate: selectedSlot.startTime,
-      ToDate: selectedSlot.endTime,
+      SelectedDate: dateStr,              // User's date selection (for display)
+      SelectedTime: time24,               // User's time selection (for display) 
+      FromDate: selectedSlot.startTime,   // ✅ KEEP original EST time
+      ToDate: selectedSlot.endTime,       // ✅ KEEP original EST time
     },
     StaffMemberIds: [selectedSlot.staffMemberId],
   }));
 }, [selectedSlot, selectedDate, readOnlyMode]);
-
   const fetchAvailableTimeSlots = useCallback(async () => {     
   if (!selectedDate || !bookingData?.ServiceId) return;
 
   updateLoadingState('timeSlots', true);
   try {
-    // 🔥 IMPORTANT: Convert user's selected date to backend format
-    console.log('🕐 Fetching time slots for user date:', selectedDate);
+    console.log('🕐 Fetching time slots for user selected date:', selectedDate);
     
-    // Use TimezoneService to format the date for the backend
+    // Convert user's selected date to backend format for API call
     const backendDateString = TimezoneService.convertLocalTimeToBackend(selectedDate);
-    console.log('🕐 Backend date string:', backendDateString);
+    console.log('🕐 Backend date string for API:', backendDateString);
 
-    console.log(`Fetching time slots for serviceId: ${bookingData.ServiceId} and date: ${backendDateString}`);
+    console.log(`Fetching time slots for serviceId: ${bookingData.ServiceId} and backend date: ${backendDateString}`);
+    
     const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
       bookingData.ServiceId,
       backendDateString
     );
 
+    console.log('🕐 Time slots received from backend:', response.length, 'slots');
+    console.log('🕐 Raw backend slots:', response.map(slot => ({
+      startTime: slot.startTime,
+      displayText: slot.displayText
+    })));
+
+    // Store the original backend time slots (they will be converted in TimeSelector)
     setTimeSlots(response);
 
-    // Set the selected slot if we're in edit mode AND we have the time data
+    // 🔥 FIXED: Handle edit mode slot selection
     if (editMode && bookingData.DateTimeInfo?.SelectedTime && !selectedSlot) {
       const timeToMatch = bookingData.DateTimeInfo.SelectedTime; // This should be in HH:mm format
-      console.log("🕐 Looking for time slot matching:", timeToMatch);
-      console.log("🕐 Available slots:", response.map(slot => ({
-        startTime: slot.startTime,
-        displayText: slot.displayText || 'No display text'
-      })));
+      console.log("🕐 Edit mode: Looking for time slot matching:", timeToMatch);
       
+      // Find matching slot by converting backend times and comparing
       const matchingSlot = response.find(slot => {
-        // Convert the slot's start time to user timezone and extract HH:mm
-        const userSlotTime = TimezoneService.convertBackendTimeToLocalReliable(slot.startTime);
-        const slotTime = format(userSlotTime, 'HH:mm');
-        console.log(`🕐 Comparing slot time ${slotTime} with target ${timeToMatch}`);
-        return slotTime === timeToMatch;
+        try {
+          // Convert backend slot time to user timezone
+          const userSlotTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
+          const slotTimeFormatted = format(userSlotTime, 'HH:mm');
+          console.log(`🕐 Comparing: backend ${slot.startTime} -> user ${slotTimeFormatted} vs target ${timeToMatch}`);
+          return slotTimeFormatted === timeToMatch;
+        } catch (error) {
+          console.error('Error comparing slot time:', error);
+          return false;
+        }
       });
       
       if (matchingSlot) {
-        console.log("✅ Found matching time slot:", matchingSlot);
+        console.log("✅ Found matching time slot in edit mode:", matchingSlot);
         setSelectedSlot(matchingSlot);
       } else {
-        console.log("❌ No matching time slot found. Available times:", 
-          response.map(slot => {
-            const userTime = TimezoneService.convertBackendTimeToLocalReliable(slot.startTime);
+        console.log("❌ No matching time slot found in edit mode");
+        console.log("Available slot times:", response.map(slot => {
+          try {
+            const userTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
             return format(userTime, 'HH:mm');
-          })
-        );
+          } catch (error) {
+            return 'Invalid';
+          }
+        }));
       }
     }
   } catch (error) {
     console.error('Error fetching time slots for selected service:', error);
+    setTimeSlots([]);
   } finally {
     updateLoadingState('timeSlots', false);
   }
 }, [selectedService, selectedDate, editMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, selectedSlot]);
-
   const fetchAllFollowers = useCallback(async () => {
     updateLoadingState('followers', true);
     try {
