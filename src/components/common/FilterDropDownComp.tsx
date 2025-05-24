@@ -24,8 +24,6 @@ interface FilterDropdownProps {
   multiSelect?: boolean;
   value: string | string[];
   onChange: (value: string | string[]) => void;
-  minWidth?: number | string;
-  maxWidth?: number | string;
 }
 
 const FilterDropdown: React.FC<FilterDropdownProps> = ({
@@ -34,9 +32,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
   options,
   multiSelect = false,
   value,
-  onChange,
-  minWidth = 120,
-  maxWidth = 140,
+  onChange
 }) => {
   const handleChange = (event: SelectChangeEvent<typeof value>) => {
     const newValue = event.target.value;
@@ -44,23 +40,34 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
   };
 
   return (
-    <FormControl 
+    <FormControl
       sx={{ 
-        minWidth: minWidth, 
-        maxWidth: maxWidth,
         flexGrow: 1,
-        fontSize: 16,
-        backgroundColor: '#F5F7F8'
+        width: '120px',
+
       }}
       size="small"
     >
-      <InputLabel id={`${id}-label`}>{label}</InputLabel>
+      <InputLabel id={`${id}-label`} sx={{ fontSize: 14 }}>{label}</InputLabel>
       {multiSelect ? (
         <Select
+          variant='outlined'
           labelId={`${id}-label`}
           id={id}
           multiple
           value={value as string[]}
+          sx={{ 
+            fontSize: 14, 
+            height: 40,
+            '& .MuiSelect-select': {
+              display: 'flex',
+              alignItems: 'center',
+              padding: '8px 14px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }
+          }}
           onChange={handleChange}
           input={<OutlinedInput label={label} />}
           renderValue={(selected) => (
@@ -71,7 +78,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
                   <Chip 
                     key={selectedId} 
                     label={option ? option.label : selectedId} 
-                    size="small" 
+                    size="small"
                   />
                 );
               })}
@@ -90,6 +97,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
           labelId={`${id}-label`}
           id={id}
           value={value as string}
+          sx={{ fontSize: 14, height: 40, }}
           onChange={handleChange}
           label={label}
         >

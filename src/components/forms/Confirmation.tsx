@@ -137,7 +137,8 @@ const Confirmation: React.FC<ConfirmationProps> = ({
             <>
               <Typography variant="body1" sx={{ mb: 3 }}>
                 Your appointment with <strong>{loanDetails.loanOfficer}</strong> has been scheduled successfully.
-                A confirmation email will be sent to your inbox.
+                A confirmation email will be sent to your inbox.<br />
+                An email has been sent to both <strong>{booking.BorrowerInformation.FirstName} {booking.BorrowerInformation.LastName}</strong> and <strong>{loanDetails.loanOfficer}</strong>
               </Typography>
 
               <Typography variant="h6" sx={{ mb: 2 }}>

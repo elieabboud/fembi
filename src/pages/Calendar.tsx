@@ -149,7 +149,7 @@ function Calendar() {
   }
   
   return (
-    <Box sx={{ px: 4, py: 2 }}>
+    <Box sx={{maxWidth: '100vw'}}>
       <CalendarContainer 
         bookings={calendarData} 
         onDateRangeChange={handleDateRangeChange}

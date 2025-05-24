@@ -67,7 +67,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   const [showLoanDetails, setShowLoanDetails] = useState<boolean>(false);
   const [loanDetails, setLoanDetails] = useState<LoanDetails>();
   const [selectedService, setSelectedService] = useState<BookingService>();
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [error, setError] = useState<string>("");
@@ -208,6 +208,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 
     if (onSuccess) {
       onSuccess(bookingData, response);
+      window.location.reload();
     }
   } catch (error) {
     console.error(`Error ${editMode ? 'updating' : 'creating'} booking:`, error);
@@ -277,7 +278,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     } finally {
       updateLoadingState('services', false);
     }
-  }, [editMode, bookingData.ServiceId]);
+  }, [editMode]);
 
   const handleDateTimeSelect = useCallback(() => {
     if (!selectedSlot || !selectedDate || readOnlyMode) return; // Prevent in view mode
@@ -470,8 +471,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     if (!readOnlyMode && selectedDate && bookingData.ServiceId) {
       fetchAvailableTimeSlots();
     }
-  }, [selectedDate, bookingData.ServiceId, fetchAvailableTimeSlots, readOnlyMode]);
-
+  }, [selectedService, selectedDate, readOnlyMode]);
 
   useEffect(() => {
     if (!readOnlyMode) { // Only handle date/time select if not in view mode
@@ -510,8 +510,9 @@ const handleSubmit = async (e: React.FormEvent) => {
       <Grid 
       container 
       spacing={2} 
-      p={4}
+      padding={{xs: 2, sm: 4}}
       sx={{
+        margin: 0,
         borderRadius: '10px',
         color: 'gray',
         overflowY: 'scroll',
@@ -529,7 +530,7 @@ const handleSubmit = async (e: React.FormEvent) => {
             <CloseIcon sx={{float: 'right', color: 'gray', cursor: 'pointer'}} onClick={onClose} />
         </Grid>
 
-        <Box sx={{ width: '100%', padding: '16px' }}>
+        <Box sx={{ width: '100%', padding: {xs: 2, sm: 4} }}>
           <Grid item xs={12}>
             <Typography variant="h6">Client Details</Typography>
             <Grid sx={{display: 'flex', gap: '4px', mt: '10px'}}>
@@ -568,7 +569,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         )}
 
         {showLoanDetails && (
-        <Box sx={{ width: '100%', padding: '16px' }}>
+        <Box sx={{ width: '100%', padding: {xs: 2, sm: 4} }}>
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Typography variant="h6">Borrower Information</Typography>
@@ -793,11 +794,11 @@ const handleSubmit = async (e: React.FormEvent) => {
             }}
           />
 
-        {error.length > 0 && !readOnlyMode && (
-          <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>
-            {error}
-          </Typography>
-        )}
+          {error.length > 0 && !readOnlyMode && (
+            <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>
+              {error}
+            </Typography>
+          )}
 
           {!readOnlyMode && (
             <Grid sx={{display: 'flex', gap: '1rem', mt: '16px'}}>

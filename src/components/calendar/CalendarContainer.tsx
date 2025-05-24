@@ -359,21 +359,21 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
       {isAdmin && loanAgents.length > 0 && (
         <Box sx={{ mt: 4 }}>
           <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
-            Filter by Loan Agents
+            Filter by Loan Officers
           </Typography>
           <LoanAgentsInput 
             agents={loanAgents}
             selectedAgents={selectedAgents}
             onChange={handleAgentsChange} 
-            label="Select Loan Agents"
+            label="Select Loan Officers"
           />
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" color="text.secondary">
               Showing {filteredBookings.length} of {bookings.length} bookings
-              {selectedAgents.length === 0 ? ' (no agents selected)' :
+              {selectedAgents.length === 0 ? ' (no officer selected)' :
                selectedAgents.length < loanAgents.length ? 
                 ` (filtered by ${selectedAgents.length} agent${selectedAgents.length !== 1 ? 's' : ''})` :
-                ' (all agents selected)'
+                ' (all officers selected)'
               }
             </Typography>
           </Box>

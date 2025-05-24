@@ -28,7 +28,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
       alignItems: 'center',
       justifyContent: 'space-between',
       width: '100%',
-      gap: { xs: 8, md: 0 },
+      gap: { xs: 1, md: 0 },
       my: { xs: 2, md: 4 },
       py: { xs: 1, md: 2 },
       borderTop: '1px solid rgba(0, 0, 0, 0.12)',
@@ -71,7 +71,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
         <Button
           variant="contained"
           onClick={onToday}
-          sx={{ height: 40, mr: 3, fontSize: 16, fontWeight: 'bold' }}
+          sx={{ width: '100%', height: 40, fontSize: 16, fontWeight: 'bold' }}
         >
           Today
         </Button>

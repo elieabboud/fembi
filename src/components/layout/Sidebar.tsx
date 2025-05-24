@@ -67,6 +67,10 @@ const Sidebar: React.FC<SidebarProps> = ({ open = true, onClose }) => {
     { text: 'Settings', icon: <SettingsIcon />, path: '/profile' },
   ];
 
+  const handleMenuItemClick = () => {
+    onClose();
+  };
+
   const handleLogout = () => {
     setLogoutOpen(true);
   }
@@ -99,6 +103,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open = true, onClose }) => {
             <ListItemButton
               component={Link}
               to={item.path}
+              onClick={handleMenuItemClick}
               selected={location.pathname === item.path}>
               <ListItemIcon style={{color: 'black'}}>{item.icon}</ListItemIcon>
               <ListItemText primary={item.text} />

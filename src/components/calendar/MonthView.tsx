@@ -66,7 +66,7 @@ const MonthView: React.FC<MonthViewProps> = ({
         ))}
       </Grid>
 
-      <Grid container sx={{ height: '600px', display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+      <Grid container sx={{ height: '600px', display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: 'repeat(5, 1fr)' }}>
         {Array.from({ length: 35 }).map((_, index) => {
           const dayOffset = index - monthStart.getDay();
           const day = new Date(monthStart);
@@ -82,25 +82,33 @@ const MonthView: React.FC<MonthViewProps> = ({
               item
               key={index}
               sx={{
-                overflow: 'auto',
+                position: 'relative',
                 borderRight: index % 7 === 6 ? 'none' : '1px solid rgba(0, 0, 0, 0.12)',
                 borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
                 p: 1,
                 backgroundColor: isCurrentDay ? 'rgba(186, 183, 183, 0.12)' : 'transparent',
                 color: !isCurrentMonth ? 'rgba(0, 0, 0, 0.38)' : 'inherit',
-                position: 'relative',
               }}
             >
-              <Typography variant="body2" onClick={() => onDateChange(day)}>
+              <Typography sx={{position: 'absolute', top:1, left:1}} variant="body2" onClick={() => onDateChange(day)}>
                 {day.getDate()}
               </Typography>
 
               {/* Events for this day */}
-              <Box sx={{ mt: 1 }}>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 20, // leaves space for date
+                  bottom: 2,
+                  left: 2,
+                  right: 2,
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  scrollbarWidth: 'none',
+                  '&::-webkit-scrollbar': { display: 'none' },
+                }}>
                 {dayEvents.map((event, eventIndex) => {
-                  const leftOffset = (100 / maxEvents) * eventIndex;
-                  const eventWidth = 100 / maxEvents;
-
                   return (
                     <Box
                       key={eventIndex}
@@ -118,16 +126,12 @@ const MonthView: React.FC<MonthViewProps> = ({
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        position: 'absolute',
-                        left: `${leftOffset}%`,
-                        width: `${eventWidth}%`,
-                        cursor: 'pointer', // Add this to show it's clickable
+                        cursor: 'pointer',
                         '&:hover': {
                           opacity: 0.8,
                           boxShadow: '0px 2px 4px rgba(0,0,0,0.2)'
                         },
-                      }}
-                    >
+                      }}>
                     {event?.start?.dateTime && (
                       <span style={{ marginRight: '4px' }}>
                         {formatEventTime(event)}

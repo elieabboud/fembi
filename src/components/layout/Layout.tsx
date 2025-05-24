@@ -20,19 +20,14 @@ const Layout = () => {
   }
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', height:'100vh'}}>
       {/* Sidebar */}
       <Sidebar open={mobileOpen} onClose={handleDrawerToggle} />
 
       {/* Main content */}
       <Box
         component="main"
-        sx={{
-          flexGrow: 1,
-          p: 3,
-          width: { sm: `calc(100% - 250px)` },
-          minHeight: '100vh',
-        }}
+        className='main-content'
       >
         {/* Mobile app bar */}
         <AppBar
@@ -63,7 +58,9 @@ const Layout = () => {
         <Toolbar sx={{ display: { xs: 'block', sm: 'none' } }} />
         
         {/* Page content */}
-        <Container maxWidth={false} sx={{ py: 2 }}>
+        <Container 
+        maxWidth={false} 
+        className='main-container'>
           <Outlet />
         </Container>
       </Box>

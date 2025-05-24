@@ -18,7 +18,12 @@ import {
   CardContent,
   Typography,
   Stack,
-  Dialog
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  CircularProgress
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -62,6 +67,8 @@ const AppTable: React.FC<AppTableProps> = ({
   const [showEditBooking, setShowEditBooking] = useState(false);
   const [showViewBooking, setShowViewBooking] = useState(false);
   const [dialogMode, setDialogMode] = useState<'edit' | 'view'>('edit');
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [loadingDelete, setLoadingDelete] = React.useState(false);
   
   const handleChangePage = (_: unknown, newPage: number) => {
     setPage(newPage);
@@ -84,10 +91,25 @@ const AppTable: React.FC<AppTableProps> = ({
     setShowViewBooking(true);
   };
 
-  const handleDeleteClick = async (row: any) => {
-    if(!row) return;
+  const handleDeleteClick = (row: any) => {
+    if (!row) return;
     setSelectedRow(row);
-    const response = await bookingService.deleteBooking(selectedRow.bookingId);
+    setConfirmDelete(true);
+  };
+
+    const handleConfirmDelete = async () => {
+    if (!selectedRow) return;
+    setLoadingDelete(true);
+    try {
+      await bookingService.deleteBooking(selectedRow.bookingId);
+      window.location.reload();
+    } catch (error) {
+      console.error('Delete failed', error);
+    } finally {
+      setLoadingDelete(false);
+      setConfirmDelete(false);
+      setSelectedRow(null);
+    }
   };
 
   const handleCloseModal = () => {
@@ -230,7 +252,9 @@ const AppTable: React.FC<AppTableProps> = ({
                               {column.label}:
                             </Typography>
                             <Box sx={{ textAlign: column.align || 'left', maxWidth: '60%' }}>
-                              {typeof displayValue === 'string' || typeof displayValue === 'number' ? (
+                              {column.id === 'status' ? (
+                                <StatusBadge status={value} />
+                              ) : typeof displayValue === 'string' || typeof displayValue === 'number' ? (
                                 <Typography variant="body1" component="span">
                                   {displayValue}
                                 </Typography>
@@ -442,6 +466,24 @@ const AppTable: React.FC<AppTableProps> = ({
           />
         </Dialog>
       )}
+
+      <Dialog open={confirmDelete} onClose={() => !confirmDelete && setConfirmDelete(false)}>
+        <DialogTitle>Confirm Deletion</DialogTitle>
+        <DialogContent>
+          Are you sure you want to delete this booking?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)} disabled={loadingDelete}>Cancel</Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            disabled={loadingDelete}
+            startIcon={loadingDelete ? <CircularProgress size={16} /> : null}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 };

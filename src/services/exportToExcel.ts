@@ -36,11 +36,11 @@ export const createBookingColumns = (): Column[] => {
       priority: 2
     },
     { 
-      id: 'serviceLocation',
-      label: 'Closing Location',
+      id: 'serviceName',
+      label: 'Service Name',
       format: (value, row) => {
-        if (!value || !value.displayName) return '-';
-        return value.displayName;
+        if (!value || !row.serviceName) return '-';
+        return row.serviceName;
       },
       priority: 3
     },
@@ -111,9 +111,9 @@ export const exportBookingsToExcel = (
       
       if (id === 'loanData' && col.label === 'Borrower') {
         if (row.loanData) {
-          value = `${row.loanData.borrowerFirstName || ''} ${row.loanData.borrowerLastName || ''}`.trim();
+          value = `${row.customerName || ''}`.trim();
         } else {
-          value = row.customerName;
+          value = `${row.loanData.borrowerFirstName || ''} ${row.loanData.borrowerLastName || ''}`.trim();
         }
       } else if (id === 'loanData' && col.label === 'Loan Closer') {
         value = row.loanData?.loanOfficer;

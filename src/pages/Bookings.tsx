@@ -98,7 +98,7 @@ const Bookings: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<BookingStatus[]>([]);
   const [officersFilter, setOfficersFilter] = useState<string[]>([]);
-  const [locationFilter, setLocationFilter] = useState<string>('');
+  const [serviceFilter, setServiceFilter] = useState<string>('');
   const [dataFetched, setDataFetched] = useState(false);
 
   // Email functionality state
@@ -114,7 +114,7 @@ const Bookings: React.FC = () => {
     { id: 'completed', label: 'Completed' },
   ];
   const [loanOfficersOptions, setLoanOfficersOptions] = useState<{id: string, label: string}[]>([]);
-  const [locationOptions, setLocationOptions] = useState<{ id: string, label: string }[]>([]);
+  const [serviceOptions, setServiceOptions] = useState<{ id: string, label: string }[]>([]);
 
   const handleConfirmationClose = () => {
     setShowSuccessMessage(false);
@@ -148,9 +148,9 @@ const Bookings: React.FC = () => {
       setBookings(sortedBookings);
       setFilteredBookings(sortedBookings);
 
-      const uniqueLocations = Array.from(new Set(sortedBookings.map(booking => booking.serviceLocation.displayName)))
-        .map(location => ({ id: location, label: location }));
-      setLocationOptions(uniqueLocations);
+      const uniqueServices = Array.from(new Set(sortedBookings.map(booking => booking.serviceName)))
+        .map(service => ({ id: service, label: service }));
+      setServiceOptions(uniqueServices);
       
       const loanOfficers = Array.from(new Set(sortedBookings.map(booking => booking.loanData.loanOfficer)))
         .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
@@ -213,14 +213,14 @@ const Bookings: React.FC = () => {
     }
     
     // Apply location filter
-    if (locationFilter) {
-      filtered = filtered.filter(booking => booking.serviceLocation.displayName === locationFilter);
+    if (serviceFilter) {
+      filtered = filtered.filter(booking => booking.serviceName === serviceFilter);
     }
 
     // Apply sorting to filtered results as well
     const sortedFiltered = sortBookings(filtered);
     setFilteredBookings(sortedFiltered);
-  }, [searchQuery, bookings, statusFilter, officersFilter, locationFilter]);
+  }, [searchQuery, bookings, statusFilter, officersFilter, serviceFilter]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -234,8 +234,8 @@ const Bookings: React.FC = () => {
     setOfficersFilter(value as string[]);
   };
 
-  const handleLocationFilterChange = (value: string | string[]) => {
-    setLocationFilter(value as string);
+  const handleServiceFilterChange = (value: string | string[]) => {
+    setServiceFilter(value as string);
   };
 
   // Email functionality handlers
@@ -326,7 +326,7 @@ const Bookings: React.FC = () => {
 };
 
   return (
-    <Box sx={{ px: 4, py: 2 }}>
+    <Box>
       <Box 
         sx={{ 
           display: 'flex', 
@@ -351,18 +351,10 @@ const Bookings: React.FC = () => {
         </Button>
       </Box>
 
-      <Box 
-        sx={{ 
-          mb: 3, 
-          display: 'flex', 
-          flexDirection: {sm:'column', md:'row'}, 
-          gap: {sm: '10px', md: '5px'}, 
-          justifyContent: 'space-evenly', 
-          alignItems: 'center', 
-          flexWrap: 'wrap' 
-        }}
+      <Box
+        id = "bookings-header"
       >
-        <Box sx={{ flexGrow: 1, width: '100%', maxWidth: {md: '260px'} }}>
+        <Box id="search-bar">
           <SearchBar
             placeholder="Search schedules..."
             value={searchQuery}
@@ -370,7 +362,7 @@ const Bookings: React.FC = () => {
           />
         </Box>
         
-        <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', gap: '10px' }}>
+        <Box id="filters">
           <FilterDropdown
             id="status-filter"
             label="Status"
@@ -388,16 +380,17 @@ const Bookings: React.FC = () => {
           />
           
           <FilterDropdown
-            id="location-filter"
-            label="Location"
-            options={locationOptions}
-            value={locationFilter}
-            onChange={handleLocationFilterChange}
+            id="service-filter"
+            label="Service"
+            options={serviceOptions}
+            value={serviceFilter}
+            onChange={handleServiceFilterChange}
           />
         </Box>
         
-        <Box sx={{display: 'flex', justifyContent: {sm: 'start',md:'center'}, gap: 2, width: {sm:'100%', md: 'auto'}}}>
+        <Box id="actions">
           <Button
+            id='button'
             variant="contained"
             onClick={handleExport}
           >
@@ -408,6 +401,7 @@ const Bookings: React.FC = () => {
           </Button>
   
           <Button
+            id='button'
             variant="contained"
             onClick={handleEmailMenuOpen}
             endIcon={<ExpandMoreIcon />}

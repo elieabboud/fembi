@@ -19,18 +19,26 @@ const Followers: React.FC<FollowersProps> = ({
   loading = false
 }) => {
   const [inputValue, setInputValue] = useState('');
+  const [followersError, setFollowersError] = useState(false);
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   const handleAddFollower = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && inputValue.trim()) {
       e.preventDefault();
       const newFollower = inputValue.trim();
-      
-      // Check if the follower is already in either list
+
+      if (!emailRegex.test(newFollower)) {
+        setFollowersError(true);
+        return;
+      }
+
       if (!fetchedFollowers.includes(newFollower) && !addedFollowers.includes(newFollower)) {
         onAddFollower(newFollower);
       }
-      
-      setInputValue(''); // Clear input regardless
+
+      setFollowersError(false);
+      setInputValue('');
     }
   };
 
@@ -78,6 +86,12 @@ const Followers: React.FC<FollowersProps> = ({
           />
         ))}
       </Box>
+
+      {followersError && (
+        <Box sx={{ display: 'flex', justifyContent: 'start', height: 'auto', color: 'red' }}>
+          Please enter a valid email address.
+        </Box>
+      )}
 
       {!editMode && (<TextField
         variant="outlined"

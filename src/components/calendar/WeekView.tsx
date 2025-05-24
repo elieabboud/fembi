@@ -59,7 +59,7 @@ const WeekView: React.FC<WeekViewProps> = ({
 
   return (
     <Box sx={{ width: '100%', height: '100%', overflow: 'auto' }}>
-      <Box sx={{ display: 'flex', height: 'calc(100% - 60px)' }}>
+      <Box id="week-view">
         <Box sx={{ width: '60px', mt: '60px', borderRight: '1px solid #ddd' }}>
           {hours.map(hour => (
             <Box

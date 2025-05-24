@@ -266,7 +266,7 @@ const Dashboard: React.FC = () => {
         {/* Closings by Agent - Real Data */}
         <Grid item xs={12} md={4}>
           <ChartCard 
-            title="Closings per Agent"
+            title="Closings per officer"
             action={
               <IconButton size="small">
                 <MoreVertIcon />
@@ -283,7 +283,7 @@ const Dashboard: React.FC = () => {
                     innerRadius={60}
                     outerRadius={100}
                     dataKey="closings"
-                    nameKey="agent"
+                    nameKey="officer"
                   >
                     {stats.closingsByAgentPie.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />

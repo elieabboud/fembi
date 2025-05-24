@@ -1,3 +1,45 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: visible !important; /* Ensure body can scroll if needed */
+}
+
+#root {
+  height: 100%;
+  overflow: visible;
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  height: 100vh;
+  padding: 0;
+  overflow: 'hidden'
+}
+
+.main-container{
+  flex-grow: 1;
+  padding: 20px;
+  overflow: 'auto';
+  height: 0
+}
+
+@media (min-width: 600px) {
+  .main-content {
+    width: calc(100% - 250px);
+    padding: 20px;
+  }
+  .main-container{
+    padding: 40px;
+  }
+}
+
 .App {
   text-align: center;
 }
@@ -35,4 +77,52 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+#bookings-header {
+  margin-bottom: 24px;
+  display: flex;
+}
+
+#bookings-header #search-bar {
+  flex: 0 0 30%;
+}
+
+#bookings-header #filters {
+  flex: 0 0 45%;
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+#actions {
+  flex: 0 0 25%;
+  display: flex;
+  justify-content: space-evenly;
+  gap: 4px;
+  height: 100%;
+}
+
+@media (max-width: 899px) {
+  #bookings-header {
+    flex-direction: column;
+    row-gap: 20px;
+  }
+
+  #bookings-header #actions Button {
+    width: 100%;
+  }
+}
+
+@media (min-width: 900px) {
+  #bookings-header {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 4px;
+  }
+}
+
+#week-view {
+  display: flex;
+  max-width: calc(100vw - 60px);
 }

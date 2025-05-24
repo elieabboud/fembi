@@ -20,7 +20,8 @@ const FollowersInput: FC<FollowersInputProps> = ({
   label = "Followers"
 }) => {
   const [internalFollowers, setInternalFollowers] = useState<string[]>(followers);
-
+  const [error, setError] = useState<string>();
+  
   useEffect(() => {
     if (getFollowers) {
       getFollowers().then(setInternalFollowers).catch(console.error);
@@ -39,7 +40,16 @@ const FollowersInput: FC<FollowersInputProps> = ({
     }
   };
 
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   const handleFollowersChange = (_event: SyntheticEvent, newValue: string[]) => {
+    const invalidEmails = newValue.filter(email => !emailRegex.test(email));
+    if (invalidEmails.length > 0) {
+      setError(`Invalid email(s): ${invalidEmails.join(', ')}`);
+      return;
+    }
+
+    setError(null);
     setInternalFollowers(newValue);
     updateFollowersBackend(newValue);
   };
@@ -65,6 +75,9 @@ const FollowersInput: FC<FollowersInputProps> = ({
             variant="outlined"
             label={label}
             placeholder="Type a name and press Enter"
+            error={!!error}
+            helperText={error}
+            onChange={() => error && setError(null)}
           />
         )}
       />

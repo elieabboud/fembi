@@ -98,36 +98,11 @@ const Profile: React.FC = () => {
                   alt={formData.fullName}
                   sx={{ width: 200, height: 200, mb: 2, border: '4px solid #1A3674' }}
                 />
-                <Box sx={{display: 'flex', flexDirection: 'column', ml: 2}}>
-                  <Button
-                    component="label"
-                    variant="contained"
-                    fullWidth
-                    sx={{ mt: 1, height: '50px', width: '200px' }}
-                  >
-                    Change
-                    <input
-                      type="file"
-                      hidden
-                      accept="image/*"
-                      onChange={handleImageChange}
-                    />
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    fullWidth
-                    color="error"
-                    sx={{ mt: 1, height: '50px',  width: '200px' }}
-                    onClick={() => setProfileImage(null)}
-                  >
-                    Remove
-                  </Button>
-                </Box>
               </Box>
               <Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: '12px', maxWidth: '400px' }}>
+              {/* <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: '12px', maxWidth: '400px' }}>
                 A profile picture helps other users recognize you, and lets you know when you're signed into your account.
-              </Typography>
+              </Typography> */}
               </Box>
             </Box>
           {/* Profile Form */}

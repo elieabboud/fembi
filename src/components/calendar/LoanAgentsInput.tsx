@@ -13,7 +13,7 @@ const LoanAgentsInput: FC<LoanAgentsInputProps> = ({
   agents,
   selectedAgents,
   onChange,
-  label = "Loan Agents"
+  label = "Loan Officers"
 }) => {
 
   const handleAgentsChange = (_event: SyntheticEvent, newValue: User[]) => {
@@ -97,8 +97,8 @@ const LoanAgentsInput: FC<LoanAgentsInputProps> = ({
             {...params}
             variant="outlined"
             label={label}
-            placeholder={selectedAgents.length === 0 ? "Select loan agents to filter calendar" : "Add or remove agents"}
-            helperText={`${selectedAgents.length} of ${agents.length} agents selected`}
+            placeholder={selectedAgents.length === 0 ? "Select loan officers to filter calendar" : "Add or remove officers"}
+            helperText={`${selectedAgents.length} of ${agents.length} officers selected`}
           />
         )}
         ChipProps={{

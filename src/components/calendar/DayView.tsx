@@ -9,7 +9,15 @@ interface DayViewProps {
   currentDate: Date;
   events: calendarBooking[];
   onDateChange: (date: Date) => void;
-  onEventClick?: (booking: calendarBooking) => void; // Add this prop
+  onEventClick?: (booking: calendarBooking) => void;
+}
+
+interface EventPosition {
+  event: calendarBooking;
+  startMinutes: number;
+  endMinutes: number;
+  column: number;
+  totalColumns: number;
 }
 
 const DayView: React.FC<DayViewProps> = ({ 
@@ -34,7 +42,6 @@ const DayView: React.FC<DayViewProps> = ({
         const timeA = TimezoneService.convertBackendTimeToLocal(a.start.dateTime);
         const timeB = TimezoneService.convertBackendTimeToLocal(b.start.dateTime);
         
-        // Sort by start time (hour and minute)
         const minutesA = timeA.getHours() * 60 + timeA.getMinutes();
         const minutesB = timeB.getHours() * 60 + timeB.getMinutes();
         
@@ -45,61 +52,110 @@ const DayView: React.FC<DayViewProps> = ({
       }
     });
 
-  // Group overlapping events
-  const groupOverlappingEvents = (events: calendarBooking[]) => {
+  // Calculate event positions with proper width distribution
+  const calculateEventPositions = (events: calendarBooking[]): EventPosition[] => {
     if (!events.length) return [];
 
-    // Sort events by start time
-    const sortedEvents = [...events].sort((a, b) => {
-      if (!a.start?.dateTime || !b.start?.dateTime) return 0;
-      const aStart = parseDateTime(a.start).getTime();
-      const bStart = parseDateTime(b.start).getTime();
-      return aStart - bStart;
+    // Convert events to time intervals
+    const intervals = events.map(event => {
+      const startDateTime = parseDateTime(event?.start);
+      const endDateTime = parseDateTime(event?.end);
+      const startMinutes = startDateTime.getHours() * 60 + startDateTime.getMinutes();
+      const endMinutes = endDateTime.getHours() * 60 + endDateTime.getMinutes();
+      
+      return {
+        event,
+        startMinutes,
+        endMinutes
+      };
+    }).filter(interval => interval.startMinutes < interval.endMinutes);
+
+    // Sort by start time, then by end time
+    intervals.sort((a, b) => {
+      if (a.startMinutes !== b.startMinutes) {
+        return a.startMinutes - b.startMinutes;
+      }
+      return a.endMinutes - b.endMinutes;
     });
 
-    // Group events that overlap
-    const groups: { events: calendarBooking[]; groupIndex: number }[][] = [];
+    const positions: EventPosition[] = [];
     
-    for (const event of sortedEvents) {
-      if (!event.start?.dateTime || !event.end?.dateTime) continue;
-      const eventStart = parseDateTime(event.start).getTime();
-      const eventEnd = parseDateTime(event.end).getTime();
+    for (const interval of intervals) {
+      // Find overlapping events that are already positioned
+      const overlapping = positions.filter(pos => 
+        pos.startMinutes < interval.endMinutes && pos.endMinutes > interval.startMinutes
+      );
+
+      // Find the first available column by checking which columns are occupied
+      let column = 0;
+      const occupiedColumns = new Set(overlapping.map(pos => pos.column));
       
-      let placed = false;
+      while (occupiedColumns.has(column)) {
+        column++;
+      }
+
+      // Add this event to positions temporarily to calculate max simultaneous
+      const tempPosition = {
+        event: interval.event,
+        startMinutes: interval.startMinutes,
+        endMinutes: interval.endMinutes,
+        column,
+        totalColumns: 1
+      };
       
-      for (const group of groups) {
-        let columnFound = false;
-        
-        for (let colIndex = 0; colIndex < 4; colIndex++) { // Max 4 events
-          const column = group.filter(item => item.groupIndex === colIndex);
+      // Calculate the maximum number of overlapping events including this one
+      const allOverlapping = [...overlapping, tempPosition];
+      const maxColumns = Math.max(...allOverlapping.map(pos => pos.column)) + 1;
+
+      positions.push({
+        ...tempPosition,
+        totalColumns: maxColumns
+      });
+    }
+
+    // Third pass: ensure all overlapping events have the same totalColumns
+    const groups: EventPosition[][] = [];
+    const processed = new Set<number>();
+
+    for (let i = 0; i < positions.length; i++) {
+      if (processed.has(i)) continue;
+
+      const group: EventPosition[] = [positions[i]];
+      const queue = [i];
+      processed.add(i);
+
+      while (queue.length > 0) {
+        const currentIndex = queue.shift()!;
+        const current = positions[currentIndex];
+
+        for (let j = 0; j < positions.length; j++) {
+          if (processed.has(j)) continue;
           
-          const noOverlap = column.every(item => {
-            if (!item.events[0]?.start?.dateTime || !item.events[0]?.end?.dateTime) return false;
-            const itemStart = parseDateTime(item.events[0].start).getTime();
-            const itemEnd = parseDateTime(item.events[0].end).getTime();
-            return eventEnd <= itemStart || eventStart >= itemEnd;
-          });
-          
-          if (noOverlap) {
-            group.push({ events: [event], groupIndex: colIndex });
-            columnFound = true;
-            placed = true;
-            break;
+          const other = positions[j];
+          // Check if they overlap
+          if (current.startMinutes < other.endMinutes && current.endMinutes > other.startMinutes) {
+            group.push(other);
+            queue.push(j);
+            processed.add(j);
           }
         }
-        
-        if (columnFound) break;
       }
-      
-      if (!placed) {
-        groups.push([{ events: [event], groupIndex: 0 }]);
-      }
+
+      groups.push(group);
     }
-    
-    return groups.flat();
+
+    // Update totalColumns for each group
+    groups.forEach(group => {
+      const maxColumns = Math.max(...group.map(pos => pos.column)) + 1;
+      group.forEach(pos => {
+        pos.totalColumns = maxColumns;
+      });
+    });
+
+    return positions;
   };
 
-  const groupedEvents = groupOverlappingEvents(eventsForDay);
+  const eventPositions = calculateEventPositions(eventsForDay);
 
   return (
     <Box sx={{ width: '100%', height: '100%', overflow: 'auto' }}>
@@ -140,24 +196,12 @@ const DayView: React.FC<DayViewProps> = ({
           ))}
 
           {/* Event cards */}
-          {groupedEvents.map((groupItem, index) => {
-            const event = groupItem.events[0];
-            const columnIndex = groupItem.groupIndex;
-            const totalColumns = 4;
+          {eventPositions.map((position, index) => {
+            const { event, startMinutes, endMinutes, column, totalColumns } = position;
             
-            const startDateTime = parseDateTime(event?.start);
-            const endDateTime = parseDateTime(event?.end);
-            
-            const startHour = startDateTime.getHours();
-            const startMinutes = startDateTime.getMinutes();
-            const top = startHour * 60 + startMinutes;
-            
-            const endHour = endDateTime.getHours();
-            const endMinutes = endDateTime.getMinutes();
-            const duration = (endHour * 60 + endMinutes) - (startHour * 60 + startMinutes);
-            
-            const columnWidth = 95 / totalColumns;
-            const left = columnIndex * columnWidth;
+            const duration = endMinutes - startMinutes;
+            const columnWidth = 100 / totalColumns;
+            const left = columnWidth * column;
             
             return (
               <Paper
@@ -165,9 +209,9 @@ const DayView: React.FC<DayViewProps> = ({
                 onClick={() => onEventClick && onEventClick(event)}
                 sx={{
                   position: 'absolute',
-                  top: `${top}px`,
-                  left: `${left}%`,
+                  top: `${startMinutes}px`,
                   width: `${columnWidth}%`,
+                  left: `${left}%`,
                   height: `${duration}px`,
                   bgcolor: event?.color,
                   color: 'white',
@@ -175,7 +219,8 @@ const DayView: React.FC<DayViewProps> = ({
                   overflow: 'hidden',
                   borderRadius: 1,
                   zIndex: 10,
-                  cursor: 'pointer', // Add this to show it's clickable
+                  cursor: 'pointer',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
                   '&:hover': {
                     opacity: 0.9,
                     boxShadow: 2

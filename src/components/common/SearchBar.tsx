@@ -31,19 +31,21 @@ const SearchBar: React.FC<SearchBarProps> = ({
         alignItems: 'center',
         width: '100%',
         borderRadius: 1,
-        border: 'solid gray 1px',
+        border: 'solid #D3D3D3 0.5px',
         color: 'black'
       }}
       elevation={0}
       onSubmit={(e) => e.preventDefault()}
     >
-      <IconButton sx={{ pr: '10px' }} aria-label="search">
+      <IconButton sx={{ pr: 1 }} aria-label="search">
         <SearchIcon style={{color: 'black'}} />
       </IconButton>
       <InputBase
         sx={{
-          flex: 1,
-          fontSize: 16,
+          fontSize: 14,
+          '& .MuiOutlinedInput-root': {
+            height: 40,
+          },
           '& .MuiInputBase-input': {
             color: 'black',
           },
