@@ -1,19 +1,38 @@
 import { calendarBooking } from "../types/calendarBooking";
 import { CreateAppointmentRequest } from "../types/CreateAppointmentRequest";
 import { TimezoneService } from "./timezoneUtils";
+import { parseISO, format } from "date-fns";
 
-// Updated function to handle timezone conversion
+// Updated function to handle timezone conversion properly
 export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): CreateAppointmentRequest => {
+  console.log('🔄 Mapping calendar booking to form data:', calendarBooking);
+  
   // Convert backend times to user's local timezone for form display
   let selectedDate = "";
   let selectedTime = "";
+  
   if (calendarBooking.start && calendarBooking.start.dateTime) {
-    const userStartDate = TimezoneService.convertBackendTimeToLocal(calendarBooking.start.dateTime);
-    selectedDate = userStartDate.toISOString().split('T')[0]; // YYYY-MM-DD in user's timezone
-    selectedTime = userStartDate.toTimeString().substr(0, 5); // HH:mm in user's timezone
+    try {
+      // Format date and time in user's timezone for form display
+      selectedDate = TimezoneService.formatDateForUser(calendarBooking.start.dateTime, 'yyyy-MM-dd');
+      selectedTime = TimezoneService.formatTimeForUser(calendarBooking.start.dateTime, 'HH:mm');
+      
+      console.log('🔄 Converted times for form:', {
+        original: calendarBooking.start.dateTime,
+        selectedDate,
+        selectedTime,
+        userTimezone: TimezoneService.getUserTimezone()
+      });
+    } catch (error) {
+      console.error('Error converting times for form:', error);
+      // Fallback to current date/time
+      const now = new Date();
+      selectedDate = format(now, 'yyyy-MM-dd');
+      selectedTime = format(now, 'HH:mm');
+    }
   }
 
-  return {   
+  const formData: CreateAppointmentRequest = {   
     // Service information
     ServiceId: calendarBooking.serviceId || "",
     ServiceName: calendarBooking.serviceName || "",
@@ -22,15 +41,15 @@ export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): 
     // Encompass loan info
     EncompassDetails: {
       EncompassLoanId: calendarBooking.encompassLoanId || "",
-      LoanCloser: calendarBooking.LoanCloser ||  "",
-      LoanOfficer: calendarBooking.LoanOfficer ||  "",
-      dpa: calendarBooking.dpa ||  ""
+      LoanCloser: calendarBooking.LoanCloser || "",
+      LoanOfficer: calendarBooking.LoanOfficer || "",
+      dpa: calendarBooking.dpa || ""
     },
     
     // Borrower information from customer data
     BorrowerInformation: {
-      FirstName: calendarBooking.customerName.split(' ')[0] || "",
-      LastName: calendarBooking.customerName.split(' ').slice(1).join(' ') || "",
+      FirstName: calendarBooking.customerName?.split(' ')[0] || "",
+      LastName: calendarBooking.customerName?.split(' ').slice(1).join(' ') || "",
       Email: calendarBooking.customerEmailAddress || "",
       PhoneNumber: calendarBooking.customerPhone || "",
       Address: {
@@ -41,12 +60,13 @@ export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): 
       },
     },
     
-    // Date and time information (in user's timezone for form display)
+    // Date and time information (converted to user's timezone for form display)
     DateTimeInfo: {
       SelectedDate: selectedDate,
       SelectedTime: selectedTime,
-      FromDate: calendarBooking.start?.dateTime || "", // Keep original backend time for API
-      ToDate: calendarBooking.end?.dateTime || "", // Keep original backend time for API
+      // Keep original backend times for API communication
+      FromDate: calendarBooking.start?.dateTime || "",
+      ToDate: calendarBooking.end?.dateTime || "",
     },
     
     // Additional booking details
@@ -57,4 +77,7 @@ export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): 
     PriceType: calendarBooking.priceType || "notSet",
     StaffMemberIds: calendarBooking.staffMemberIds || [],
   };
+
+  console.log('🔄 Mapped form data:', formData);
+  return formData;
 };
