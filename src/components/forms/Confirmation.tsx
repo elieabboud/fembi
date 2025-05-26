@@ -19,6 +19,7 @@ import { CreateAppointmentRequest } from '../../types/CreateAppointmentRequest';
 import { LoanDetails } from '../../types/loanDetails';
 import { bookingService } from '../../services/bookingService';
 import { EmailRequestDTO } from '../../types/email';
+import { useAuth } from '../../context/AuthContext';
 
 type ConfirmationProps = {
   open: boolean;
@@ -35,6 +36,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
 }) => {
   // If loanDetails is null, we're still loading
   const isLoading = !loanDetails;
+  const {user} = useAuth();
 
   const emailSubject = `Appointment Confirmation: ${booking.ServiceName}`;
   const emailBody = `
@@ -138,7 +140,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
               <Typography variant="body1" sx={{ mb: 3 }}>
                 Your appointment with <strong>{loanDetails.loanOfficer}</strong> has been scheduled successfully.
                 A confirmation email will be sent to your inbox.<br />
-                An email has been sent to both <strong>{booking.BorrowerInformation.FirstName} {booking.BorrowerInformation.LastName}</strong> and <strong>{loanDetails.loanOfficer}</strong>
+                An email has been sent to both <strong>{booking.BorrowerInformation.FirstName} {booking.BorrowerInformation.LastName}</strong> and <strong>{user?.fullName}</strong>
               </Typography>
 
               <Typography variant="h6" sx={{ mb: 2 }}>

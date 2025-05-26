@@ -36,26 +36,32 @@ export const bookingService = {
   },
 
   //get available time slots
-  async getAvailableTimeSlots(serviceId: string, selectedDateTime: string): Promise<TimeSlot[]> {
+   async getAvailableTimeSlots(serviceId: string, selectedDateTime: string): Promise<TimeSlot[]> {
     console.log('🕐 Getting time slots for:', { serviceId, selectedDateTime });
     
-    // selectedDateTime should be in user's local time format (YYYY-MM-DD)
-    // We need to send it as EST to the backend
+    // 🔥 FIXED: For edit/view mode, the selectedDateTime is already in the correct format
+    // Don't apply additional timezone conversion that shifts the date
     
-    // Parse the date and convert to EST for the backend
-    const userDate = new Date(selectedDateTime);
+    let estDateString: string;
     
-    // Create EST date by converting user date to backend timezone
-    const estDateTimeISO = TimezoneService.convertLocalTimeToBackend(userDate);
-    const estDate = new Date(estDateTimeISO);
-    const estDateString = format(estDate, 'yyyy-MM-dd');
+    // Check if selectedDateTime already includes time (format: YYYY-MM-DDTHH:mm:ss)
+    if (selectedDateTime.includes('T')) {
+      // Extract just the date part if it's already a full datetime
+      const dateOnly = selectedDateTime.split('T')[0];
+      estDateString = dateOnly;
+      console.log('🕐 Using date part directly for backend:', estDateString);
+    } else {
+      // If it's just a date string, use it as-is
+      estDateString = selectedDateTime;
+      console.log('🕐 Using date string as-is for backend:', estDateString);
+    }
     
-    console.log('🕐 Converted date for backend:', estDateString);
+    console.log('🕐 Final date sent to backend API:', `${estDateString}T00:00:00`);
     
     const response = await api.get('/api/Application/v1/GetAvailableTimeSlots', {
       params: {
         serviceId,
-        selectedDateTime: `${estDateString}T00:00:00` // Send as EST midnight
+        selectedDateTime: `${estDateString}T00:00:00` // Send as EST date
       }
     });
   
@@ -250,10 +256,13 @@ export const bookingService = {
     return response.data;
   },
 
+  //send email
   async sendEmail(request: EmailRequestDTO): Promise<EmailResponseDTO> {
-    console.log('📧 Sending email to:', request.To);
-    const response = await api.post('/api/Application/v1/SendEmail', request);
-    console.log('📧 Email sent successfully');
-    return response.data;
+    try{
+      const response = await api.post('/api/Application/v1/SendEmail', request);
+      return response.data;
+    }catch(error){
+      console.error('Error sending appointment notification:', error);
+    }
   },
 }

@@ -29,6 +29,7 @@ import { calendarBooking } from '../../types/calendarBooking';
 import { mapCalendarBookingToFormData } from '../../services/bookingFormUtils';
 import { toLocalISOString } from '../../utils/general';
 import { TimezoneService } from '../../services/timezoneUtils';
+import { EmailRequestDTO } from '../../types/email';
 
 type BookingFormProps = {
   onClose: () => void;
@@ -49,7 +50,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   
   // Loading states for different operations
   const [loadingStates, setLoadingStates] = useState({
@@ -58,7 +59,8 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     timeSlots: false,
     followers: false,
     submitting: false,
-    initializing: false
+    initializing: false,
+    sendingEmail: false
   });
   
   const [services, setServices] = useState<BookingService[]>([]);
@@ -72,6 +74,10 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [error, setError] = useState<string>("");
+  
+  // NEW: State to track if loan details have been loaded and validated
+  const [isLoanDetailsValidated, setIsLoanDetailsValidated] = useState<boolean>(false);
+  
   const [bookingData, setBookingData] = useState<CreateAppointmentRequest>(
   {
     ServiceId: "",
@@ -127,6 +133,12 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     return 'Schedule a New Booking';
   };
 
+  // NEW: Function to format loan amount with commas
+  const formatLoanAmount = (amount: number | undefined): string => {
+    if (!amount) return '';
+    return amount.toLocaleString();
+  };
+
   const handleLoanIdChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string>
   ) => {
@@ -140,6 +152,12 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
         EncompassLoanId: loanId,
       },
     }));
+    
+    // NEW: Reset validation state when loan ID changes
+    if (!editMode) {
+      setIsLoanDetailsValidated(false);
+      setShowLoanDetails(false);
+    }
   };
 
 const handleServiceChange = (event: React.ChangeEvent<{ value: unknown }>) => {
@@ -158,12 +176,130 @@ const handleServiceChange = (event: React.ChangeEvent<{ value: unknown }>) => {
   }
 };
 
+const sendEmailNotifications = async (response: any) => {
+  debugger;
+  if (readOnlyMode || editMode) return;
+  updateLoadingState('sendingEmail', true);
+  
+  try {
+    const currentUserEmail = user?.email || '';
+    
+    const recipientEmails: string[] = [];
+    
+    if (currentUserEmail) {
+      recipientEmails.push(currentUserEmail);
+    }
+    
+    if (bookingData.BorrowerInformation.Email) {
+      recipientEmails.push(bookingData.BorrowerInformation.Email);
+    }
+    
+    if (bookingData.Followers) {
+      const followerEmails = bookingData.Followers
+        .split(',')
+        .map(email => email.trim())
+        .filter(email => email.length > 0 && email.includes('@'));
+      recipientEmails.push(...followerEmails);
+    }
+    
+    const uniqueEmails = Array.from(new Set(recipientEmails));
+    
+    if (uniqueEmails.length === 0) {
+      console.log('No valid email addresses found for notification');
+      return;
+    }
+    
+    const appointmentDate = new Date(bookingData.DateTimeInfo.SelectedDate).toLocaleDateString();
+    const appointmentTime = bookingData.DateTimeInfo.SelectedTime;
+    const borrowerName = `${bookingData.BorrowerInformation.FirstName} ${bookingData.BorrowerInformation.LastName}`.trim();
+    
+    const htmlBody = `
+      <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #2c5aa0; border-bottom: 2px solid #2c5aa0; padding-bottom: 10px;">
+              New Appointment Scheduled
+            </h2>
+            
+            <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #28a745;">Appointment Details</h3>
+              <p><strong>Service:</strong> ${bookingData.ServiceName}</p>
+              <p><strong>Date:</strong> ${appointmentDate}</p>
+              <p><strong>Time:</strong> ${appointmentTime}</p>
+              <p><strong>Loan ID:</strong> ${bookingData.EncompassDetails.EncompassLoanId}</p>
+            </div>
+            
+            <div style="background-color: #e9ecef; border-left: 4px solid #007bff; padding: 15px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #007bff;">Borrower Information</h3>
+              <p><strong>Name:</strong> ${borrowerName}</p>
+              <p><strong>Email:</strong> ${bookingData.BorrowerInformation.Email}</p>
+              <p><strong>Phone:</strong> ${bookingData.BorrowerInformation.PhoneNumber}</p>
+              <p><strong>Address:</strong> ${bookingData.BorrowerInformation.Address.Street}, ${bookingData.BorrowerInformation.Address.City}, ${bookingData.BorrowerInformation.Address.State} ${bookingData.BorrowerInformation.Address.ZipCode}</p>
+            </div>
+            
+            <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #856404;">Loan Information</h3>
+              <p><strong>Loan Closer:</strong> ${bookingData.EncompassDetails.LoanCloser}</p>
+              <p><strong>Loan Officer:</strong> ${bookingData.EncompassDetails.LoanOfficer}</p>
+              ${bookingData.EncompassDetails.dpa ? `<p><strong>DPA Program:</strong> ${bookingData.EncompassDetails.dpa}</p>` : ''}
+            </div>
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d;">
+              <p>This is an automated notification. Please do not reply to this email.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    
+    const emailRequest: EmailRequestDTO = {
+      To: uniqueEmails,
+      Subject: `New Appointment Scheduled - ${bookingData.ServiceName} for ${borrowerName}`,
+      Body: htmlBody,
+      IsHtml: true
+    };
+    
+    const emailResponse = await bookingService.sendEmail(emailRequest);
+
+    console.log("received response:" , emailResponse);
+    
+    if (emailResponse.Success) {
+      console.log(`Email notifications sent successfully to: ${uniqueEmails.join(', ')}`);
+    } else {
+      console.error('Failed to send some email notifications:', emailResponse.FailedRecipients);
+      console.error('Email error message:', emailResponse.Message);
+    }
+    
+  } catch (error) {
+    console.error('Error sending email notifications:', error);
+  } finally {
+    updateLoadingState('sendingEmail', false);
+  }
+};
+
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   
   if (readOnlyMode || loadingStates.submitting) return;
 
-  // Validation logic...
+  // NEW: Validation for loan details in new booking mode
+  if (!editMode && !isLoanDetailsValidated) {
+    setError("Please enter a valid Loan ID and press Enter to load loan details before submitting.");
+    return;
+  }
+
+  // Existing validation logic...
+  if (!bookingData.ServiceId) {
+    setError("Please select a service.");
+    return;
+  }
+
+  if (!selectedSlot) {
+    setError("Please select a time slot.");
+    return;
+  }
+
+  setError("");
   
   updateLoadingState('submitting', true);
   setLoading?.(true);
@@ -183,8 +319,12 @@ const handleSubmit = async (e: React.FormEvent) => {
       
       response = await bookingService.updateBooking(updateData);
     } else {
-      // For new bookings, the bookingService.postBooking will handle timezone conversion
       response = await bookingService.postBooking(bookingData);
+      console.log('Post API Response:', response);
+
+      if (response) {
+        await sendEmailNotifications(response);
+      }
     }
 
     if (onSuccess) {
@@ -193,15 +333,25 @@ const handleSubmit = async (e: React.FormEvent) => {
     }
   } catch (error) {
     console.error(`Error ${editMode ? 'updating' : 'creating'} booking:`, error);
+    setError(`Failed to ${editMode ? 'update' : 'create'} booking. Please try again.`);
   } finally {
     updateLoadingState('submitting', false);
     setLoading?.(false);
   }
 };
+
   const fetchLoanDetails = async () => {
     if (loadingStates.submitting || readOnlyMode) return; // Prevent in view mode
 
+    // NEW: Check if loan ID is provided
+    if (!bookingData.EncompassDetails.EncompassLoanId.trim()) {
+      setError("Please enter a Loan ID.");
+      return;
+    }
+
     updateLoadingState('loanDetails', true);
+    setError(""); // Clear any previous errors
+    
     try{
       const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
 
@@ -230,10 +380,22 @@ const handleSubmit = async (e: React.FormEvent) => {
       }));
 
       setShowLoanDetails(true);
+      // NEW: Mark loan details as validated
+      setIsLoanDetailsValidated(true);
     }catch (error) {
       console.error('Error fetching Loan Details:', error);
+      setError("Failed to load loan details. Please check the Loan ID and try again.");
+      setIsLoanDetailsValidated(false);
     }finally{
       updateLoadingState('loanDetails', false);
+    }
+  };
+
+  // NEW: Handle Enter key press for loan ID field
+  const handleLoanIdKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      fetchLoanDetails();
     }
   };
 
@@ -297,18 +459,30 @@ const handleSubmit = async (e: React.FormEvent) => {
     StaffMemberIds: [selectedSlot.staffMemberId],
   }));
 }, [selectedSlot, selectedDate, readOnlyMode]);
+
   const fetchAvailableTimeSlots = useCallback(async () => {     
   if (!selectedDate || !bookingData?.ServiceId) return;
 
   updateLoadingState('timeSlots', true);
   try {
-    console.log('🕐 Fetching time slots for user selected date:', selectedDate);
+    console.log('🕐 ===== FETCH TIME SLOTS DEBUG =====');
+    console.log('🕐 selectedDate object:', selectedDate);
+    console.log('🕐 selectedDate.toString():', selectedDate.toString());
+    console.log('🕐 selectedDate.toLocaleDateString():', selectedDate.toLocaleDateString());
+    console.log('🕐 selectedDate.toISOString():', selectedDate.toISOString());
+    console.log('🕐 Mode check - editMode:', editMode, 'isViewMode:', isViewMode);
+    console.log('🕐 ServiceId:', bookingData.ServiceId);
     
-    // Convert user's selected date to backend format for API call
-    const backendDateString = TimezoneService.convertLocalTimeToBackend(selectedDate);
-    console.log('🕐 Backend date string for API:', backendDateString);
-
-    console.log(`Fetching time slots for serviceId: ${bookingData.ServiceId} and backend date: ${backendDateString}`);
+    // 🔥 FIXED: Always use local date format to avoid timezone issues
+    // Format the selectedDate as YYYY-MM-DD and add T00:00:00
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const backendDateString = `${year}-${month}-${day}T00:00:00`;
+    
+    console.log('🕐 Date components - Year:', year, 'Month:', month, 'Day:', day);
+    console.log('🕐 Final backendDateString for API:', backendDateString);
+    console.log('🕐 =====================================');
     
     const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
       bookingData.ServiceId,
@@ -364,7 +538,8 @@ const handleSubmit = async (e: React.FormEvent) => {
   } finally {
     updateLoadingState('timeSlots', false);
   }
-}, [selectedService, selectedDate, editMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, selectedSlot]);
+}, [selectedService, selectedDate, editMode, isViewMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, selectedSlot]);
+
   const fetchAllFollowers = useCallback(async () => {
     updateLoadingState('followers', true);
     try {
@@ -424,6 +599,8 @@ const handleSubmit = async (e: React.FormEvent) => {
         const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
         setLoanDetails(loanDetails);
         setShowLoanDetails(true);
+        // NEW: Mark as validated for edit mode
+        setIsLoanDetailsValidated(true);
         
         setBookingData((prev) => ({
           ...formattedData,
@@ -444,7 +621,23 @@ const handleSubmit = async (e: React.FormEvent) => {
         console.log("after setting:", formattedData); // Use formattedData here
 
         if (formattedData.DateTimeInfo?.SelectedDate) {
-          setSelectedDate(new Date(formattedData.DateTimeInfo.SelectedDate));
+          // 🔥 FIXED: For edit mode, use the date string directly without timezone conversion
+          // The SelectedDate should already be in the correct format (yyyy-MM-dd)
+          const dateStr = formattedData.DateTimeInfo.SelectedDate;
+          console.log('🗓️ Edit mode: Setting selectedDate from dateStr:', dateStr);
+          console.log('🗓️ Edit mode: Original booking start time:', initialData?.start?.dateTime);
+          
+          // Parse the date string directly as a local date
+          if (dateStr.includes('-')) {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const correctDate = new Date(year, month - 1, day); // month is 0-indexed
+            console.log('🗓️ Edit mode: Created selectedDate:', correctDate);
+            console.log('🗓️ Edit mode: Date components - Year:', year, 'Month:', month, 'Day:', day);
+            setSelectedDate(correctDate);
+          } else {
+            console.warn('🗓️ Edit mode: Invalid date format:', dateStr);
+            setSelectedDate(new Date());
+          }
         }
 
         if (formattedData.Followers) {
@@ -510,7 +703,8 @@ const handleSubmit = async (e: React.FormEvent) => {
           <CircularProgress color="inherit" size={60} />
           <Typography variant="h6">
             {loadingStates.submitting ? (editMode ? 'Updating booking...' : 'Creating booking...') : 
-             loadingStates.initializing ? 'Loading booking details...' : 'Processing...'}
+            loadingStates.initializing ? 'Loading booking details...' : 
+            loadingStates.sendingEmail ? 'Sending email notifications...' : 'Processing...'}
           </Typography>
         </Box>
       </Backdrop>
@@ -556,9 +750,11 @@ const handleSubmit = async (e: React.FormEvent) => {
                 required
                 value={bookingData.EncompassDetails.EncompassLoanId || ''}
                 onChange={handleLoanIdChange}
+                onKeyDown={!editMode && !readOnlyMode ? handleLoanIdKeyDown : undefined}
                 InputProps={{
                   readOnly: editMode || readOnlyMode,
                 }}
+                helperText={!editMode && !readOnlyMode ? "Press Enter after entering Loan ID" : ""}
               />
               {!editMode && !readOnlyMode && (
                 <Button 
@@ -708,7 +904,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                 InputProps={{
                   readOnly: true,
                 }}
-                value={loanDetails?.loanAmount || ''}/>
+                value={formatLoanAmount(loanDetails?.loanAmount)}/>
             </Grid>
             <Grid item xs={6}>
             <TextField
@@ -749,14 +945,14 @@ const handleSubmit = async (e: React.FormEvent) => {
       )}
 
         <Grid item xs={12}>
-          <Typography variant="h6">Service Details</Typography>
+          <Typography variant="h6">Appointment Details</Typography>
           <TextField
             fullWidth
             value={bookingData.ServiceName || ''}
             required
             onChange={handleServiceChange}
             select={!editMode && !readOnlyMode}
-            label="Service Name"
+            label="Location"
             variant="outlined"    
             InputProps={{
               readOnly: editMode || readOnlyMode,
@@ -774,7 +970,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 
         <Grid item xs={12}>
           <StaticDatePicker
-            disabled={!selectedService || readOnlyMode}
+            disabled={(!selectedService && !editMode) || readOnlyMode}
             value={selectedDate}
             onChange={(date: Date | null) => !readOnlyMode && setSelectedDate(date)}
             orientation={isMobile ? 'portrait' : 'landscape'}
@@ -782,7 +978,17 @@ const handleSubmit = async (e: React.FormEvent) => {
               actionBar: { actions: [] }
             }}
             readOnly={readOnlyMode}
-            disablePast
+            disablePast={true}
+            shouldDisableDate={(date) => {
+              // In edit mode, allow the currently selected date even if it's in the past
+              if (editMode && selectedDate && date.toDateString() === selectedDate.toDateString()) {
+                return false;
+              }
+              // For all other cases, disable past dates
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              return date < today;
+            }}
           />
         </Grid>
 
@@ -835,7 +1041,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                   fullWidth
                   variant="contained"
                   onClick={handleSubmit}
-                  disabled={isAnyLoading}
+                  disabled={isAnyLoading || (!editMode && !isLoanDetailsValidated)}
                   onMouseDown={(e) => e.preventDefault()}
                   sx={{
                     position: 'relative',

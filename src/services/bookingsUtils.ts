@@ -41,6 +41,23 @@ export function addStatusToBooking(booking: calendarBooking): calendarBooking {
     };
 }
 
+// 🔥 FIXED: Status-based color assignment instead of random
+export const getColorByStatus = (status?: BookingStatus): string => {
+  switch (status) {
+    case 'completed':
+      return '#2196F3'; // Blue for past/completed appointments
+    case 'upcoming':
+      return '#F44336'; // Red for upcoming appointments
+    case 'inProgress':
+      return '#FF9800'; // Orange for in-progress appointments
+    case 'canceled':
+      return '#9E9E9E'; // Gray for canceled appointments
+    default:
+      return '#2196F3'; // Default to blue
+  }
+};
+
+// Keep the old random function for backward compatibility if needed
 export const getRandomColor = (id?: string | number): string => {
   const colors = [
     '#4285F4', // Blue
@@ -68,16 +85,27 @@ export function addColorToBookings(bookings: calendarBooking[]): calendarBooking
     return bookings.map(booking => addColorToBooking(booking));
 }
 
+// 🔥 FIXED: Use status-based colors instead of random colors
 export function addColorToBooking(booking: calendarBooking): calendarBooking {
     if (!booking) {
         console.error('addColorToBooking called with null/undefined booking');
         return booking;
     }
 
-    const color = getRandomColor();
+    // Ensure the booking has a status (it should already have one from addStatusToBooking)
+    const status = booking.status || determineBookingStatus(booking);
+    const color = getColorByStatus(status);
+
+    console.log('🎨 Assigning color:', { 
+        bookingId: booking.bookingId, 
+        status, 
+        color,
+        startTime: booking.start?.dateTime 
+    });
 
     return {
         ...booking,
+        status,
         color
     };
 }
