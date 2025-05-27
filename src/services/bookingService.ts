@@ -50,12 +50,12 @@ export const bookingService = {
     return response.data;
   },
 
-  //get available time slots
-   async getAvailableTimeSlots(serviceId: string, selectedDateTime: string): Promise<TimeSlot[]> {
-    console.log('🕐 Getting time slots for:', { serviceId, selectedDateTime });
-    
-    // 🔥 FIXED: For edit/view mode, the selectedDateTime is already in the correct format
-    // Don't apply additional timezone conversion that shifts the date
+  async getAvailableTimeSlots(
+    serviceId: string, 
+    selectedDateTime: string, 
+    isEditMode: boolean = false
+  ): Promise<TimeSlot[]> {
+    console.log('🕐 Getting time slots for:', { serviceId, selectedDateTime, isEditMode });
     
     let estDateString: string;
     
@@ -79,14 +79,49 @@ export const bookingService = {
         selectedDateTime: `${estDateString}T00:00:00` // Send as EST date
       }
     });
-  
+
     console.log('🕐 Time slots received:', response.data?.length, 'slots');
+    
+    let timeSlots = response.data || [];
+    
+    // 🔥 NEW: Filter out past time slots in edit mode
+    if (isEditMode && timeSlots.length > 0) {
+      console.log('✏️ Edit mode: Filtering out past time slots...');
+      
+      const now = new Date();
+      console.log('✏️ Current time:', now.toISOString());
+      
+      const filteredSlots = timeSlots.filter((slot: TimeSlot) => {
+        try {
+          // Parse the slot start time (backend EST time)
+          const slotStartTime = new Date(slot.startTime);
+          
+          // Check if this slot is in the future
+          const isFuture = slotStartTime > now;
+          
+          if (!isFuture) {
+            console.log('✏️ Filtering out past slot:', {
+              slotTime: slot.startTime,
+              displayText: slot.displayText,
+              reason: 'Slot is in the past'
+            });
+          }
+          
+          return isFuture;
+        } catch (error) {
+          console.error('❌ Error checking slot time:', error);
+          return false; // Filter out slots with invalid times
+        }
+      });
+      
+      console.log(`✏️ Filtered ${timeSlots.length} slots to ${filteredSlots.length} future slots`);
+      timeSlots = filteredSlots;
+    }
     
     // Backend returns time slots in EST/EDT
     // They will be converted to user timezone in the TimeSelector component
-    return response.data || [];
+    return timeSlots;
   },
-  
   //get available services
   async getAvailableServices(): Promise<BookingService[]> {
     const response = await api.get('/api/Application/v1/GetAvailableServices');

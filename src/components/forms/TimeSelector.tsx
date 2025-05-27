@@ -183,7 +183,7 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
       ) : null}
 
       {/* Debug info (remove in production) */}
-      {process.env.NODE_ENV === 'development' && !loading && (
+      {/* {process.env.NODE_ENV === 'development' && !loading && (
         <Box sx={{ mt: 2, p: 1, bgcolor: 'grey.100', borderRadius: 1, fontSize: '0.75rem' }}>
           <Typography variant="caption" display="block">
             <strong>Debug:</strong> {convertedTimeSlots.length} slots converted
@@ -195,7 +195,7 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
             <strong>User TZ:</strong> {TimezoneService.getUserTimezone()}
           </Typography>
         </Box>
-      )}
+      )} */}
     </Box>
   );
 };

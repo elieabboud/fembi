@@ -80,6 +80,8 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [error, setError] = useState<string>("");
+
+  
   
   // NEW: State to track if loan details have been loaded and validated
   const [isLoanDetailsValidated, setIsLoanDetailsValidated] = useState<boolean>(false);
@@ -322,6 +324,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
       updateLoadingState('sendingEmail', false);
     }
   };
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -373,7 +376,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
 
     if (onSuccess) {
       onSuccess(bookingData, response);
-      window.location.reload();
+      //window.location.reload();
     }
     } catch (error) {
       console.error(`Error ${editMode ? 'updating' : 'creating'} booking:`, error);
@@ -514,14 +517,16 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
       
       console.log('🕐 Final backendDateString for API:', backendDateString);
       
+      // 🔥 UPDATED: Pass edit mode to filter past slots
       const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
         bookingData.ServiceId,
-        backendDateString
+        backendDateString,
+        editMode // Pass edit mode flag
       );
 
       console.log('🕐 Time slots received from backend:', response.length, 'slots');
 
-      // NEW: Apply availability filtering for create mode only
+      // Apply availability filtering for create mode only
       let filteredSlots = response;
       
       if (!editMode && !readOnlyMode && dateRange) {
@@ -562,7 +567,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
       updateLoadingState('timeSlots', false);
     }
   }, [selectedService, selectedDate, editMode, isViewMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, selectedSlot, dateRange]);
-
+  
   const fetchAllFollowers = useCallback(async () => {
     updateLoadingState('followers', true);
     try {
@@ -1060,7 +1065,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
         </Grid>
 
         {/* Debug info display (remove after debugging) */}
-        {!editMode && !readOnlyMode && process.env.NODE_ENV === 'development' && (
+        {/* {!editMode && !readOnlyMode && process.env.NODE_ENV === 'development' && (
           <Grid item xs={12} sx={{padding: '16px'}}>
             <Box sx={{ p: 2, bgcolor: 'grey.100', borderRadius: 1, mt: 2 }}>
               <Typography variant="h6" color="grey.700">DEBUG INFO</Typography>
@@ -1086,10 +1091,10 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
               </Typography>
             </Box>
           </Grid>
-        )}
+        )} */}
 
         {/* Availability info display */}
-        {!editMode && !readOnlyMode && dateRange && availabilitySettings && (
+        {/* {!editMode && !readOnlyMode && dateRange && availabilitySettings && (
           <Grid item xs={12} sx={{padding: '16px'}}>
             <Box sx={{ bgcolor: 'grey.100', borderRadius: 1, mt: 2, p: 2 }}>
               <Typography variant="body2" color="grey.700">
@@ -1100,7 +1105,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
               </Typography>
             </Box>
           </Grid>
-        )}
+        )} */}
 
         <Grid container sx={{display: 'flex', flexDirection: 'column', width: '100%', padding: '16px'}}>
           {(timeSlots.length > 0 || selectedSlot || (editMode && selectedDate)) && (

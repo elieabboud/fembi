@@ -153,53 +153,71 @@ export class AvailabilityService {
    * Filter time slots based on availability settings
    */
   static filterTimeSlots<T extends { startTime: string; endTime: string }>(
-    timeSlots: T[], 
-    selectedDate: Date, 
-    dateRange: DateRange
-  ): T[] {
-    if (!timeSlots || timeSlots.length === 0) {
-      return [];
-    }
-
-    console.log('🕐 Filtering time slots for date:', selectedDate.toLocaleDateString());
-    console.log('🕐 Date range constraints:', {
-      minDateTime: dateRange.minDateTime.toISOString(),
-      maxDateTime: dateRange.maxDateTime.toISOString()
-    });
-
-    const filtered = timeSlots.filter(slot => {
-      try {
-        // Parse slot times as dates on the selected day
-        const slotStart = new Date(slot.startTime);
-        const slotEnd = new Date(slot.endTime);
-
-        // Check if slot is within availability window
-        const isStartValid = slotStart >= dateRange.minDateTime;
-        const isEndValid = slotEnd <= dateRange.maxDateTime;
-        const isValid = isStartValid && isEndValid;
-
-        if (!isValid) {
-          console.log('🕐 Filtering out slot:', {
-            slot: `${slotStart.toLocaleTimeString()} - ${slotEnd.toLocaleTimeString()}`,
-            reason: !isStartValid ? 'starts too early' : 'ends too late',
-            slotStart: slotStart.toISOString(),
-            slotEnd: slotEnd.toISOString(),
-            minAllowed: dateRange.minDateTime.toISOString(),
-            maxAllowed: dateRange.maxDateTime.toISOString()
-          });
-        }
-
-        return isValid;
-      } catch (error) {
-        console.error('❌ Error filtering time slot:', slot, error);
-        return false;
-      }
-    });
-
-    console.log(`🕐 Filtered ${timeSlots.length} slots to ${filtered.length} available slots`);
-    
-    return filtered;
+  timeSlots: T[], 
+  selectedDate: Date, 
+  dateRange: DateRange
+): T[] {
+  if (!timeSlots || timeSlots.length === 0) {
+    return [];
   }
+
+  console.log('🕐 Filtering time slots for date:', selectedDate.toLocaleDateString());
+  console.log('🕐 Date range constraints (UTC):', {
+    minDateTime: dateRange.minDateTime.toISOString(),
+    maxDateTime: dateRange.maxDateTime.toISOString()
+  });
+
+  const filtered = timeSlots.filter(slot => {
+    try {
+
+      const slotStartDate = new Date(slot.startTime);
+      const slotEndDate = new Date(slot.endTime);
+      
+      // Get the date components (these are in EST)
+      const startYear = slotStartDate.getFullYear();
+      const startMonth = slotStartDate.getMonth();
+      const startDay = slotStartDate.getDate();
+      const startHour = slotStartDate.getHours();
+      const startMinute = slotStartDate.getMinutes();
+      
+      const endYear = slotEndDate.getFullYear();
+      const endMonth = slotEndDate.getMonth();
+      const endDay = slotEndDate.getDate();
+      const endHour = slotEndDate.getHours();
+      const endMinute = slotEndDate.getMinutes();
+      
+      // Create new dates representing these times in EST
+      // For May 2025, EST is actually EDT (UTC-4)
+      const estOffsetHours = 4; // EDT offset from UTC
+      
+      // Create UTC times by adding the EST offset
+      const slotStartUTC = new Date(Date.UTC(startYear, startMonth, startDay, startHour + estOffsetHours, startMinute));
+      const slotEndUTC = new Date(Date.UTC(endYear, endMonth, endDay, endHour + estOffsetHours, endMinute));
+
+      // Now compare these UTC times with the availability window
+      const isStartValid = slotStartUTC >= dateRange.minDateTime;
+      const isEndValid = slotEndUTC <= dateRange.maxDateTime;
+      const isValid = isStartValid && isEndValid;
+
+      console.log(`🕐 Slot ${isValid ? '✅' : '❌'}:`, {
+        original: `${slot.startTime} - ${slot.endTime}`,
+        estToUtc: `${slotStartUTC.toISOString()} - ${slotEndUTC.toISOString()}`,
+        constraints: `${dateRange.minDateTime.toISOString()} to ${dateRange.maxDateTime.toISOString()}`,
+        startCheck: `${slotStartUTC.toISOString()} >= ${dateRange.minDateTime.toISOString()} = ${isStartValid}`,
+        endCheck: `${slotEndUTC.toISOString()} <= ${dateRange.maxDateTime.toISOString()} = ${isEndValid}`
+      });
+
+      return isValid;
+    } catch (error) {
+      console.error('❌ Error filtering time slot:', slot, error);
+      return false;
+    }
+  });
+
+  console.log(`🕐 Final result: ${filtered.length} of ${timeSlots.length} slots available after filtering`);
+  
+  return filtered;
+}
 
   /**
    * Check if time slot should be disabled (for display purposes)
