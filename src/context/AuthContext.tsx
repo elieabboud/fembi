@@ -31,7 +31,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const mockUser: User = {
     id: 'auto-user-123',
     fullName: 'Auto Login User',
-    email: 'kanaanmikaella@gmail.com'
+    email: 'auto@example.com'
   };
 
   useEffect(() => {

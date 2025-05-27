@@ -183,6 +183,10 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
     setSelectedRow(booking);
     setShowEditBooking(true);
   }, []);
+
+  const handleDayClick = useCallback((date: Date) => {
+    updateDateAndView(date, 'day');
+  }, [updateDateAndView]);
   
   const renderCalendarView = () => {
     switch (currentView) {
@@ -221,6 +225,8 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
             events={filteredBookings}
             onDateChange={handleDateChange} 
             onEventClick={handleEventClick}
+            onViewChange={handleViewChange}
+            onDayClick={handleDayClick}
           />
         );
     }
@@ -309,7 +315,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   return (
     <Box>      
       {/* TITLE + NEW BOOKING BUTTON */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: {xs: 1, md: 3} }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', mb: {xs: 1, md: 3} }}>
         <Typography 
           variant="h4" 
           component="h1"
@@ -320,8 +326,6 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
           }}>
           Calendar
         </Typography>
-      </Box>
-      <Box sx={{ display: 'flex', justifyContent: 'end', alignItems: 'center', mb: 3 }}>
         <Button
           variant="contained"
           onClick={() => {setNewBooking(!newBooking)}}

@@ -34,9 +34,11 @@ import { BookingService } from '../../types/service';
 import CreateBookingForm from '../forms/NewBookingForm';
 import { bookingService } from '../../services/bookingService';
 import { calendarBooking } from '../../types/calendarBooking';
+import { TableSortLabel } from '@mui/material';
+import { visuallyHidden } from '@mui/utils';
 
 interface AppTableProps {
-  columns: Column[];
+  columns: Column<calendarBooking>[];
   rows: any[];
   selectable?: boolean;
   availableServices: BookingService[];
@@ -69,6 +71,70 @@ const AppTable: React.FC<AppTableProps> = ({
   const [dialogMode, setDialogMode] = useState<'edit' | 'view'>('edit');
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [loadingDelete, setLoadingDelete] = React.useState(false);
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+  const [orderBy, setOrderBy] = useState<keyof calendarBooking | string>('');
+
+  const getComparator = (
+    order: 'asc' | 'desc',
+    orderBy: keyof calendarBooking | string,
+    columns: Column<calendarBooking>[]
+  ): (a: calendarBooking, b: calendarBooking) => number => {
+    const column = columns.find(col => col.id === orderBy);
+    
+    if (column && column.comparator) {
+      return order === 'desc'
+        ? (a, b) => -column.comparator!(a, b)
+        : (a, b) => column.comparator!(a, b);
+    }
+    
+    return order === 'desc'
+      ? (a, b) => {
+          const aVal = (a as any)[orderBy] || '';
+          const bVal = (b as any)[orderBy] || '';
+          if (bVal < aVal) return -1;
+          if (bVal > aVal) return 1;
+          return 0;
+        }
+      : (a, b) => {
+          const aVal = (a as any)[orderBy] || '';
+          const bVal = (b as any)[orderBy] || '';
+          if (aVal < bVal) return -1;
+          if (aVal > bVal) return 1;
+          return 0;
+        };
+  };
+
+  const handleRequestSort = (event: React.MouseEvent<unknown>, property: keyof calendarBooking | string) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  };
+
+  const createSortHandler = (property: keyof calendarBooking | string) => (event: React.MouseEvent<unknown>) => {
+    const column = columns.find(col => col.id === property);
+    
+    if (column && (column.comparator || isBasicSortableColumn(property as string))) {
+      handleRequestSort(event, property);
+    }
+  };
+
+  const isBasicSortableColumn = (columnId: string): boolean => {
+    const basicSortableColumns = [
+      'serviceName', 
+      'customerName', 
+      'price',
+      'bookingId'
+    ];
+    return basicSortableColumns.includes(columnId);
+  };
+
+  const sortedRows = React.useMemo(() => {
+    if (!orderBy) {
+      return rows;
+    }
+    
+    return [...rows].sort(getComparator(order, orderBy, columns));
+  }, [rows, order, orderBy, columns]);
   
   const handleChangePage = (_: unknown, newPage: number) => {
     setPage(newPage);
@@ -173,7 +239,7 @@ const AppTable: React.FC<AppTableProps> = ({
     return (
       <Box sx={{ width: '100%' }}>
         <Stack spacing={2}>
-          {rows
+          {sortedRows
             .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
             .map((row) => {
               const isItemSelected = isSelected(row.bookingId);
@@ -181,7 +247,7 @@ const AppTable: React.FC<AppTableProps> = ({
               
               return (
                 <Card 
-                  key={row.BookingId} 
+                  key={row.bookingId}
                   elevation={1}
                   sx={{ 
                     cursor: onRowClick ? 'pointer' : 'default',
@@ -243,17 +309,17 @@ const AppTable: React.FC<AppTableProps> = ({
                     
                     <Stack spacing={1.5}>
                       {prioritizedColumns.map((column, i) => {
-                        const value = row[column.id];
+                        const value = (row as any)[column.id];
                         const displayValue = column.format ? column.format(value, row) : value;
                         
                         return (
-                          <Box key={column.label} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Box key={`${row.bookingId}-${column.id as string}`} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
                               {column.label}:
                             </Typography>
                             <Box sx={{ textAlign: column.align || 'left', maxWidth: '60%' }}>
                               {column.id === 'status' ? (
-                                <StatusBadge status={value} />
+                                <StatusBadge status={row.status} />
                               ) : typeof displayValue === 'string' || typeof displayValue === 'number' ? (
                                 <Typography variant="body1" component="span">
                                   {displayValue}
@@ -274,7 +340,7 @@ const AppTable: React.FC<AppTableProps> = ({
         <TablePagination
           rowsPerPageOptions={[5, 10, 25]}
           component="div"
-          count={rows.length}
+          count={sortedRows.length}
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={handleChangePage}
@@ -310,20 +376,50 @@ const AppTable: React.FC<AppTableProps> = ({
                   />
                 </TableCell>
               )}
-              {columns.map((column) => (
-                <TableCell
-                  key={column.label}
-                  align={column.align}
-                  style={{ minWidth: column.minWidth, fontWeight: 'bold' }}
-                >
-                  {column.label}
-                </TableCell>
-              ))}
+              {columns.map((column) => {
+                const canSort = column.comparator || isBasicSortableColumn(column.id as string);
+                
+                return (
+                  <TableCell
+                    key={column.id as string}
+                    align={column.align}
+                    style={{ minWidth: column.minWidth, fontWeight: 'bold' }}
+                    sortDirection={orderBy === column.id ? order : false}
+                  >
+                    {canSort ? (
+                      <TableSortLabel
+                        active={orderBy === column.id}
+                        direction={orderBy === column.id ? order : 'asc'}
+                        onClick={createSortHandler(column.id)}
+                        sx={{
+                          '&.MuiTableSortLabel-root': {
+                            color: 'inherit',
+                          },
+                          '&.MuiTableSortLabel-root:hover': {
+                            color: 'primary.main',
+                          },
+                        }}
+                      >
+                        {column.label}
+                        {orderBy === column.id ? (
+                          <Box component="span" sx={visuallyHidden}>
+                            {order === 'desc' ? 'sorted descending' : 'sorted ascending'}
+                          </Box>
+                        ) : null}
+                      </TableSortLabel>
+                    ) : (
+                      <Typography variant="inherit" sx={{ fontWeight: 'bold' }}>
+                        {column.label}
+                      </Typography>
+                    )}
+                  </TableCell>
+                );
+              })}
               <TableCell align="right" style={{ fontWeight: 'bold' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows
+            {sortedRows
               .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
               .map((row) => {
                 const isItemSelected = isSelected(row.bookingId);
@@ -350,11 +446,11 @@ const AppTable: React.FC<AppTableProps> = ({
                       </TableCell>
                     )}
                     {columns.map((column) => {
-                      const value = row[column.id];
+                      const value = (row as any)[column.id];
                       return (
-                        <TableCell key={column.label} align={column.align} style={{ fontWeight: 'light' }}>
+                        <TableCell key={`${row.bookingId}-${column.id as string}`} align={column.align} style={{ fontWeight: 'light' }}>
                           {column.id === 'status' ? (
-                            <StatusBadge status={value} />
+                            <StatusBadge status={row.status} />
                           ) : column.format ? (
                             column.format(value, row)
                           ) : (
@@ -422,7 +518,7 @@ const AppTable: React.FC<AppTableProps> = ({
         <TablePagination
           rowsPerPageOptions={[5, 10, 25]}
           component="div"
-          count={rows.length}
+          count={sortedRows.length}
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={handleChangePage}

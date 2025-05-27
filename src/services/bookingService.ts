@@ -9,8 +9,23 @@ import { BookingService } from '../types/service';
 import { UpdateBookingRequest } from '../types/updateBookingRequest';
 import { TimezoneService } from './timezoneUtils';
 import { format } from 'date-fns';
+import { AvailabilitySettings } from './availabilityService';
 
 export const bookingService = {
+
+  async getAvailability(serviceId?: string): Promise<AvailabilitySettings> {
+    console.log('📅 Getting availability settings...', serviceId ? `for serviceId: ${serviceId}` : '');
+    
+    const params = serviceId ? { serviceId } : {};
+    const response = await api.get('/api/Application/v1/GetAvailability', { params });
+    
+    console.log('📅 Availability settings received:', response.data);
+    
+    return {
+      minimumLeadTime: response.data.minimumLeadTime || "00:00:00",
+      maximumAdvance: response.data.maximumAdvance || "365.00:00:00"
+    };
+  },
 
   //get calendar data
   async getCalendarData(start: string, end: string): Promise<calendarBooking[]> {

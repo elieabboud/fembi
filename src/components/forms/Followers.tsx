@@ -43,7 +43,7 @@ const Followers: React.FC<FollowersProps> = ({
   };
 
   return (
-    <Box sx={{ p: '16px', justifySelf: 'start' }}>
+    <Box sx={{py: '16px', justifySelf: 'start' }}>
       <Typography variant="h6" gutterBottom>
         Followers
       </Typography>

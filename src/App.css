@@ -98,7 +98,8 @@ html, body {
 #actions {
   flex: 0 0 25%;
   display: flex;
-  justify-content: space-evenly;
+  justify-content: space-between;
+  max-width: fit-content;
   gap: 4px;
   height: 100%;
 }

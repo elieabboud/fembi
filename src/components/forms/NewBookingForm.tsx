@@ -30,13 +30,14 @@ import { mapCalendarBookingToFormData } from '../../services/bookingFormUtils';
 import { toLocalISOString } from '../../utils/general';
 import { TimezoneService } from '../../services/timezoneUtils';
 import { EmailRequestDTO } from '../../types/email';
+import { AvailabilityService, AvailabilitySettings, DateRange } from '../../services/availabilityService';
 
 type BookingFormProps = {
   onClose: () => void;
   onSuccess?: (bookingData: CreateAppointmentRequest, response: any) => void;
   initialData?: calendarBooking;
   isEditMode?: boolean;
-  isViewMode?: boolean; // New prop for view-only mode
+  isViewMode?: boolean;
   setLoading?: (loading: boolean) => void;
 }
 
@@ -45,7 +46,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   onSuccess, 
   initialData, 
   isEditMode = false,
-  isViewMode = false, // New prop
+  isViewMode = false,
   setLoading 
 }) => {
   const theme = useTheme();
@@ -62,6 +63,11 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     initializing: false,
     sendingEmail: false
   });
+  
+  // NEW: Availability constraint states
+  const [availabilitySettings, setAvailabilitySettings] = useState<AvailabilitySettings | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
   
   const [services, setServices] = useState<BookingService[]>([]);
   const [fetchedFollowers, setFetchedFollowers] = useState<string[]>([]);
@@ -116,7 +122,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   });
 
   const editMode = isEditMode || !!initialData;
-  const readOnlyMode = isViewMode; // For view-only mode
+  const readOnlyMode = isViewMode;
 
   // Helper function to update loading states
   const updateLoadingState = (key: keyof typeof loadingStates, value: boolean) => {
@@ -139,10 +145,45 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     return amount.toLocaleString();
   };
 
+  // NEW: Fetch availability settings when service is selected
+  const fetchAvailabilitySettings = useCallback(async (serviceId?: string) => {
+    if (editMode || readOnlyMode) return; // Only apply to create mode
+    
+    setIsLoadingAvailability(true);
+    try {
+      console.log('📅 Fetching availability settings for create mode...', serviceId ? `serviceId: ${serviceId}` : '');
+      
+      const settings = await bookingService.getAvailability(serviceId);
+      setAvailabilitySettings(settings);
+      
+      const calculatedRange = AvailabilityService.calculateDateRange(settings);
+      setDateRange(calculatedRange);
+      
+      // 🔥 NEW: Auto-select the first available date
+      if (calculatedRange.minDate) {
+        console.log('📅 Auto-selecting first available date:', calculatedRange.minDate.toLocaleDateString());
+        setSelectedDate(calculatedRange.minDate);
+      }
+      
+      console.log('📅 Availability constraints applied:', {
+        serviceId,
+        settings,
+        dateRange: calculatedRange
+      });
+      
+    } catch (error) {
+      console.error('❌ Error fetching availability settings:', error);
+      setAvailabilitySettings(null);
+      setDateRange(null);
+    } finally {
+      setIsLoadingAvailability(false);
+    }
+  }, [editMode, readOnlyMode]);
+
   const handleLoanIdChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string>
   ) => {
-    if (readOnlyMode) return; // Prevent changes in view mode
+    if (readOnlyMode) return;
     
     const loanId = event.target.value;
     setBookingData((prev) => ({
@@ -153,156 +194,159 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
       },
     }));
     
-    // NEW: Reset validation state when loan ID changes
     if (!editMode) {
       setIsLoanDetailsValidated(false);
       setShowLoanDetails(false);
     }
   };
 
-const handleServiceChange = (event: React.ChangeEvent<{ value: unknown }>) => {
-  if (readOnlyMode) return; // Prevent changes in view mode
-  
-  const selectedValue = event.target.value as string;
-  const selectedService = services.find(s => s.displayName === selectedValue);
-  if (selectedService) {
-    setSelectedService(selectedService);
-    setBookingData(prev => ({
-      ...prev,
-      ServiceName: selectedService.displayName,
-      ServiceId: selectedService.id,
-      ServicePrice: selectedService.defaultPrice,
-    }));
-  }
-};
+  // UPDATED: Handle service change with availability fetching
+  const handleServiceChange = (event: React.ChangeEvent<{ value: unknown }>) => {
+    if (readOnlyMode) return;
+    
+    const selectedValue = event.target.value as string;
+    const selectedService = services.find(s => s.displayName === selectedValue);
+    if (selectedService) {
+      setSelectedService(selectedService);
+      setBookingData(prev => ({
+        ...prev,
+        ServiceName: selectedService.displayName,
+        ServiceId: selectedService.id,
+        ServicePrice: selectedService.defaultPrice,
+      }));
 
-const sendEmailNotifications = async (response: any) => {
-  debugger;
-  if (readOnlyMode || editMode) return;
-  updateLoadingState('sendingEmail', true);
-  
-  try {
-    const currentUserEmail = user?.email || '';
-    
-    const recipientEmails: string[] = [];
-    
-    if (currentUserEmail) {
-      recipientEmails.push(currentUserEmail);
+      // NEW: Fetch availability settings when service is selected
+      if (!editMode && !readOnlyMode) {
+        console.log('🔧 Service selected, fetching availability for:', selectedService.id);
+        fetchAvailabilitySettings(selectedService.id);
+      }
     }
+  };
+
+  const sendEmailNotifications = async (response: any) => {
+    if (readOnlyMode || editMode) return;
+    updateLoadingState('sendingEmail', true);
     
-    if (bookingData.BorrowerInformation.Email) {
-      recipientEmails.push(bookingData.BorrowerInformation.Email);
+    try {
+      const currentUserEmail = user?.email || '';
+      
+      const recipientEmails: string[] = [];
+      
+      if (currentUserEmail) {
+        recipientEmails.push(currentUserEmail);
+      }
+      
+      if (bookingData.BorrowerInformation.Email) {
+        recipientEmails.push(bookingData.BorrowerInformation.Email);
+      }
+      
+      if (bookingData.Followers) {
+        const followerEmails = bookingData.Followers
+          .split(',')
+          .map(email => email.trim())
+          .filter(email => email.length > 0 && email.includes('@'));
+        recipientEmails.push(...followerEmails);
+      }
+      
+      const uniqueEmails = Array.from(new Set(recipientEmails));
+      
+      if (uniqueEmails.length === 0) {
+        console.log('No valid email addresses found for notification');
+        return;
+      }
+      
+      const appointmentDate = new Date(bookingData.DateTimeInfo.SelectedDate).toLocaleDateString();
+      const appointmentTime = bookingData.DateTimeInfo.SelectedTime;
+      const borrowerName = `${bookingData.BorrowerInformation.FirstName} ${bookingData.BorrowerInformation.LastName}`.trim();
+      
+      const htmlBody = `
+        <html>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #2c5aa0; border-bottom: 2px solid #2c5aa0; padding-bottom: 10px;">
+                New Appointment Scheduled
+              </h2>
+              
+              <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #28a745;">Appointment Details</h3>
+                <p><strong>Service:</strong> ${bookingData.ServiceName}</p>
+                <p><strong>Date:</strong> ${appointmentDate}</p>
+                <p><strong>Time:</strong> ${appointmentTime}</p>
+                <p><strong>Loan ID:</strong> ${bookingData.EncompassDetails.EncompassLoanId}</p>
+              </div>
+              
+              <div style="background-color: #e9ecef; border-left: 4px solid #007bff; padding: 15px; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #007bff;">Borrower Information</h3>
+                <p><strong>Name:</strong> ${borrowerName}</p>
+                <p><strong>Email:</strong> ${bookingData.BorrowerInformation.Email}</p>
+                <p><strong>Phone:</strong> ${bookingData.BorrowerInformation.PhoneNumber}</p>
+                <p><strong>Address:</strong> ${bookingData.BorrowerInformation.Address.Street}, ${bookingData.BorrowerInformation.Address.City}, ${bookingData.BorrowerInformation.Address.State} ${bookingData.BorrowerInformation.Address.ZipCode}</p>
+              </div>
+              
+              <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #856404;">Loan Information</h3>
+                <p><strong>Loan Closer:</strong> ${bookingData.EncompassDetails.LoanCloser}</p>
+                <p><strong>Loan Officer:</strong> ${bookingData.EncompassDetails.LoanOfficer}</p>
+                ${bookingData.EncompassDetails.dpa ? `<p><strong>DPA Program:</strong> ${bookingData.EncompassDetails.dpa}</p>` : ''}
+              </div>
+              
+              <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d;">
+                <p>This is an automated notification. Please do not reply to this email.</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+      
+      const emailRequest: EmailRequestDTO = {
+        To: uniqueEmails,
+        Subject: `New Appointment Scheduled - ${bookingData.ServiceName} for ${borrowerName}`,
+        Body: htmlBody,
+        IsHtml: true
+      };
+      
+      const emailResponse = await bookingService.sendEmail(emailRequest);
+
+      console.log("received response:" , emailResponse);
+      
+      if (emailResponse.Success) {
+        console.log(`Email notifications sent successfully to: ${uniqueEmails.join(', ')}`);
+      } else {
+        console.error('Failed to send some email notifications:', emailResponse.FailedRecipients);
+        console.error('Email error message:', emailResponse.Message);
+      }
+      
+    } catch (error) {
+      console.error('Error sending email notifications:', error);
+    } finally {
+      updateLoadingState('sendingEmail', false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    if (bookingData.Followers) {
-      const followerEmails = bookingData.Followers
-        .split(',')
-        .map(email => email.trim())
-        .filter(email => email.length > 0 && email.includes('@'));
-      recipientEmails.push(...followerEmails);
-    }
-    
-    const uniqueEmails = Array.from(new Set(recipientEmails));
-    
-    if (uniqueEmails.length === 0) {
-      console.log('No valid email addresses found for notification');
+    if (readOnlyMode || loadingStates.submitting) return;
+
+    if (!editMode && !isLoanDetailsValidated) {
+      setError("Please enter a valid Loan ID and press Enter to load loan details before submitting.");
       return;
     }
-    
-    const appointmentDate = new Date(bookingData.DateTimeInfo.SelectedDate).toLocaleDateString();
-    const appointmentTime = bookingData.DateTimeInfo.SelectedTime;
-    const borrowerName = `${bookingData.BorrowerInformation.FirstName} ${bookingData.BorrowerInformation.LastName}`.trim();
-    
-    const htmlBody = `
-      <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-          <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: #2c5aa0; border-bottom: 2px solid #2c5aa0; padding-bottom: 10px;">
-              New Appointment Scheduled
-            </h2>
-            
-            <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0;">
-              <h3 style="margin-top: 0; color: #28a745;">Appointment Details</h3>
-              <p><strong>Service:</strong> ${bookingData.ServiceName}</p>
-              <p><strong>Date:</strong> ${appointmentDate}</p>
-              <p><strong>Time:</strong> ${appointmentTime}</p>
-              <p><strong>Loan ID:</strong> ${bookingData.EncompassDetails.EncompassLoanId}</p>
-            </div>
-            
-            <div style="background-color: #e9ecef; border-left: 4px solid #007bff; padding: 15px; margin: 20px 0;">
-              <h3 style="margin-top: 0; color: #007bff;">Borrower Information</h3>
-              <p><strong>Name:</strong> ${borrowerName}</p>
-              <p><strong>Email:</strong> ${bookingData.BorrowerInformation.Email}</p>
-              <p><strong>Phone:</strong> ${bookingData.BorrowerInformation.PhoneNumber}</p>
-              <p><strong>Address:</strong> ${bookingData.BorrowerInformation.Address.Street}, ${bookingData.BorrowerInformation.Address.City}, ${bookingData.BorrowerInformation.Address.State} ${bookingData.BorrowerInformation.Address.ZipCode}</p>
-            </div>
-            
-            <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
-              <h3 style="margin-top: 0; color: #856404;">Loan Information</h3>
-              <p><strong>Loan Closer:</strong> ${bookingData.EncompassDetails.LoanCloser}</p>
-              <p><strong>Loan Officer:</strong> ${bookingData.EncompassDetails.LoanOfficer}</p>
-              ${bookingData.EncompassDetails.dpa ? `<p><strong>DPA Program:</strong> ${bookingData.EncompassDetails.dpa}</p>` : ''}
-            </div>
-            
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d;">
-              <p>This is an automated notification. Please do not reply to this email.</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-    
-    const emailRequest: EmailRequestDTO = {
-      To: uniqueEmails,
-      Subject: `New Appointment Scheduled - ${bookingData.ServiceName} for ${borrowerName}`,
-      Body: htmlBody,
-      IsHtml: true
-    };
-    
-    const emailResponse = await bookingService.sendEmail(emailRequest);
 
-    console.log("received response:" , emailResponse);
-    
-    if (emailResponse.Success) {
-      console.log(`Email notifications sent successfully to: ${uniqueEmails.join(', ')}`);
-    } else {
-      console.error('Failed to send some email notifications:', emailResponse.FailedRecipients);
-      console.error('Email error message:', emailResponse.Message);
+    if (!bookingData.ServiceId) {
+      setError("Please select a service.");
+      return;
     }
+
+    if (!selectedSlot) {
+      setError("Please select a time slot.");
+      return;
+    }
+
+    setError("");
     
-  } catch (error) {
-    console.error('Error sending email notifications:', error);
-  } finally {
-    updateLoadingState('sendingEmail', false);
-  }
-};
-
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  if (readOnlyMode || loadingStates.submitting) return;
-
-  // NEW: Validation for loan details in new booking mode
-  if (!editMode && !isLoanDetailsValidated) {
-    setError("Please enter a valid Loan ID and press Enter to load loan details before submitting.");
-    return;
-  }
-
-  // Existing validation logic...
-  if (!bookingData.ServiceId) {
-    setError("Please select a service.");
-    return;
-  }
-
-  if (!selectedSlot) {
-    setError("Please select a time slot.");
-    return;
-  }
-
-  setError("");
-  
-  updateLoadingState('submitting', true);
-  setLoading?.(true);
+    updateLoadingState('submitting', true);
+    setLoading?.(true);
 
   try {
     let response;
@@ -312,8 +356,8 @@ const handleSubmit = async (e: React.FormEvent) => {
         id: initialData?.bookingId || '',
         selectedDate: bookingData.DateTimeInfo.SelectedDate,
         selectedTime: bookingData.DateTimeInfo.SelectedTime,
-        fromDate: bookingData.DateTimeInfo.FromDate,  // These are already in backend format
-        toDate: bookingData.DateTimeInfo.ToDate,      // These are already in backend format
+        fromDate: bookingData.DateTimeInfo.FromDate,
+        toDate: bookingData.DateTimeInfo.ToDate,
         staffMemberIds: bookingData.StaffMemberIds
       };
       
@@ -321,36 +365,35 @@ const handleSubmit = async (e: React.FormEvent) => {
     } else {
       response = await bookingService.postBooking(bookingData);
       console.log('Post API Response:', response);
+    }
 
-      if (response) {
-        await sendEmailNotifications(response);
-      }
+    if (response) {
+      await sendEmailNotifications(response);
     }
 
     if (onSuccess) {
       onSuccess(bookingData, response);
       window.location.reload();
     }
-  } catch (error) {
-    console.error(`Error ${editMode ? 'updating' : 'creating'} booking:`, error);
-    setError(`Failed to ${editMode ? 'update' : 'create'} booking. Please try again.`);
-  } finally {
-    updateLoadingState('submitting', false);
-    setLoading?.(false);
-  }
-};
+    } catch (error) {
+      console.error(`Error ${editMode ? 'updating' : 'creating'} booking:`, error);
+      setError(`Failed to ${editMode ? 'update' : 'create'} booking. Please try again.`);
+    } finally {
+      updateLoadingState('submitting', false);
+      setLoading?.(false);
+    }
+  };
 
   const fetchLoanDetails = async () => {
-    if (loadingStates.submitting || readOnlyMode) return; // Prevent in view mode
+    if (loadingStates.submitting || readOnlyMode) return;
 
-    // NEW: Check if loan ID is provided
     if (!bookingData.EncompassDetails.EncompassLoanId.trim()) {
       setError("Please enter a Loan ID.");
       return;
     }
 
     updateLoadingState('loanDetails', true);
-    setError(""); // Clear any previous errors
+    setError("");
     
     try{
       const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
@@ -380,7 +423,6 @@ const handleSubmit = async (e: React.FormEvent) => {
       }));
 
       setShowLoanDetails(true);
-      // NEW: Mark loan details as validated
       setIsLoanDetailsValidated(true);
     }catch (error) {
       console.error('Error fetching Loan Details:', error);
@@ -391,7 +433,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     }
   };
 
-  // NEW: Handle Enter key press for loan ID field
   const handleLoanIdKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -405,7 +446,6 @@ const handleSubmit = async (e: React.FormEvent) => {
       const response: BookingService[] = await bookingService.getAvailableServices();
       setServices(response);
       
-      // In edit mode, find and set the selected service
       if (editMode && bookingData.ServiceId) {
         console.log('looking for service');
         const matchedService = response.find(s => s.id === bookingData.ServiceId);
@@ -422,140 +462,119 @@ const handleSubmit = async (e: React.FormEvent) => {
     }
   }, [editMode]);
 
- const handleDateTimeSelect = useCallback(() => {
-  if (!selectedSlot || !selectedDate || readOnlyMode) return;
+  const handleDateTimeSelect = useCallback(() => {
+    if (!selectedSlot || !selectedDate || readOnlyMode) return;
 
-  console.log('🕐 Form: Handling date/time selection:', { 
-    selectedSlot: selectedSlot.startTime, 
-    selectedDate: selectedDate.toLocaleDateString() 
-  });
+    console.log('🕐 Form: Handling date/time selection:', { 
+      selectedSlot: selectedSlot.startTime, 
+      selectedDate: selectedDate.toLocaleDateString() 
+    });
 
-  // Format date for display (user timezone)
-  const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const startTimeUser = TimezoneService.convertBackendTimeToLocalReliable(selectedSlot.startTime);
+    const time24 = format(startTimeUser, 'HH:mm');
 
-  // Convert slot time to user timezone for DISPLAY ONLY
-  const startTimeUser = TimezoneService.convertBackendTimeToLocalReliable(selectedSlot.startTime);
-  const time24 = format(startTimeUser, 'HH:mm');
-
-  console.log('🕐 Form: Date/time processed:', {
-    dateStr,
-    time24,
-    displayTime: startTimeUser.toLocaleString(),
-    keepingOriginalESTTimes: {
-      fromDate: selectedSlot.startTime,
-      toDate: selectedSlot.endTime
-    }
-  });
-
-  // 🎯 KEY: Keep the ORIGINAL EST times for backend
-  setBookingData((prev) => ({
-    ...prev,
-    DateTimeInfo: {
-      SelectedDate: dateStr,              // User's date selection (for display)
-      SelectedTime: time24,               // User's time selection (for display) 
-      FromDate: selectedSlot.startTime,   // ✅ KEEP original EST time
-      ToDate: selectedSlot.endTime,       // ✅ KEEP original EST time
-    },
-    StaffMemberIds: [selectedSlot.staffMemberId],
-  }));
-}, [selectedSlot, selectedDate, readOnlyMode]);
-
-  const fetchAvailableTimeSlots = useCallback(async () => {     
-  if (!selectedDate || !bookingData?.ServiceId) return;
-
-  updateLoadingState('timeSlots', true);
-  try {
-    console.log('🕐 ===== FETCH TIME SLOTS DEBUG =====');
-    console.log('🕐 selectedDate object:', selectedDate);
-    console.log('🕐 selectedDate.toString():', selectedDate.toString());
-    console.log('🕐 selectedDate.toLocaleDateString():', selectedDate.toLocaleDateString());
-    console.log('🕐 selectedDate.toISOString():', selectedDate.toISOString());
-    console.log('🕐 Mode check - editMode:', editMode, 'isViewMode:', isViewMode);
-    console.log('🕐 ServiceId:', bookingData.ServiceId);
-    
-    // 🔥 FIXED: Always use local date format to avoid timezone issues
-    // Format the selectedDate as YYYY-MM-DD and add T00:00:00
-    const year = selectedDate.getFullYear();
-    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-    const day = String(selectedDate.getDate()).padStart(2, '0');
-    const backendDateString = `${year}-${month}-${day}T00:00:00`;
-    
-    console.log('🕐 Date components - Year:', year, 'Month:', month, 'Day:', day);
-    console.log('🕐 Final backendDateString for API:', backendDateString);
-    console.log('🕐 =====================================');
-    
-    const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
-      bookingData.ServiceId,
-      backendDateString
-    );
-
-    console.log('🕐 Time slots received from backend:', response.length, 'slots');
-    console.log('🕐 Raw backend slots:', response.map(slot => ({
-      startTime: slot.startTime,
-      displayText: slot.displayText
-    })));
-
-    // Store the original backend time slots (they will be converted in TimeSelector)
-    setTimeSlots(response);
-
-    // 🔥 FIXED: Handle edit mode slot selection
-    if (editMode && bookingData.DateTimeInfo?.SelectedTime && !selectedSlot) {
-      const timeToMatch = bookingData.DateTimeInfo.SelectedTime; // This should be in HH:mm format
-      console.log("🕐 Edit mode: Looking for time slot matching:", timeToMatch);
-      
-      // Find matching slot by converting backend times and comparing
-      const matchingSlot = response.find(slot => {
-        try {
-          // Convert backend slot time to user timezone
-          const userSlotTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
-          const slotTimeFormatted = format(userSlotTime, 'HH:mm');
-          console.log(`🕐 Comparing: backend ${slot.startTime} -> user ${slotTimeFormatted} vs target ${timeToMatch}`);
-          return slotTimeFormatted === timeToMatch;
-        } catch (error) {
-          console.error('Error comparing slot time:', error);
-          return false;
-        }
-      });
-      
-      if (matchingSlot) {
-        console.log("✅ Found matching time slot in edit mode:", matchingSlot);
-        setSelectedSlot(matchingSlot);
-      } else {
-        console.log("❌ No matching time slot found in edit mode");
-        console.log("Available slot times:", response.map(slot => {
-          try {
-            const userTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
-            return format(userTime, 'HH:mm');
-          } catch (error) {
-            return 'Invalid';
-          }
-        }));
+    console.log('🕐 Form: Date/time processed:', {
+      dateStr,
+      time24,
+      displayTime: startTimeUser.toLocaleString(),
+      keepingOriginalESTTimes: {
+        fromDate: selectedSlot.startTime,
+        toDate: selectedSlot.endTime
       }
+    });
+
+    setBookingData((prev) => ({
+      ...prev,
+      DateTimeInfo: {
+        SelectedDate: dateStr,
+        SelectedTime: time24,
+        FromDate: selectedSlot.startTime,
+        ToDate: selectedSlot.endTime,
+      },
+      StaffMemberIds: [selectedSlot.staffMemberId],
+    }));
+  }, [selectedSlot, selectedDate, readOnlyMode]);
+
+  // UPDATED: Apply availability filtering to time slots
+  const fetchAvailableTimeSlots = useCallback(async () => {     
+    if (!selectedDate || !bookingData?.ServiceId) return;
+
+    updateLoadingState('timeSlots', true);
+    try {
+      console.log('🕐 ===== FETCH TIME SLOTS DEBUG =====');
+      console.log('🕐 selectedDate object:', selectedDate);
+      console.log('🕐 Mode check - editMode:', editMode, 'isViewMode:', isViewMode);
+      console.log('🕐 ServiceId:', bookingData.ServiceId);
+      
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const backendDateString = `${year}-${month}-${day}T00:00:00`;
+      
+      console.log('🕐 Final backendDateString for API:', backendDateString);
+      
+      const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
+        bookingData.ServiceId,
+        backendDateString
+      );
+
+      console.log('🕐 Time slots received from backend:', response.length, 'slots');
+
+      // NEW: Apply availability filtering for create mode only
+      let filteredSlots = response;
+      
+      if (!editMode && !readOnlyMode && dateRange) {
+        console.log('📅 Applying availability filtering to time slots...');
+        filteredSlots = AvailabilityService.filterTimeSlots(response, selectedDate, dateRange);
+        console.log(`📅 Filtered ${response.length} slots to ${filteredSlots.length} available slots`);
+      }
+
+      setTimeSlots(filteredSlots);
+
+      if (editMode && bookingData.DateTimeInfo?.SelectedTime && !selectedSlot) {
+        const timeToMatch = bookingData.DateTimeInfo.SelectedTime;
+        console.log("🕐 Edit mode: Looking for time slot matching:", timeToMatch);
+        
+        const matchingSlot = filteredSlots.find(slot => {
+          try {
+            const userSlotTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
+            const slotTimeFormatted = format(userSlotTime, 'HH:mm');
+            console.log(`🕐 Comparing: backend ${slot.startTime} -> user ${slotTimeFormatted} vs target ${timeToMatch}`);
+            return slotTimeFormatted === timeToMatch;
+          } catch (error) {
+            console.error('Error comparing slot time:', error);
+            return false;
+          }
+        });
+        
+        if (matchingSlot) {
+          console.log("✅ Found matching time slot in edit mode:", matchingSlot);
+          setSelectedSlot(matchingSlot);
+        } else {
+          console.log("❌ No matching time slot found in edit mode");
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching time slots for selected service:', error);
+      setTimeSlots([]);
+    } finally {
+      updateLoadingState('timeSlots', false);
     }
-  } catch (error) {
-    console.error('Error fetching time slots for selected service:', error);
-    setTimeSlots([]);
-  } finally {
-    updateLoadingState('timeSlots', false);
-  }
-}, [selectedService, selectedDate, editMode, isViewMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, selectedSlot]);
+  }, [selectedService, selectedDate, editMode, isViewMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, selectedSlot, dateRange]);
 
   const fetchAllFollowers = useCallback(async () => {
     updateLoadingState('followers', true);
     try {
-      // Always fetch regular followers
       const regularFollowersPromise = bookingService.getFollowers();
       
-      // If admin, also fetch global followers
       const promises = [regularFollowersPromise];
       if (isAdmin) {
         promises.push(bookingService.getGlobalFollowers());
       }
       
-      // Wait for all promises to resolve
       const results = await Promise.all(promises);
       
-      // Combine and deduplicate results
       let allFollowers: string[] = [];
       results.forEach(result => {
         if (Array.isArray(result)) {
@@ -563,7 +582,6 @@ const handleSubmit = async (e: React.FormEvent) => {
         }
       });
       
-      // Remove duplicates
       const uniqueFollowers = Array.from(new Set(allFollowers));
       setFetchedFollowers(uniqueFollowers);
       
@@ -575,98 +593,88 @@ const handleSubmit = async (e: React.FormEvent) => {
     }
   }, [isAdmin]);
 
-    // Handle adding a new follower
   const handleAddFollower = (newFollower: string) => {
-    if (readOnlyMode) return; // Prevent in view mode
+    if (readOnlyMode) return;
     
-    // Only add if not already in either list
     if (!fetchedFollowers.includes(newFollower) && !addedFollowers.includes(newFollower)) {
       setAddedFollowers(prev => [...prev, newFollower]);
     }
   };
 
-  // Add this effect after your state declarations
   useEffect(() => {
-  const initializeEditMode = async () => {
-    if (editMode && initialData) {
-      updateLoadingState('initializing', true);
-      
-      console.log('Edit mode activated with initial data:', initialData);
-      
-      const formattedData = mapCalendarBookingToFormData(initialData as any);
-
-      try {
-        const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
-        setLoanDetails(loanDetails);
-        setShowLoanDetails(true);
-        // NEW: Mark as validated for edit mode
-        setIsLoanDetailsValidated(true);
+    const initializeEditMode = async () => {
+      if (editMode && initialData) {
+        updateLoadingState('initializing', true);
         
-        setBookingData((prev) => ({
-          ...formattedData,
-          BorrowerInformation: {
-            FirstName: loanDetails.borrowerFirstName,
-            LastName: loanDetails.borrowerLastName,
-            Email: loanDetails.borrowerEmail,
-            PhoneNumber: loanDetails.borrowerPhone,
-            Address: {
-              Street: loanDetails.borrowerAddress,
-              City: loanDetails.borrowerCity,
-              State: loanDetails.borrowerState,
-              ZipCode: loanDetails.borrowerZipCode,
-            },
-          },
-        }));
+        console.log('Edit mode activated with initial data:', initialData);
+        
+        const formattedData = mapCalendarBookingToFormData(initialData as any);
 
-        console.log("after setting:", formattedData); // Use formattedData here
-
-        if (formattedData.DateTimeInfo?.SelectedDate) {
-          // 🔥 FIXED: For edit mode, use the date string directly without timezone conversion
-          // The SelectedDate should already be in the correct format (yyyy-MM-dd)
-          const dateStr = formattedData.DateTimeInfo.SelectedDate;
-          console.log('🗓️ Edit mode: Setting selectedDate from dateStr:', dateStr);
-          console.log('🗓️ Edit mode: Original booking start time:', initialData?.start?.dateTime);
+        try {
+          const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
+          setLoanDetails(loanDetails);
+          setShowLoanDetails(true);
+          setIsLoanDetailsValidated(true);
           
-          // Parse the date string directly as a local date
-          if (dateStr.includes('-')) {
-            const [year, month, day] = dateStr.split('-').map(Number);
-            const correctDate = new Date(year, month - 1, day); // month is 0-indexed
-            console.log('🗓️ Edit mode: Created selectedDate:', correctDate);
-            console.log('🗓️ Edit mode: Date components - Year:', year, 'Month:', month, 'Day:', day);
-            setSelectedDate(correctDate);
-          } else {
-            console.warn('🗓️ Edit mode: Invalid date format:', dateStr);
-            setSelectedDate(new Date());
+          setBookingData((prev) => ({
+            ...formattedData,
+            BorrowerInformation: {
+              FirstName: loanDetails.borrowerFirstName,
+              LastName: loanDetails.borrowerLastName,
+              Email: loanDetails.borrowerEmail,
+              PhoneNumber: loanDetails.borrowerPhone,
+              Address: {
+                Street: loanDetails.borrowerAddress,
+                City: loanDetails.borrowerCity,
+                State: loanDetails.borrowerState,
+                ZipCode: loanDetails.borrowerZipCode,
+              },
+            },
+          }));
+
+          console.log("after setting:", formattedData);
+
+          if (formattedData.DateTimeInfo?.SelectedDate) {
+            const dateStr = formattedData.DateTimeInfo.SelectedDate;
+            console.log('🗓️ Edit mode: Setting selectedDate from dateStr:', dateStr);
+            
+            if (dateStr.includes('-')) {
+              const [year, month, day] = dateStr.split('-').map(Number);
+              const correctDate = new Date(year, month - 1, day);
+              console.log('🗓️ Edit mode: Created selectedDate:', correctDate);
+              setSelectedDate(correctDate);
+            } else {
+              console.warn('🗓️ Edit mode: Invalid date format:', dateStr);
+              setSelectedDate(new Date());
+            }
           }
-        }
 
-        if (formattedData.Followers) {
-          const followerArray = formattedData.Followers.split(',');
-          setFetchedFollowers(followerArray);
+          if (formattedData.Followers) {
+            const followerArray = formattedData.Followers.split(',');
+            setFetchedFollowers(followerArray);
+          }
+        } catch (error) {
+          console.error('Error initializing edit mode:', error);
+        } finally {
+          updateLoadingState('initializing', false);
         }
-      } catch (error) {
-        console.error('Error initializing edit mode:', error);
-      } finally {
-        updateLoadingState('initializing', false);
       }
-    }
-  };
+    };
 
-  initializeEditMode();
-}, [editMode, initialData]);
+    initializeEditMode();
+  }, [editMode, initialData]);
 
+  // UPDATED: Remove automatic availability fetching on mount
   useEffect(() => {
     fetchAvailableServicesData();
     fetchAllFollowers();
+    
+    // Note: Availability settings will be fetched when service is selected
   }, [fetchAvailableServicesData, fetchAllFollowers]);
 
-  // Update bookingData.Followers whenever either follower list changes
   useEffect(() => {
-    // Combine fetched (read-only) and added followers
     const allFollowers = [...fetchedFollowers, ...addedFollowers];
-    // Remove any duplicates
     const uniqueFollowers = Array.from(new Set(allFollowers));
-    // Join as comma-separated string for the API
     const followersString = uniqueFollowers.join(',');
     
     setBookingData(prev => ({
@@ -682,14 +690,13 @@ const handleSubmit = async (e: React.FormEvent) => {
   }, [selectedService, selectedDate, readOnlyMode]);
 
   useEffect(() => {
-    if (!readOnlyMode) { // Only handle date/time select if not in view mode
+    if (!readOnlyMode) {
       handleDateTimeSelect();
     }
   }, [selectedSlot, selectedDate, handleDateTimeSelect, readOnlyMode]);
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
-      {/* Loading Backdrop for major operations */}
       <Backdrop
         sx={{ 
           color: '#fff', 
@@ -709,18 +716,18 @@ const handleSubmit = async (e: React.FormEvent) => {
         </Box>
       </Backdrop>
 
-      {/* Loading Progress Bar */}
       {isAnyLoading && !loadingStates.submitting && !loadingStates.initializing && (
         <Box sx={{ width: '100%', position: 'sticky', top: 0, zIndex: 10 }}>
           <LinearProgress />
         </Box>
       )}
 
-      <Grid 
+      <Grid
       container 
       spacing={2} 
-      padding={{xs: 2, sm: 4}}
+      padding={2}
       sx={{
+        width: '100%',
         margin: 0,
         borderRadius: '10px',
         color: 'gray',
@@ -739,10 +746,10 @@ const handleSubmit = async (e: React.FormEvent) => {
             <CloseIcon sx={{float: 'right', color: 'gray', cursor: 'pointer'}} onClick={onClose} />
         </Grid>
 
-        <Box sx={{ width: '100%', padding: {xs: 2, sm: 4} }}>
+        <Box sx={{ width: '100%', padding: 2 }}>
           <Grid item xs={12}>
             <Typography variant="h6">Client Details</Typography>
-            <Grid sx={{display: 'flex', gap: '4px', mt: '10px'}}>
+            <Grid sx={{display: 'flex', gap: '4px', mt: '10px', maxHeight: '56px'}}>
               <TextField
                 fullWidth
                 label="Encompass Loan ID"
@@ -780,7 +787,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         )}
 
         {showLoanDetails && (
-        <Box sx={{ width: '100%', padding: {xs: 2, sm: 4} }}>
+        <Box sx={{ width: '100%', padding: 2 }}>
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Typography variant="h6">Borrower Information</Typography>
@@ -944,7 +951,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         </Box>
       )}
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sx={{padding: '16px'}}>
           <Typography variant="h6">Appointment Details</Typography>
           <TextField
             fullWidth
@@ -968,9 +975,18 @@ const handleSubmit = async (e: React.FormEvent) => {
           </TextField>
         </Grid>
 
-        <Grid item xs={12}>
+        {isLoadingAvailability && (
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
+              <CircularProgress size={24} />
+              <Typography color="text.secondary">Loading availability settings...</Typography>
+            </Box>
+          </Grid>
+        )}
+
+        <Grid item xs={12} sx={{padding: '16px'}}>
           <StaticDatePicker
-            disabled={(!selectedService && !editMode) || readOnlyMode}
+            disabled={(!selectedService && !editMode) || readOnlyMode || isLoadingAvailability}
             value={selectedDate}
             onChange={(date: Date | null) => !readOnlyMode && setSelectedDate(date)}
             orientation={isMobile ? 'portrait' : 'landscape'}
@@ -978,21 +994,115 @@ const handleSubmit = async (e: React.FormEvent) => {
               actionBar: { actions: [] }
             }}
             readOnly={readOnlyMode}
-            disablePast={true}
+            // NEW: Apply availability constraints for create mode
+            minDate={!editMode && !readOnlyMode && dateRange ? dateRange.minDate : undefined}
+            maxDate={!editMode && !readOnlyMode && dateRange ? dateRange.maxDate : undefined}
             shouldDisableDate={(date) => {
-              // In edit mode, allow the currently selected date even if it's in the past
+              // For create mode, apply availability constraints
+              if (!editMode && !readOnlyMode) {
+                // Require service selection first
+                if (!selectedService) {
+                  console.log('📅 Disabling date - no service selected:', date.toLocaleDateString());
+                  return true;
+                }
+                
+                // If we have dateRange constraints, apply them
+                if (dateRange) {
+                  const shouldDisable = AvailabilityService.shouldDisableDate(date, dateRange);
+                  if (shouldDisable) {
+                    console.log('📅 Disabling date due to availability constraints:', date.toLocaleDateString());
+                    return true;
+                  }
+                }
+                
+                // 🔥 REMOVED: Don't add extra past date filtering since AvailabilityService handles it
+                return false;
+              }
+              
+              // For edit mode, allow the currently selected date even if it's in the past
               if (editMode && selectedDate && date.toDateString() === selectedDate.toDateString()) {
                 return false;
               }
-              // For all other cases, disable past dates
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              return date < today;
+              
+              // For edit mode, disable past dates (but allow current selected date)
+              if (editMode) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const dateToCheck = new Date(date);
+                dateToCheck.setHours(0, 0, 0, 0);
+                return dateToCheck < today;
+              }
+              
+              // Default: don't disable
+              return false;
             }}
+            // ADDED: Disable past dates in create mode by default
+            disablePast={!editMode && !readOnlyMode}
           />
+          
+          {/* Show message when no service is selected */}
+          {!editMode && !readOnlyMode && !selectedService && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+              <Typography variant="body2" color="grey.700">
+                Please select a service first to see available dates.
+              </Typography>
+            </Box>
+          )}
+          
+          {/* Show message when service is selected but availability is loading */}
+          {!editMode && !readOnlyMode && selectedService && isLoadingAvailability && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+              <Typography variant="body2" color="grey.700">
+                Loading availability for selected service...
+              </Typography>
+            </Box>
+          )}
         </Grid>
 
-        <Grid container sx={{display: 'flex', flexDirection: 'column', width: '100%'}}>
+        {/* Debug info display (remove after debugging) */}
+        {!editMode && !readOnlyMode && process.env.NODE_ENV === 'development' && (
+          <Grid item xs={12} sx={{padding: '16px'}}>
+            <Box sx={{ p: 2, bgcolor: 'grey.100', borderRadius: 1, mt: 2 }}>
+              <Typography variant="h6" color="grey.700">DEBUG INFO</Typography>
+              <Typography variant="body2" color="grey.700">
+                <strong>Selected Service:</strong> {selectedService?.id || 'None'}<br/>
+                <strong>Has Availability Settings:</strong> {availabilitySettings ? 'Yes' : 'No'}<br/>
+                <strong>Has Date Range:</strong> {dateRange ? 'Yes' : 'No'}<br/>
+                <strong>Loading Availability:</strong> {isLoadingAvailability ? 'Yes' : 'No'}<br/>
+                {availabilitySettings && (
+                  <>
+                    <strong>Min Lead Time:</strong> {availabilitySettings.minimumLeadTime}<br/>
+                    <strong>Max Advance:</strong> {availabilitySettings.maximumAdvance}<br/>
+                  </>
+                )}
+                {dateRange && (
+                  <>
+                    <strong>Min Date:</strong> {dateRange.minDate.toLocaleDateString()}<br/>
+                    <strong>Max Date:</strong> {dateRange.maxDate.toLocaleDateString()}<br/>
+                    <strong>Min DateTime (Local):</strong> {dateRange.minDateTime.toLocaleString()}<br/>
+                    <strong>Max DateTime (Local):</strong> {dateRange.maxDateTime.toLocaleString()}<br/>
+                  </>
+                )}
+              </Typography>
+            </Box>
+          </Grid>
+        )}
+
+        {/* Availability info display */}
+        {!editMode && !readOnlyMode && dateRange && availabilitySettings && (
+          <Grid item xs={12} sx={{padding: '16px'}}>
+            <Box sx={{ bgcolor: 'grey.100', borderRadius: 1, mt: 2, p: 2 }}>
+              <Typography variant="body2" color="grey.700">
+                <strong>Booking Window:</strong> From {dateRange.minDate.toLocaleDateString()} to {dateRange.maxDate.toLocaleDateString()}
+              </Typography>
+              <Typography variant="caption" color="grey.700">
+                Minimum lead time: {availabilitySettings.minimumLeadTime} | Maximum advance: {availabilitySettings.maximumAdvance}
+              </Typography>
+            </Box>
+          </Grid>
+        )}
+
+        <Grid container sx={{display: 'flex', flexDirection: 'column', width: '100%', padding: '16px'}}>
           {(timeSlots.length > 0 || selectedSlot || (editMode && selectedDate)) && (
             <TimeSelector
             timeSlots={timeSlots}
@@ -1022,7 +1132,7 @@ const handleSubmit = async (e: React.FormEvent) => {
           )}
 
           {!readOnlyMode && (
-            <Grid sx={{display: 'flex', gap: '1rem', mt: '16px'}}>
+            <Grid sx={{display: 'flex', gap: '1rem'}}>
               <Grid item xs={6}>
                 <Button
                   fullWidth

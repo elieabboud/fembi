@@ -71,7 +71,7 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
   };
 
   return (
-    <Box sx={{ justifySelf: 'start', p: '16px' }}>
+    <Box sx={{ justifySelf: 'start'}}>
       <Typography variant="h6" gutterBottom>
         {readOnly ? 'Selected Time' : 'Select Time'}
       </Typography>

@@ -198,27 +198,31 @@ Note: All times have been converted to your local timezone (${userTimezone}) fro
       } else {
         value = booking.customerName;
       }
-    } else if (id === 'loanData' && column.label === 'Loan Closer') {
-      value = booking.loanData?.loanOfficer;
-    } else if (id === 'loanData' && column.label === 'Loan Officer') {
-      value = booking.loanData?.loanOfficer;
-    } else if (id === 'loanData' && column.label === 'DPA Program') {
-      value = booking.loanData?.loanType;
+    } else if (id === 'LoanCloser' && column.label === 'Loan Closer') {
+      value = booking.loanData?.loanCloser || booking.LoanCloser;
+    } else if (id === 'LoanOfficer' && column.label === 'Loan Officer') {
+      value = booking.loanData?.loanOfficer || booking.LoanOfficer;
+    } else if (id === 'dpa' && column.label === 'DPA Program') {
+      value = booking.loanData?.dpa || booking.loanData?.loanType || booking.dpa;
     } else if (id === 'start' && column.label === 'Closing Date') {
       if (booking.start?.dateTime) {
-        // Use timezone conversion for email
         value = TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy');
       }
-    } else if (id === 'start' && column.label === 'Closing Time') {
+    } else if (id === 'end' && column.label === 'Closing Time') {
       if (booking.start?.dateTime) {
-        // Use timezone conversion for email
         value = TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a');
       }
-    } else if (id === 'serviceLocation') {
-      value = booking.serviceLocation?.displayName;
+    } else if (id === 'serviceName') {
+      value = booking.serviceName;
     } else if (id === 'status') {
       if (booking.status) {
-        value = booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
+        switch (booking.status) {
+          case 'upcoming': value = 'Upcoming'; break;
+          case 'inProgress': value = 'In Progress'; break;
+          case 'completed': value = 'Completed'; break;
+          case 'canceled': value = 'Canceled'; break;
+          // default:  value = (status as string).charAt(0).toUpperCase() + (status as string).slice(1);/
+        }
       }
     } else {
       value = booking[id as keyof calendarBooking];

@@ -39,7 +39,8 @@ import { CreateAppointmentRequest } from '../types/CreateAppointmentRequest';
 import { LoanDetails } from '../types/loanDetails';
 import Confirmation from '../components/forms/Confirmation';
 import { EmailService } from '../services/emailService'; 
-
+import { dummyData } from '../assets/dummyData';
+import { TimezoneService } from '../services/timezoneUtils';
 
 // Custom sorting function for bookings
 const sortBookings = (bookings: calendarBooking[]): calendarBooking[] => {
@@ -181,19 +182,122 @@ const Bookings: React.FC = () => {
   useEffect(() => {
     let filtered = [...bookings];
     
-    // Apply search query filter
-    if (searchQuery.trim()) {
-      const lowercaseQuery = searchQuery.toLowerCase();
-      filtered = filtered.filter((booking) => {
-        return (
-          booking.loanData?.borrowerFirstName?.toLowerCase().includes(lowercaseQuery) ||
-          booking.loanData?.borrowerLastName?.toLowerCase().includes(lowercaseQuery) ||
-          booking.loanData?.borrowerAddress?.toLowerCase().includes(lowercaseQuery) ||
-          booking.loanData?.borrowerCity?.toLowerCase().includes(lowercaseQuery) ||
-          booking.loanData?.borrowerState?.toLowerCase().includes(lowercaseQuery) ||
-          booking.loanData?.loanOfficer?.toLowerCase().includes(lowercaseQuery)
-        );
+    const searchInBooking = (booking: calendarBooking, query: string): boolean => {
+      const lowercaseQuery = query.toLowerCase();
+      
+      const getNestedValue = (obj: any, path: string): string => {
+        return path.split('.').reduce((current, key) => current?.[key], obj) || '';
+      };
+      
+      const extractSearchableText = (value: any): string => {
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number') return value.toString();
+        if (typeof value === 'boolean') return value.toString();
+        if (typeof value === 'object') {
+          return JSON.stringify(value);
+        }
+        return String(value);
+      };
+      
+      const getFormattedDateTimeValues = (booking: calendarBooking): string[] => {
+        const values: string[] = [];
+        
+        if (booking.start?.dateTime) {
+          try {
+            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy')); // "June 1, 2025"
+            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMM d, yyyy'));   // "Jun 1, 2025"
+            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MM/dd/yyyy'));    // "06/01/2025"
+            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'yyyy-MM-dd'));    // "2025-06-01"
+            
+            values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a'));        // "9:00 AM"
+            values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'HH:mm'));         // "09:00"
+            values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'h a'));           // "9 AM"
+            
+            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy') + ' ' + 
+                      TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a')); // "June 1, 2025 9:00 AM"
+          } catch (error) {
+            console.warn('Error formatting date/time for search:', error);
+          }
+        }
+        
+        return values;
+      };
+      
+      const searchableFields = [
+        // Direct booking properties
+        'bookingId',
+        'customerName',
+        'serviceName',
+        'customerEmailAddress',
+        'customerPhone',
+        'status',
+        'encompassLoanId',
+        'LoanCloser',
+        'LoanOfficer',
+        'dpa',
+        
+        // Loan data properties
+        'loanData.borrowerFirstName',
+        'loanData.borrowerLastName',
+        'loanData.borrowerEmail',
+        'loanData.borrowerPhone',
+        'loanData.borrowerAddress',
+        'loanData.borrowerCity',
+        'loanData.borrowerState',
+        'loanData.borrowerZipCode',
+        'loanData.loanNumber',
+        'loanData.loanType',
+        'loanData.loanAmount',
+        'loanData.loanOfficer',
+        'loanData.loanCloser',
+        'loanData.dpa',
+        'loanData.notes',
+        
+        // Service location properties
+        'serviceLocation.displayName',
+        'serviceLocation.address.street',
+        'serviceLocation.address.city',
+        'serviceLocation.address.state',
+        'serviceLocation.address.postalCode',
+        
+        // Customer array (if exists)
+        'customers.0.name',
+        'customers.0.emailAddress',
+        'customers.0.phone'
+      ];
+      
+      // Search through all defined fields
+      const fieldMatches = searchableFields.some(fieldPath => {
+        const value = getNestedValue(booking, fieldPath);
+        const searchableText = extractSearchableText(value).toLowerCase();
+        return searchableText.includes(lowercaseQuery);
       });
+      
+      // Search through formatted date/time values
+      const formattedDateTimeValues = getFormattedDateTimeValues(booking);
+      const dateTimeMatches = formattedDateTimeValues.some(dateTimeValue => 
+        dateTimeValue.toLowerCase().includes(lowercaseQuery)
+      );
+      
+      // Also search for status in formatted form
+      const formattedStatus = booking.status ? (() => {
+        switch (booking.status) {
+          case 'upcoming': return 'Upcoming';
+          case 'inProgress': return 'In Progress';
+          case 'completed': return 'Completed';
+          case 'canceled': return 'Canceled';
+          // default: return booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
+        }
+      })() : '';
+      const statusMatches = formattedStatus.toLowerCase().includes(lowercaseQuery);
+      
+      return fieldMatches || dateTimeMatches || statusMatches;
+    };
+    
+    // Apply search query filter using enhanced search
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(booking => searchInBooking(booking, searchQuery));
     }
     
     // Apply status filter
@@ -207,8 +311,9 @@ const Bookings: React.FC = () => {
     // Apply loan Officers filter
     if (officersFilter.length > 0) {
       filtered = filtered.filter(booking => {
-        if(!booking.loanData) return false;
-        return officersFilter.includes(booking.loanData.loanOfficer);
+        if (!booking.loanData) return false;
+        const officer = booking.loanData.loanOfficer || booking.LoanOfficer;
+        return officer && officersFilter.includes(officer);
       });
     }
     
@@ -217,7 +322,7 @@ const Bookings: React.FC = () => {
       filtered = filtered.filter(booking => booking.serviceName === serviceFilter);
     }
 
-    // Apply sorting to filtered results as well
+    // Apply sorting to filtered results
     const sortedFiltered = sortBookings(filtered);
     setFilteredBookings(sortedFiltered);
   }, [searchQuery, bookings, statusFilter, officersFilter, serviceFilter]);

@@ -9,14 +9,18 @@ interface MonthViewProps {
   currentDate: Date;
   events: calendarBooking[];
   onDateChange: (date: Date) => void;
-  onEventClick?: (booking: calendarBooking) => void; // Add this prop
+  onEventClick?: (booking: calendarBooking) => void;
+  onViewChange?: (view: 'month' | 'week' | 'day' | 'agenda') => void;
+  onDayClick?: (date: Date) => void;
 }
 
 const MonthView: React.FC<MonthViewProps> = ({ 
   currentDate, 
   events, 
   onDateChange,
-  onEventClick 
+  onEventClick,
+  onViewChange,
+  onDayClick
 }) => {
   const monthStart = startOfMonth(currentDate);
 
@@ -80,6 +84,14 @@ const MonthView: React.FC<MonthViewProps> = ({
           return (
             <Grid
               item
+              onClick={() => {
+                if (onDayClick) {
+                  onDayClick(day);
+                } else {
+                  onDateChange(day);
+                  if (onViewChange) onViewChange('day');
+                }
+              }}
               key={index}
               sx={{
                 position: 'relative',
@@ -88,9 +100,20 @@ const MonthView: React.FC<MonthViewProps> = ({
                 p: 1,
                 backgroundColor: isCurrentDay ? 'rgba(186, 183, 183, 0.12)' : 'transparent',
                 color: !isCurrentMonth ? 'rgba(0, 0, 0, 0.38)' : 'inherit',
+                '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.04)',
+                  cursor: 'pointer',
+                },
               }}
             >
-              <Typography sx={{position: 'absolute', top:1, left:1}} variant="body2" onClick={() => onDateChange(day)}>
+              <Typography 
+              sx={{position: 'absolute', top:1, left:1}} 
+              variant="body2"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDateChange(day);
+                if (onViewChange) onViewChange('day');
+              }}>
                 {day.getDate()}
               </Typography>
 
@@ -122,6 +145,8 @@ const MonthView: React.FC<MonthViewProps> = ({
                         borderRadius: '4px',
                         p: 0.5,
                         mb: 0.5,
+                        flexShrink: 0,
+                        minHeight: '20px',
                         fontSize: '0.75rem',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
