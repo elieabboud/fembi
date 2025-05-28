@@ -1,6 +1,8 @@
 import { dashboardResponseDTO } from "../types/dashboardResponseDTO";
 import { dashboardStats } from "../types/dashboardStats";
 import { TimezoneService } from "../services/timezoneUtils";
+import { User } from "../types/userModel";
+import { BookingService } from "../types/service";
 
 // Updated to handle timezone conversion
 export function toLocalISOString(date: Date): string {
@@ -35,7 +37,7 @@ export function formatDateForDisplay(backendTime: string, formatString: string =
   return TimezoneService.formatDateForUser(backendTime, formatString);
 }
 
-export const mapApiResponseToDashboardStats = (apiResponse: dashboardResponseDTO): dashboardStats => {
+export const mapApiResponseToDashboardStats = (apiResponse: dashboardResponseDTO, agentsList: User[], servicesList: BookingService[]): dashboardStats => {
   const colors = ['#2e7d32', '#ffc107', '#1976d2', '#d32f2f', '#9c27b0', '#ff5722'];
 
   // Monthly closings pie chart data
@@ -47,17 +49,22 @@ export const mapApiResponseToDashboardStats = (apiResponse: dashboardResponseDTO
 
   // Closings by owner pie chart data
   const closingsByAgentPie = apiResponse.getClosingsPerOwner.totalClosingsPerOwner.map((owner, i) => ({
-    agent: owner.ownerName,
+    agentFirstName: agentsList.find(agent => agent.microsoft_id === owner.ownerName)?.first_name,
+    agentLastName: agentsList.find(agent => agent.microsoft_id === owner.ownerName)?.last_name,
     closings: parseInt(owner.numberOfMeetings),
     color: colors[i % colors.length],
   }));
 
+  const totalMeetingsByService = apiResponse.getClosingsByServiceAndMonth.totalMeetingsByService.map(item => {
+    const serviceName = servicesList.find( service => service.id === item.serviceId).displayName;
+    return {...item, serviceId: serviceName}
+  });
   // Closings by service bar chart data
-  const serviceNames = apiResponse.getClosingsByServiceAndMonth.totalMeetingsByService.map(s => s.serviceId);
-
+  const serviceNames = totalMeetingsByService.map(s => s.serviceId);
+ 
   // Collect all unique months from services data
   const monthSet = new Set<string>();
-  apiResponse.getClosingsByServiceAndMonth.totalMeetingsByService.forEach(service => {
+  totalMeetingsByService.forEach(service => {
     service.totalMeetingsByMonth.forEach(monthData => {
       monthSet.add(monthData.month);
     });
@@ -68,7 +75,7 @@ export const mapApiResponseToDashboardStats = (apiResponse: dashboardResponseDTO
   const closingsByServiceBar: { month: string; [serviceId: string]: number | string }[] = monthsSorted.map(month => {
     const entry: { month: string; [serviceId: string]: number | string } = { month };
     serviceNames.forEach(serviceId => {
-      const serviceData = apiResponse.getClosingsByServiceAndMonth.totalMeetingsByService.find(s => s.serviceId === serviceId);
+      const serviceData = totalMeetingsByService.find(s => s.serviceId === serviceId);
       const monthData = serviceData?.totalMeetingsByMonth.find(m => m.month === month);
       entry[serviceId] = monthData ? parseInt(monthData.numberOfMeetings) : 0;
     });

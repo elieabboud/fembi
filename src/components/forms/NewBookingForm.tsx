@@ -376,7 +376,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
 
     if (onSuccess) {
       onSuccess(bookingData, response);
-      //window.location.reload();
+      // window.location.reload();
     }
     } catch (error) {
       console.error(`Error ${editMode ? 'updating' : 'creating'} booking:`, error);
@@ -571,24 +571,31 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   const fetchAllFollowers = useCallback(async () => {
     updateLoadingState('followers', true);
     try {
-      const regularFollowersPromise = bookingService.getFollowers();
-      
-      const promises = [regularFollowersPromise];
-      if (isAdmin) {
-        promises.push(bookingService.getGlobalFollowers());
-      }
-      
-      const results = await Promise.all(promises);
-      
-      let allFollowers: string[] = [];
-      results.forEach(result => {
-        if (Array.isArray(result)) {
-          allFollowers = [...allFollowers, ...result];
+      debugger;
+      if(editMode === true && initialData?.followers !== null && initialData?.followers !== ""){
+
+        setFetchedFollowers(initialData?.followers.split(','));
+      }else{
+        const regularFollowersPromise = bookingService.getFollowers();
+        
+        const promises = [regularFollowersPromise];
+        if (isAdmin) {
+          promises.push(bookingService.getGlobalFollowers());
         }
-      });
-      
-      const uniqueFollowers = Array.from(new Set(allFollowers));
-      setFetchedFollowers(uniqueFollowers);
+        
+        const results = await Promise.all(promises);
+        
+        let allFollowers: string[] = [];
+        results.forEach(result => {
+          if (Array.isArray(result)) {
+            allFollowers = [...allFollowers, ...result];
+          }
+        });
+        
+        const uniqueFollowers = Array.from(new Set(allFollowers));
+        setFetchedFollowers(uniqueFollowers);
+      }
+     
       
     } catch (error) {
       console.error('Failed to fetch followers', error);

@@ -261,17 +261,17 @@ export const dummyData : calendarBooking[] = [
             "postalCode": "10002"
           }
         },
-        "timeZone": "America/Los_Angeles",
+        "timeZone": "Asia/Beirut",
         "customQuestionAnswers": []
       }
     ],
     "start": {
-      "dateTime": "2025-06-03T11:00:00",
-      "timeZone": "America/Los_Angeles"
+      "dateTime": "2025-06-03T03:00:00",
+      "timeZone": "Asia/Beirut"
     },
     "end": {
-      "dateTime": "2025-06-01T12:00:00",
-      "timeZone": "America/Los_Angeles"
+      "dateTime": "2025-06-03T04:00:00",
+      "timeZone": "Asia/Beirut"
     },
     "serviceLocation": {
       "displayName": "Main Office",

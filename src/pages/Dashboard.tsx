@@ -20,7 +20,6 @@ import {
   People as PeopleIcon,
   Event as EventIcon,
   AttachMoney as MoneyIcon,
-  MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import {
   PieChart,
@@ -44,6 +43,8 @@ import { dashboardStats } from '../types/dashboardStats';
 import { dashboardResponseDTO } from '../types/dashboardResponseDTO';
 import { mapApiResponseToDashboardStats } from '../utils/general';
 import { dashboardService } from '../services/dashboardService';
+import { bookingService } from '../services/bookingService';
+import { User } from '../types/userModel';
 
 const Dashboard: React.FC = () => {
   const theme = useTheme();
@@ -54,8 +55,10 @@ const Dashboard: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        const agents = (await bookingService.getUsers({ tableName: 'user' })).result as unknown as User[];
+        const services = (await bookingService.getAvailableServices());
         const apiResponse: dashboardResponseDTO = await dashboardService.getDashboardData();
-        const mappedStats = mapApiResponseToDashboardStats(apiResponse);
+        const mappedStats = mapApiResponseToDashboardStats(apiResponse, agents, services);
         setStats(mappedStats);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -185,14 +188,14 @@ const Dashboard: React.FC = () => {
     </Card>
   );
 
-  const AgentCard = ({ name, closings, color }: { name: string; closings: number; color: string }) => (
+  const AgentCard = ({ firstName, lastName, closings, color }: { firstName: string; lastName: string; closings: number; color: string }) => (
     <Stack direction="row" alignItems="center" spacing={2} sx={{ py: 1 }}>
       <Avatar sx={{ width: 32, height: 32, bgcolor: color, fontSize: '0.875rem' }}>
-        {name.split(' ').map(n => n[0]).join('').toUpperCase()}
+        {firstName.charAt(0).toUpperCase() + lastName.charAt(0).toUpperCase()}
       </Avatar>
       <Box sx={{ flexGrow: 1 }}>
         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-          {name}
+          {firstName + ' ' + lastName}
         </Typography>
       </Box>
       <Chip 
@@ -216,7 +219,7 @@ const Dashboard: React.FC = () => {
           Dashboard
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Welcome back! Your business analytics overview
+          Monitor business performance and analytics through data insights.
         </Typography>
       </Box>
 
@@ -228,7 +231,7 @@ const Dashboard: React.FC = () => {
             value={stats.summaryMetrics.totalClosings}
             icon={<EventIcon />}
             color="primary"
-            subtitle="All time closings"
+            subtitle="This year's closings"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -267,11 +270,6 @@ const Dashboard: React.FC = () => {
         <Grid item xs={12} md={4}>
           <ChartCard 
             title="Closings per officer"
-            action={
-              <IconButton size="small">
-                <MoreVertIcon />
-              </IconButton>
-            }
           >
             <Box sx={{ height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -283,13 +281,13 @@ const Dashboard: React.FC = () => {
                     innerRadius={60}
                     outerRadius={100}
                     dataKey="closings"
-                    nameKey="officer"
+                    nameKey="agentFirstName"
                   >
                     {stats.closingsByAgentPie.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip/>
                 </PieChart>
               </ResponsiveContainer>
             </Box>
@@ -297,7 +295,8 @@ const Dashboard: React.FC = () => {
               {stats.closingsByAgentPie.slice(0, 4).map((agent, index) => (
                 <AgentCard 
                   key={index}
-                  name={agent.agent} 
+                  firstName ={agent.agentFirstName}
+                  lastName ={agent.agentLastName}
                   closings={agent.closings} 
                   color={agent.color}
                 />
@@ -318,9 +317,6 @@ const Dashboard: React.FC = () => {
                   color={stats.summaryMetrics.monthlyGrowth >= 0 ? 'success' : 'error'} 
                   variant="outlined" 
                 />
-                <IconButton size="small">
-                  <MoreVertIcon />
-                </IconButton>
               </Box>
             }
           >
@@ -373,11 +369,6 @@ const Dashboard: React.FC = () => {
         <Grid item xs={12}>
           <ChartCard 
             title="Team Performance Comparison (Closings by Service)"
-            action={
-              <IconButton size="small">
-                <MoreVertIcon />
-              </IconButton>
-            }
           >
             <Box sx={{ height: 400 }}>
               <ResponsiveContainer width="100%" height="100%">

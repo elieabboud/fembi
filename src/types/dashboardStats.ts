@@ -13,7 +13,8 @@ export interface dashboardStats {
   }>;
 
   closingsByAgentPie: Array<{
-    agent: string;
+    agentFirstName: string;
+    agentLastName: string;
     closings: number;
     color: string;
   }>;

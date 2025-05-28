@@ -39,7 +39,7 @@ export const createBookingColumns = (): Column[] => {
       priority: 1
     },
     { 
-      id: 'end',
+      id: 'start',
       label: 'Closing Time',
       format: (value: DateTimeInfo | null | undefined, row) => {
         if (!value || !value.dateTime) return '-';

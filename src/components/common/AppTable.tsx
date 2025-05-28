@@ -168,7 +168,7 @@ const AppTable: React.FC<AppTableProps> = ({
     setLoadingDelete(true);
     try {
       await bookingService.deleteBooking(selectedRow.bookingId);
-      window.location.reload();
+      // window.location.reload();
     } catch (error) {
       console.error('Delete failed', error);
     } finally {

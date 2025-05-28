@@ -43,6 +43,7 @@ export interface calendarBooking {
   serviceLocation: LocationRequest;
   status?: BookingStatus;
   color?: string;
+  followers?: string;
 }
 
 export interface BookingReminderRequest {
