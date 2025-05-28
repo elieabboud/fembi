@@ -76,9 +76,11 @@ const Sidebar: React.FC<SidebarProps> = ({ open = true, onClose }) => {
   }
 
   const logUserOut = () => {
-    console.log('Logging out...');
-    logout();
+    console.log('Sidebar: User confirmed logout');
     setLogoutOpen(false);
+    
+    // Call the logout from AuthContext (this handles everything)
+    logout();
   }
 
   const handleLogoutClose = () => {

@@ -11,14 +11,12 @@ export const loginRedirect = async () => {
       scopes: config.apiConfig.scopes
     };
     
-    // Use redirectMethod instead of popup
     return msalInstance.loginRedirect(loginRequest);
   } catch (error) {
     console.error("Error during login:", error);
     throw error;
   }
 };
-
 
 // Function to handle login with popup (keeping for reference)
 export const loginPopup = async () => {
@@ -34,13 +32,62 @@ export const loginPopup = async () => {
   }
 };
 
-// Function to handle logout
+// FIXED: Function to handle logout with proper error handling
 export const logout = () => {
-  const logoutRequest = {
-    account: msalInstance.getActiveAccount() as AccountInfo,
-  };
-  
-  return msalInstance.logout(logoutRequest);
+  try {
+    console.log('Starting logout process...');
+    
+    const account = msalInstance.getActiveAccount();
+    
+    if (account) {
+      console.log('Active account found, logging out:', account.username);
+      
+      const logoutRequest = {
+        account: account,
+        postLogoutRedirectUri: window.location.origin + '/login',
+        mainWindowRedirectUri: window.location.origin + '/login'
+      };
+      
+      // Clear the active account first
+      msalInstance.setActiveAccount(null);
+      
+      // Use logoutRedirect for better reliability
+      return msalInstance.logoutRedirect(logoutRequest);
+    } else {
+      console.log('No active account found, redirecting to login');
+      // If no active account, just redirect to login
+      window.location.href = '/login';
+    }
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Fallback: force redirect to login
+    forceLogout();
+  }
+};
+
+// NEW: Force logout utility function
+export const forceLogout = () => {
+  try {
+    console.log('Force logout initiated...');
+    
+    // Clear all local storage and session storage
+    sessionStorage.clear();
+    localStorage.clear();
+    
+    // Clear MSAL active account
+    msalInstance.setActiveAccount(null);
+    
+    // Note: MSAL v2 doesn't have clearCache() or removeAccount()
+    // The cache will be cleared when the user logs in again
+    // or when the tokens expire
+    
+    // Force redirect to login
+    window.location.href = '/login';
+  } catch (error) {
+    console.error('Force logout error:', error);
+    // Ultimate fallback - reload the page
+    window.location.reload();
+  }
 };
 
 // Function to get active account
@@ -52,17 +99,14 @@ export const getAccount = (): AccountInfo | null => {
 export const handleRedirectResponse = async () => {
   try {
     console.log("Handling redirect response...");
-    // Handle the redirect promise
     const response = await msalInstance.handleRedirectPromise();
     console.log("Redirect response:", response);
     
-    // Check if we have a response
     if (response) {
       console.log("Authentication successful, setting active account");
       return response.account;
     } else {
       console.log("No redirect response found");
-      // Even if no redirect response, check if we have an active account
       const account = msalInstance.getActiveAccount();
       console.log("Current active account:", account);
       return account;
@@ -92,7 +136,7 @@ export const acquireToken = async (): Promise<string> => {
   } catch (error) {
     console.error("Silent token acquisition failed, using redirect:", error);
     msalInstance.acquireTokenRedirect(silentRequest);
-    return ""; // This will not be reached as redirect will navigate away
+    return "";
   }
 };
 

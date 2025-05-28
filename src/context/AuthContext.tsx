@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { AccountInfo, EventType } from '@azure/msal-browser';
-import msalInstance, { getAccount, loginRedirect, logout, handleRedirectResponse, acquireToken } from '../services/authService';
+import msalInstance, { getAccount, loginRedirect, logout, handleRedirectResponse, acquireToken, forceLogout } from '../services/authService';
 import { User } from '../types/user';
 import { bookingService } from '../services/bookingService';
 
@@ -16,7 +16,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   user: null,
-  isAdmin: true,
+  isAdmin: false,
   login: async () => {},
   logout: () => {},
   loading: true
@@ -26,7 +26,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [isAdmin, setIsAdmin] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -37,22 +37,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (account) {
           setIsAuthenticated(true);
           convertAccountToUser(account);
+          
+          // Check admin status
+          try {
+            const isUserAdmin = await bookingService.getIsAdminUser();
+            debugger;
+            setIsAdmin(isUserAdmin === "true");
+          } catch (error) {
+            console.error('Error checking admin status:', error);
+            setIsAdmin(false);
+          }
         } else {
           // Check if user is already logged in
           const currentAccount = getAccount();
           if (currentAccount) {
             setIsAuthenticated(true);
             convertAccountToUser(currentAccount);
-            var isUserAdmin = await bookingService.getIsAdminUser();
-            if(isUserAdmin === "true"){
-              setIsAdmin(true);
-            }
             
-
+            try {
+              const isUserAdmin = await bookingService.getIsAdminUser();
+              setIsAdmin(isUserAdmin === "true");
+            } catch (error) {
+              console.error('Error checking admin status:', error);
+              setIsAdmin(false);
+            }
           }
         }
       } catch (error) {
         console.error('Authentication initialization failed:', error);
+        // Clear any partial auth state on error
+        setIsAuthenticated(false);
+        setUser(null);
+        setIsAdmin(false);
       } finally {
         setLoading(false);
       }
@@ -73,49 +89,82 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const handleLogin = async (): Promise<void> => {
     try {
       setLoading(true);
-      // Use redirect method instead of popup
       await loginRedirect();
-      // Note: we won't reach this point immediately as the page will redirect
     } catch (error) {
       console.error('Login failed:', error);
       setLoading(false);
     }
   };
 
+  // FIXED: Proper logout with state clearing BEFORE MSAL logout
   const handleLogout = (): void => {
-    setLoading(true);
-    logout();
-    setIsAuthenticated(false);
-    setUser(null);
-    setLoading(false);
+    try {
+      console.log('AuthContext: Starting logout...');
+      setLoading(true);
+      
+      // Clear React state FIRST (before MSAL logout which will redirect)
+      setIsAuthenticated(false);
+      setUser(null);
+      setIsAdmin(false);
+      
+      // Clear any local storage
+      try {
+        sessionStorage.removeItem('user');
+        sessionStorage.removeItem('isAdmin');
+        // Don't clear all sessionStorage as MSAL needs some data for logout
+      } catch (storageError) {
+        console.warn('Error clearing storage:', storageError);
+      }
+      
+      console.log('AuthContext: State cleared, calling MSAL logout...');
+      
+      // Call MSAL logout (this will redirect the page)
+      logout();
+      
+    } catch (error) {
+      console.error('Logout error in AuthContext:', error);
+      setLoading(false);
+      
+      // Fallback to force logout
+      console.log('Using force logout fallback...');
+      forceLogout();
+    }
   };
 
-  // In AuthContext.tsx, add this inside the AuthProvider:
-useEffect(() => {
   // Subscribe to MSAL events
-  const callbackId = msalInstance.addEventCallback((event) => {
-    if (event.eventType === EventType.ACQUIRE_TOKEN_SUCCESS || 
-        event.eventType === EventType.LOGIN_SUCCESS) {
-      console.log("Auth event:", event.eventType);
+  useEffect(() => {
+    const callbackId = msalInstance.addEventCallback((event) => {
+      console.log('MSAL Event:', event.eventType);
       
-      // Update authenticated state when login succeeds
-      if (event.payload) {
-        setIsAuthenticated(true);
-        const account = msalInstance.getActiveAccount();
-        if (account) {
-          convertAccountToUser(account);
+      if (event.eventType === EventType.ACQUIRE_TOKEN_SUCCESS || 
+          event.eventType === EventType.LOGIN_SUCCESS) {
+        console.log("Auth event:", event.eventType);
+        
+        if (event.payload) {
+          setIsAuthenticated(true);
+          const account = msalInstance.getActiveAccount();
+          if (account) {
+            convertAccountToUser(account);
+          }
         }
       }
-    }
-  });
-  
-  // Clean up subscription
-  return () => {
-    if (callbackId) {
-      msalInstance.removeEventCallback(callbackId);
-    }
-  };
-}, []);
+      
+      // Handle logout events
+      if (event.eventType === EventType.LOGOUT_SUCCESS) {
+        console.log('Logout successful');
+        setIsAuthenticated(false);
+        setUser(null);
+        setIsAdmin(false);
+        setLoading(false);
+      }
+    });
+    
+    return () => {
+      if (callbackId) {
+        msalInstance.removeEventCallback(callbackId);
+      }
+    };
+  }, []);
 
   return (
     <AuthContext.Provider

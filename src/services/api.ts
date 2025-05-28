@@ -10,18 +10,18 @@ const api = axios.create({
   });
   
   // Add request interceptor to include auth token
-  // api.interceptors.request.use(async (config) => {
-  //   try {
-  //     const token = await acquireToken();
-  //     if (token) {
-  //       config.headers.Authorization = `Bearer ${token}`;
-  //     }
-  //     return config;
-  //   } catch (error) {
-  //     console.error('Error getting token:', error);
-  //     return Promise.reject(error);
-  //   }
-  // });
+  api.interceptors.request.use(async (config) => {
+    try {
+      const token = await acquireToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    } catch (error) {
+      console.error('Error getting token:', error);
+      return Promise.reject(error);
+    }
+  });
   
   // Add response interceptor for error handling
   api.interceptors.response.use(
