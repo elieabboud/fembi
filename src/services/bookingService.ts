@@ -14,12 +14,10 @@ import { AvailabilitySettings } from './availabilityService';
 export const bookingService = {
 
   async getAvailability(serviceId?: string): Promise<AvailabilitySettings> {
-    console.log('📅 Getting availability settings...', serviceId ? `for serviceId: ${serviceId}` : '');
     
     const params = serviceId ? { serviceId } : {};
     const response = await api.get('/api/Application/v1/GetAvailability', { params });
     
-    console.log('📅 Availability settings received:', response.data);
     
     return {
       minimumLeadTime: response.data.minimumLeadTime || "00:00:00",
@@ -29,7 +27,6 @@ export const bookingService = {
 
   //get calendar data
   async getCalendarData(start: string, end: string): Promise<calendarBooking[]> {
-    console.log('📅 Getting calendar data:', { start, end });
     
     const response = await api.get('/api/Application/v1/GetCalendarData', {
       params: {
@@ -38,7 +35,6 @@ export const bookingService = {
       },
     });
     
-    console.log('📅 Raw calendar data received:', response.data?.length, 'bookings');
     
     // Backend returns times in EST/EDT - no conversion needed here
     // Conversion happens in UI components when displaying
@@ -55,7 +51,6 @@ export const bookingService = {
     selectedDateTime: string, 
     isEditMode: boolean = false
   ): Promise<TimeSlot[]> {
-    console.log('🕐 Getting time slots for:', { serviceId, selectedDateTime, isEditMode });
     
     let estDateString: string;
     
@@ -64,32 +59,24 @@ export const bookingService = {
       // Extract just the date part if it's already a full datetime
       const dateOnly = selectedDateTime.split('T')[0];
       estDateString = dateOnly;
-      console.log('🕐 Using date part directly for backend:', estDateString);
     } else {
       // If it's just a date string, use it as-is
       estDateString = selectedDateTime;
-      console.log('🕐 Using date string as-is for backend:', estDateString);
     }
-    
-    console.log('🕐 Final date sent to backend API:', `${estDateString}T00:00:00`);
-    
+        
     const response = await api.get('/api/Application/v1/GetAvailableTimeSlots', {
       params: {
         serviceId,
         selectedDateTime: `${estDateString}T00:00:00` // Send as EST date
       }
     });
-
-    console.log('🕐 Time slots received:', response.data?.length, 'slots');
     
     let timeSlots = response.data || [];
     
     // 🔥 NEW: Filter out past time slots in edit mode
     if (isEditMode && timeSlots.length > 0) {
-      console.log('✏️ Edit mode: Filtering out past time slots...');
       
       const now = new Date();
-      console.log('✏️ Current time:', now.toISOString());
       
       const filteredSlots = timeSlots.filter((slot: TimeSlot) => {
         try {
@@ -99,13 +86,6 @@ export const bookingService = {
           // Check if this slot is in the future
           const isFuture = slotStartTime > now;
           
-          if (!isFuture) {
-            console.log('✏️ Filtering out past slot:', {
-              slotTime: slot.startTime,
-              displayText: slot.displayText,
-              reason: 'Slot is in the past'
-            });
-          }
           
           return isFuture;
         } catch (error) {
@@ -114,7 +94,6 @@ export const bookingService = {
         }
       });
       
-      console.log(`✏️ Filtered ${timeSlots.length} slots to ${filteredSlots.length} future slots`);
       timeSlots = filteredSlots;
     }
     
@@ -126,31 +105,22 @@ export const bookingService = {
   async getAvailableServices(): Promise<BookingService[]> {
     const response = await api.get('/api/Application/v1/GetAvailableServices');
     const services = response.data.value;
-    console.log('🔧 Available services:', services?.length);
     return services || [];
   },
 
   //get loan details
-  async getLoanDetails(loanId: string): Promise<LoanDetails>{
-    console.log('🏠 Getting loan details for:', loanId);
-    
+  async getLoanDetails(loanId: string): Promise<LoanDetails>{    
     const response = await api.get('/api/Encompass/v1/GetLoanDetails', {
       params: {
         loanId: loanId
       },
     });
     
-    console.log('🏠 Loan details received for:', response.data?.loanId);
     return response.data;
   },
 
   //create appointment
  async postBooking(appointmentData: CreateAppointmentRequest): Promise<void> {
-    console.log('📝 Creating appointment with data:', appointmentData);
-    
-    // 🎯 SIMPLE FIX: The FromDate and ToDate should already be in EST format
-    // from the original time slots. NO conversion needed if they come from slots!
-    
     // Check if FromDate/ToDate look like EST times (no timezone suffix)
     const isEstFormat = (timeString: string) => {
       return timeString && !timeString.endsWith('Z') && !timeString.includes('+');
@@ -160,7 +130,6 @@ export const bookingService = {
 
     // Only convert if the times look like user local times (with Z or timezone)
     if (!isEstFormat(appointmentData.DateTimeInfo.FromDate)) {
-      console.log('🔄 Converting user local times to EST...');
       
       backendAppointmentData = {
         ...appointmentData,
@@ -170,25 +139,15 @@ export const bookingService = {
           ToDate: TimezoneService.convertLocalTimeToBackend(new Date(appointmentData.DateTimeInfo.ToDate)),
         }
       };
-    } else {
-      console.log('🎯 Times already in EST format, using as-is');
     }
 
-    console.log('📝 Sending to backend:', {
-      originalFromDate: appointmentData.DateTimeInfo.FromDate,
-      backendFromDate: backendAppointmentData.DateTimeInfo.FromDate,
-      originalToDate: appointmentData.DateTimeInfo.ToDate,
-      backendToDate: backendAppointmentData.DateTimeInfo.ToDate,
-    });
 
     const response = await api.post('/api/Application/v1/CreateAppointment', backendAppointmentData);
-    console.log('📝 Appointment created successfully');
     return response.data;
   },
 
   //update appointment - SIMPLIFIED FIX
   updateBooking: async (updateData: UpdateBookingRequest) => {    
-    console.log('✏️ Updating appointment:', updateData);
     
     // Same logic for updates
     const isEstFormat = (timeString: string) => {
@@ -198,21 +157,14 @@ export const bookingService = {
     let backendUpdateData = updateData;
 
     if (!isEstFormat(updateData.fromDate)) {
-      console.log('🔄 Converting update times to EST...');
       
       backendUpdateData = {
         ...updateData,
         fromDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.fromDate)),
         toDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.toDate)),
       };
-    } else {
-      console.log('🎯 Update times already in EST format');
-    }
+    } 
 
-    console.log('✏️ Sending update to backend:', {
-      original: updateData,
-      backend: backendUpdateData
-    });
     
     const response = await api.post(`/api/Application/v1/UpdateAppointment?appointmentId=${backendUpdateData.id}`, {
       DateTimeInfo: {
@@ -223,7 +175,7 @@ export const bookingService = {
       }
     });
 
-    console.log('✏️ Appointment updated successfully');
+   
     
     return {
       success: true,
@@ -234,13 +186,11 @@ export const bookingService = {
 
   //delete appointment
   async deleteBooking(appointmentId: string): Promise<void> {
-    console.log('🗑️ Deleting appointment:', appointmentId);
     
     const response = await api.delete('/api/Application/v1/DeleteAppointment', {
       params: { appointmentId }
     });
     
-    console.log('🗑️ Appointment deleted successfully');
     return response.data;
   },
 
@@ -248,13 +198,11 @@ export const bookingService = {
   //get followers
   async getFollowers(): Promise<string[]> {
     const response = await api.get('/api/Application/v1/GetFollowers');
-    console.log('👥 Followers retrieved:', response.data?.length);
     return response.data || [];
   },
 
   //set followers
   async setFollowers(followers: string[]): Promise<void> {
-    console.log('👥 Setting followers:', followers.length);
     const query = encodeURIComponent(followers.join(','));
     await api.post(`/api/Application/v1/SetFollowers?followers=${query}`);
   },
@@ -267,7 +215,6 @@ export const bookingService = {
       const query = encodeURIComponent(allFollowers.join(','));
       const response = await api.post(`/api/Application/v1/SetFollowers?followers=${query}`);
       
-      console.log('👥 Followers updated:', allFollowers.length);
     } catch (error) {
       console.error('Error updating followers:', error);
     }
@@ -276,13 +223,11 @@ export const bookingService = {
   // GET global followers
   async getGlobalFollowers(): Promise<string[]> {
     const response = await api.get('/api/Application/v1/GetGlobalFollowers');
-    console.log('🌐 Global followers retrieved:', response.data?.length);
     return response.data || [];
   },
 
   // SET global followers
   async setGlobalFollowers(followers: string[]): Promise<void> {
-    console.log('🌐 Setting global followers:', followers.length);
     const query = encodeURIComponent(followers.join(','));
     await api.post(`/api/Application/v1/SetGlobalFollowers?followers=${query}`);
   },
@@ -293,7 +238,6 @@ export const bookingService = {
       const existing = await this.getGlobalFollowers();
       const all = Array.from(new Set([...existing, ...newFollowers]));
       await this.setGlobalFollowers(all);
-      console.log('🌐 Global followers updated:', all.length);
     } catch (error) {
       console.error('Failed to update global followers:', error);
     }
@@ -302,7 +246,6 @@ export const bookingService = {
   //get users from DB
   async getUsers(getRequestDTO: GetRequestDTO): Promise<GetResponseDTO> {
     const response = await api.post('/api/Databases/v1/Get', getRequestDTO);
-    console.log('👤 Users retrieved:', response.data?.result?.length);
     return response.data;
   },
 

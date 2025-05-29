@@ -5,7 +5,6 @@ import { parseISO, format } from "date-fns";
 
 // 🔥 FIXED: Updated function to handle timezone conversion properly
 export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): CreateAppointmentRequest => {
-  console.log('🔄 Mapping calendar booking to form data:', calendarBooking);
   
   // Convert backend times to user's local timezone for form display
   let selectedDate = "";
@@ -13,18 +12,11 @@ export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): 
   
   if (calendarBooking.start && calendarBooking.start.dateTime) {
     try {
-      console.log('🔄 Converting backend time for form:', calendarBooking.start.dateTime);
       
       // Use TimezoneService to format date and time in user's timezone for form display
       selectedDate = TimezoneService.formatDateForUser(calendarBooking.start.dateTime, 'yyyy-MM-dd');
       selectedTime = TimezoneService.formatTimeForUser(calendarBooking.start.dateTime, 'HH:mm');
-      
-      console.log('🔄 Converted times for form:', {
-        original: calendarBooking.start.dateTime,
-        selectedDate,
-        selectedTime,
-        userTimezone: TimezoneService.getUserTimezone()
-      });
+    
     } catch (error) {
       console.error('❌ Error converting times for form:', error);
       // Fallback to current date/time
@@ -80,6 +72,5 @@ export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): 
     StaffMemberIds: calendarBooking.staffMemberIds || [],
   };
 
-  console.log('🔄 Mapped form data:', formData);
   return formData;
 };

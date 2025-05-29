@@ -101,12 +101,6 @@ export function addColorToBooking(booking: calendarBooking): calendarBooking {
     const status = booking.status || determineBookingStatus(booking);
     const color = getColorByServiceLocation(booking.serviceName);
 
-    // console.log('🎨 Assigning color:', { 
-    //     bookingId: booking.bookingId, 
-    //     status, 
-    //     color,
-    //     startTime: booking.start?.dateTime 
-    // });
 
     return {
         ...booking,

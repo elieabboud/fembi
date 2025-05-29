@@ -35,17 +35,13 @@ export const loginPopup = async () => {
 // 🔥 FIXED: Simple and reliable logout
 export const logout = (): void => {
   try {
-    console.log('authService: Starting logout...');
+
     
-    const account = msalInstance.getActiveAccount();
-    console.log('authService: Active account:', account?.username || 'None');
-    
+    const account = msalInstance.getActiveAccount();    
     // Clear the active account
     msalInstance.setActiveAccount(null);
-    console.log('authService: Active account cleared');
     
     if (account) {
-      console.log('authService: Performing logout redirect...');
       
       const logoutRequest = {
         account: account,
@@ -56,11 +52,9 @@ export const logout = (): void => {
       msalInstance.logoutRedirect(logoutRequest);
       
     } else {
-      console.log('authService: No active account, redirecting to login...');
       window.location.href = '/login';
     }
   } catch (error) {
-    console.error('authService: Logout error:', error);
     // Fallback: direct redirect
     window.location.href = '/login';
   }
@@ -69,16 +63,13 @@ export const logout = (): void => {
 // 🔥 IMPROVED: Enhanced force logout with better cleanup
 export const forceLogout = async (): Promise<void> => {
   try {
-    console.log('authService: Force logout initiated...');
     
     // 1. Clear MSAL active account
     msalInstance.setActiveAccount(null);
-    console.log('authService: MSAL active account cleared');
     
     // 2. Try to clear MSAL cache if possible
     try {
       const accounts = msalInstance.getAllAccounts();
-      console.log('authService: Found', accounts.length, 'accounts in cache');
       
       // For each account, try to remove it
       for (const account of accounts) {
@@ -98,7 +89,6 @@ export const forceLogout = async (): Promise<void> => {
     
     // 3. Clear all storage as fallback
     try {
-      console.log('authService: Clearing all storage...');
       sessionStorage.clear();
       localStorage.clear();
     } catch (storageError) {
@@ -106,14 +96,10 @@ export const forceLogout = async (): Promise<void> => {
     }
     
     // 4. Final fallback - redirect to login
-    console.log('authService: Redirecting to login...');
     window.location.href = '/login';
     
   } catch (error) {
     console.error('authService: Force logout error:', error);
-    
-    // Ultimate fallback - reload the page to clear everything
-    console.log('authService: Ultimate fallback - reloading page...');
     window.location.reload();
   }
 };
@@ -126,17 +112,12 @@ export const getAccount = (): AccountInfo | null => {
 // Function to handle the redirect response
 export const handleRedirectResponse = async () => {
   try {
-    console.log("authService: Handling redirect response...");
     const response = await msalInstance.handleRedirectPromise();
-    console.log("authService: Redirect response:", response);
     
     if (response) {
-      console.log("authService: Authentication successful, setting active account");
       return response.account;
     } else {
-      console.log("authService: No redirect response found");
       const account = msalInstance.getActiveAccount();
-      console.log("authService: Current active account:", account);
       return account;
     }
   } catch (error) {

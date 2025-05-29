@@ -234,13 +234,15 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
       const currentUserEmail = user?.email || '';
       
       const recipientEmails: string[] = [];
+      const mainRecipientEmail : string[] = [];
       
       if (currentUserEmail) {
         recipientEmails.push(currentUserEmail);
       }
       
       if (bookingData.BorrowerInformation.Email) {
-        recipientEmails.push(bookingData.BorrowerInformation.Email);
+        mainRecipientEmail.push(bookingData.BorrowerInformation.Email)
+        //recipientEmails.push(bookingData.BorrowerInformation.Email);
       }
       
       if (bookingData.Followers) {
@@ -331,8 +333,9 @@ DESCRIPTION:${eventDescription}
 END:VEVENT
 END:VCALENDAR`
       const emailRequest: EmailRequestDTO = {
-        // To: uniqueEmails,
-        To: ["bruno.farjallah@tacresearch.com"],
+         To: mainRecipientEmail,
+         Bcc: recipientEmails,
+        //To: ["bruno.farjallah@tacresearch.com"],
         Subject: `New Appointment Scheduled - ${bookingData.ServiceName} for ${borrowerName}`,
         Body: htmlBody,
         IsHtml: true,
