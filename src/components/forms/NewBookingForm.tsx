@@ -344,18 +344,7 @@ END:VCALENDAR`
           }
         ]
       };
-      debugger;
-      console.log(emailRequest);
       const emailResponse = await bookingService.sendEmail(emailRequest);
-
-      console.log("received response:" , emailResponse);
-      
-      if (emailResponse.Success) {
-        console.log(`Email notifications sent successfully to: ${uniqueEmails.join(', ')}`);
-      } else {
-        console.error('Failed to send some email notifications:', emailResponse.FailedRecipients);
-        console.error('Email error message:', emailResponse.Message);
-      }
       
     } catch (error) {
       console.error('Error sending email notifications:', error);
@@ -406,7 +395,6 @@ END:VCALENDAR`
       response = await bookingService.updateBooking(updateData);
     } else {
       response = await bookingService.postBooking(bookingData);
-      console.log('Post API Response:', response);
     }
 
     if (response) {
@@ -488,11 +476,9 @@ END:VCALENDAR`
       setServices(response);
       
       if (editMode && bookingData.ServiceId) {
-        console.log('looking for service');
         const matchedService = response.find(s => s.id === bookingData.ServiceId);
         if (matchedService) {
           setSelectedService(matchedService);
-          console.log("Selected service in edit mode:", matchedService);
         }
       }
     } catch (error) {
@@ -506,24 +492,10 @@ END:VCALENDAR`
   const handleDateTimeSelect = useCallback(() => {
     if (!selectedSlot || !selectedDate || readOnlyMode) return;
 
-    // console.log('🕐 Form: Handling date/time selection:', { 
-    //   selectedSlot: selectedSlot.startTime, 
-    //   selectedDate: selectedDate.toLocaleDateString() 
-    // });
 
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const startTimeUser = TimezoneService.convertBackendTimeToLocalReliable(selectedSlot.startTime);
     const time24 = format(startTimeUser, 'HH:mm');
-
-    // console.log('🕐 Form: Date/time processed:', {
-    //   dateStr,
-    //   time24,
-    //   displayTime: startTimeUser.toLocaleString(),
-    //   keepingOriginalESTTimes: {
-    //     fromDate: selectedSlot.startTime,
-    //     toDate: selectedSlot.endTime
-    //   }
-    // });
 
     setBookingData((prev) => ({
       ...prev,
@@ -543,47 +515,34 @@ END:VCALENDAR`
 
     updateLoadingState('timeSlots', true);
     try {
-      // console.log('🕐 ===== FETCH TIME SLOTS DEBUG =====');
-      // console.log('🕐 selectedDate object:', selectedDate);
-      // console.log('🕐 Mode check - editMode:', editMode, 'isViewMode:', isViewMode);
-      // console.log('🕐 ServiceId:', bookingData.ServiceId);
-      
+     
       const year = selectedDate.getFullYear();
       const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
       const day = String(selectedDate.getDate()).padStart(2, '0');
       const backendDateString = `${year}-${month}-${day}T00:00:00`;
-      
-      // console.log('🕐 Final backendDateString for API:', backendDateString);
-      
-      // 🔥 UPDATED: Pass edit mode to filter past slots
+  
       const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
         bookingData.ServiceId,
         backendDateString,
         editMode // Pass edit mode flag
       );
 
-      // console.log('🕐 Time slots received from backend:', response.length, 'slots');
-
       // Apply availability filtering for create mode only
       let filteredSlots = response;
       
       if (!editMode && !readOnlyMode && dateRange) {
-        // console.log('📅 Applying availability filtering to time slots...');
         filteredSlots = AvailabilityService.filterTimeSlots(response, selectedDate, dateRange);
-        // console.log(`📅 Filtered ${response.length} slots to ${filteredSlots.length} available slots`);
       }
 
       setTimeSlots(filteredSlots);
 
       if (editMode && bookingData.DateTimeInfo?.SelectedTime && !selectedSlot) {
         const timeToMatch = bookingData.DateTimeInfo.SelectedTime;
-        // console.log("🕐 Edit mode: Looking for time slot matching:", timeToMatch);
         
         const matchingSlot = filteredSlots.find(slot => {
           try {
             const userSlotTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
             const slotTimeFormatted = format(userSlotTime, 'HH:mm');
-            // console.log(`🕐 Comparing: backend ${slot.startTime} -> user ${slotTimeFormatted} vs target ${timeToMatch}`);
             return slotTimeFormatted === timeToMatch;
           } catch (error) {
             console.error('Error comparing slot time:', error);
@@ -592,10 +551,7 @@ END:VCALENDAR`
         });
         
         if (matchingSlot) {
-          // console.log("✅ Found matching time slot in edit mode:", matchingSlot);
           setSelectedSlot(matchingSlot);
-        } else {
-          // console.log("❌ No matching time slot found in edit mode");
         }
       }
     } catch (error) {
@@ -609,7 +565,6 @@ END:VCALENDAR`
   const fetchAllFollowers = useCallback(async () => {
     updateLoadingState('followers', true);
     try {
-      debugger;
       if(editMode === true && initialData?.followers !== null && initialData?.followers !== ""){
 
         setFetchedFollowers(initialData?.followers.split(','));
@@ -655,9 +610,7 @@ END:VCALENDAR`
     const initializeEditMode = async () => {
       if (editMode && initialData) {
         updateLoadingState('initializing', true);
-        
-        // console.log('Edit mode activated with initial data:', initialData);
-        
+                
         const formattedData = mapCalendarBookingToFormData(initialData as any);
 
         try {
@@ -682,19 +635,13 @@ END:VCALENDAR`
             },
           }));
 
-          // console.log("after setting:", formattedData);
-
           if (formattedData.DateTimeInfo?.SelectedDate) {
-            const dateStr = formattedData.DateTimeInfo.SelectedDate;
-            // console.log('🗓️ Edit mode: Setting selectedDate from dateStr:', dateStr);
-            
+            const dateStr = formattedData.DateTimeInfo.SelectedDate;            
             if (dateStr.includes('-')) {
               const [year, month, day] = dateStr.split('-').map(Number);
               const correctDate = new Date(year, month - 1, day);
-              // console.log('🗓️ Edit mode: Created selectedDate:', correctDate);
               setSelectedDate(correctDate);
             } else {
-              // console.warn('🗓️ Edit mode: Invalid date format:', dateStr);
               setSelectedDate(new Date());
             }
           }
@@ -1052,7 +999,6 @@ END:VCALENDAR`
               if (!editMode && !readOnlyMode) {
                 // Require service selection first
                 if (!selectedService) {
-                  // console.log('📅 Disabling date - no service selected:', date.toLocaleDateString());
                   return true;
                 }
                 
@@ -1060,12 +1006,10 @@ END:VCALENDAR`
                 if (dateRange) {
                   const shouldDisable = AvailabilityService.shouldDisableDate(date, dateRange);
                   if (shouldDisable) {
-                    // console.debug('📅 Disabling date due to availability constraints:', date.toLocaleDateString());
                     return true;
                   }
                 }
                 
-                // 🔥 REMOVED: Don't add extra past date filtering since AvailabilityService handles it
                 return false;
               }
               

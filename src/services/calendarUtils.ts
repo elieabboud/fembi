@@ -24,14 +24,12 @@ export const formatEventTime = (event: { start: DateTimeInfo; end: DateTimeInfo 
   }
 
   try {
-    // console.log('🕐 Formatting event time:', event.start.dateTime, '->', event.end.dateTime);
     
     // Use TimezoneService to format times in user's timezone
     const startTimeUser = TimezoneService.formatTimeForUser(event.start.dateTime, 'h:mm a');
     const endTimeUser = TimezoneService.formatTimeForUser(event.end.dateTime, 'h:mm a');
 
     const result = `${startTimeUser} - ${endTimeUser}`;
-    // console.log('🕐 Formatted event time result:', result);
     return result;
   } catch (error) {
     console.error('❌ Error formatting event time:', error);
@@ -72,7 +70,6 @@ export const groupEventsByDate = (events: calendarBooking[]): { [key: string]: c
     if (!event?.start?.dateTime) return;
     
     try {
-      // console.log('🗓️ Grouping event:', event.start.dateTime);
       
       // Convert backend time to user's timezone
       const userDate = TimezoneService.convertBackendTimeToLocalReliable(event.start.dateTime);
@@ -80,7 +77,6 @@ export const groupEventsByDate = (events: calendarBooking[]): { [key: string]: c
       // Format date in user's timezone
       const dateKey = format(userDate, 'yyyy-MM-dd');
       
-      // console.log('🗓️ Event grouped under date:', dateKey);
       
       if (!grouped[dateKey]) {
         grouped[dateKey] = [];
@@ -155,13 +151,10 @@ export function parseDateTime(dateTimeInfo: { dateTime?: string } | undefined): 
       console.warn('Invalid date parsed from:', dateTimeInfo.dateTime);
       return new Date();
     }
-    
-    // console.log('🗓️ Parsing dateTime:', dateTimeInfo.dateTime);
-    
+        
     // Use TimezoneService to convert backend time to user's timezone
     const userDate = TimezoneService.convertBackendTimeToLocalReliable(dateTimeInfo.dateTime);
     
-    // console.log('🗓️ Parsed to user timezone:', userDate.toLocaleString());
     return userDate;
   } catch (error) {
     console.error('Error parsing date:', error);

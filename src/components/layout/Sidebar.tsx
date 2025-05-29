@@ -72,34 +72,21 @@ const Sidebar: React.FC<SidebarProps> = ({ open = true, onClose }) => {
   };
 
   const handleLogout = () => {
-    console.log('Sidebar: Opening logout dialog');
     setLogoutOpen(true);
   };
 
   // 🔥 FIXED: Proper async logout handler
   const logUserOut = async () => {
     try {
-      console.log('Sidebar: User confirmed logout - starting logout process');
       setLogoutOpen(false);
-      
-      // Call the logout from AuthContext (this is async)
       await logout();
       
-      // Note: If logout is successful, user will be redirected
-      // so this line might not execute
-      console.log('Sidebar: Logout completed');
-      
     } catch (error) {
-      console.error('Sidebar: Logout failed:', error);
-      
-      // Fallback: force redirect to login page
-      console.log('Sidebar: Logout failed, forcing redirect to login');
       window.location.href = '/login';
     }
   };
 
   const handleLogoutClose = () => {
-    console.log('Sidebar: Logout dialog closed');
     setLogoutOpen(false);
   };
 

@@ -40,8 +40,6 @@ const Profile: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle profile update logic
-    console.log('Updated profile:', formData);
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {

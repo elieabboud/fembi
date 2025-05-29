@@ -17,7 +17,6 @@ const LoanAgentsInput: FC<LoanAgentsInputProps> = ({
 }) => {
 
   const handleAgentsChange = (_event: SyntheticEvent, newValue: User[]) => {
-    console.log('LoanAgentsInput: Selection changed to:', newValue.map(a => a.first_name));
     onChange(newValue);
   };
 

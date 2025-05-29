@@ -21,37 +21,23 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
   // 🔥 FIXED: Convert time slots ONLY once when they change
   const convertedTimeSlots = useMemo(() => {
     if (!timeSlots || timeSlots.length === 0) {
-      console.log('🕐 TimeSelector: No time slots to convert');
       return [];
     }
 
-    console.log('🕐 TimeSelector: Converting', timeSlots.length, 'time slots to user timezone');
-    console.log('🕐 Raw time slots:', timeSlots.map(slot => ({
-      startTime: slot.startTime,
-      displayText: slot.displayText
-    })));
-    
     const converted = timeSlots.map((slot, index) => {
-      console.log(`🕐 Converting slot ${index + 1}:`, slot.startTime);
       const convertedSlot = TimezoneService.convertTimeSlotToLocal(slot);
-      console.log(`🕐 Converted slot ${index + 1}:`, convertedSlot.displayText);
       return convertedSlot;
     });
     
-    console.log('🕐 All converted time slots:', converted.map(slot => slot.displayText));
     return converted;
   }, [timeSlots]);
 
   // 🔥 FIXED: Convert selected slot for display (don't modify original)
   const selectedSlotDisplay = useMemo(() => {
     if (!selectedSlot) {
-      console.log('🕐 TimeSelector: No selected slot');
       return null;
     }
-    
-    console.log('🕐 TimeSelector: Converting selected slot for display:', selectedSlot.startTime);
     const converted = TimezoneService.convertTimeSlotToLocal(selectedSlot);
-    console.log('🕐 TimeSelector: Selected slot display:', converted.displayText);
     return converted;
   }, [selectedSlot]);
 
@@ -63,9 +49,6 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
     if (readOnly) return;
     
     const originalSlot = timeSlots[originalSlotIndex];
-    console.log('🕐 TimeSelector: Slot selected at index', originalSlotIndex);
-    console.log('🕐 TimeSelector: Original slot data:', originalSlot);
-    
     // Pass the original slot (not converted) back to parent
     onSelect(originalSlot);
   };

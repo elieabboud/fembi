@@ -12,14 +12,9 @@ const LogoutDialog: React.FC<LogoutDialogProps> = ({ open, onClose, onConfirm })
 
   const handleConfirm = () => {
     try {
-      setIsLoggingOut(true);
-      console.log('LogoutDialog: User confirmed logout');
-      
+      setIsLoggingOut(true);      
       // Call the logout function (now synchronous)
       onConfirm();
-      
-      // Note: If logout is successful, user will be redirected
-      // so this code might not execute
     } catch (error) {
       console.error('LogoutDialog: Logout failed:', error);
       setIsLoggingOut(false);

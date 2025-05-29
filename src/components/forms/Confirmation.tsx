@@ -87,10 +87,6 @@ const Confirmation: React.FC<ConfirmationProps> = ({
       });
   };
 
-  useEffect(() => {
-    console.log('Confirmation - received booking:', booking);
-    console.log('Confirmation - received loanDetails:', loanDetails);
-  }, [booking, loanDetails]);
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">

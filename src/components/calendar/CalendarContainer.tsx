@@ -243,7 +243,6 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
     try {
       const response = await bookingService.getUsers({ tableName: 'user' });
       const agents = response.result as unknown as User[];
-      console.log('Fetched agents from database:', agents);
       setLoanAgents(agents);
     } catch (error) {
       console.error('Error fetching users from database: ', error);
@@ -251,18 +250,13 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   };
 
   const handleAgentsChange = useCallback((newSelectedAgents: User[]) => {
-    console.log('Calendar: Agent selection changed to:', newSelectedAgents.map(a => a.first_name));
     setSelectedAgents(newSelectedAgents);
   }, []);
 
   const applyAgentFiltering = useCallback(() => {
-    console.log('Applying agent filtering...');
-    console.log('Total bookings:', bookings.length);
-    console.log('Selected agents:', selectedAgents.length);
     
     // If no agents are selected, show no bookings (empty filter)
     if (selectedAgents.length === 0) {
-      console.log('No agents selected - showing no bookings');
       setFilteredBookings([]);
       return;
     }
@@ -271,28 +265,19 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
     const selectedAgentIds = new Set(
       selectedAgents.map(agent => String(agent.microsoft_id))
     );
-    
-    console.log('Selected agent microsoft_ids:', Array.from(selectedAgentIds));
-    
+        
     // Filter bookings where ownerId matches any selected agent's microsoft_id
     const filtered = bookings.filter(booking => {
       const ownerIdStr = String(booking.ownerId);
       const matches = selectedAgentIds.has(ownerIdStr);
-      
-      if (matches) {
-        console.log(`✓ Booking ${booking.bookingId} matches agent ${ownerIdStr}`);
-      }
-      
       return matches;
     });
     
-    console.log(`Filtered result: ${filtered.length} bookings out of ${bookings.length} total`);
     setFilteredBookings(filtered);
   }, [bookings, selectedAgents]);
   
   // Initialize agents on component mount
   useEffect(() => {
-    debugger;
     if (isAdmin) {
       fetchUsersFromDatabase();
     }
@@ -301,7 +286,6 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   // Initialize selectedAgents with all agents when agents are first loaded
   useEffect(() => {
     if (loanAgents.length > 0 && selectedAgents.length === 0) {
-      console.log('Initializing with all agents selected');
       const allAgents = [...loanAgents];
       setSelectedAgents(allAgents);
     }
@@ -309,7 +293,6 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
 
   // Apply filtering whenever bookings or selected agents change
   useEffect(() => {
-    console.log('Filter effect triggered - bookings:', bookings.length, 'selectedAgents:', selectedAgents.length);
     applyAgentFiltering();
   }, [applyAgentFiltering]);
 
