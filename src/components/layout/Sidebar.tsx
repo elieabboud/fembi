@@ -58,12 +58,12 @@ interface SidebarItem {
 const Sidebar: React.FC<SidebarProps> = ({ open = true, onClose }) => {
   const location = useLocation();
   const { user, logout, isAdmin } = useAuth();
-  const [ logoutOpen, setLogoutOpen ] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
-  const menuItems:SidebarItem[] = [
+  const menuItems: SidebarItem[] = [
     { text: 'My Calendar', icon: <CalendarTodayIcon />, path: '/calendar' },
     { text: 'Bookings', icon: <BookingsIcon />, path: '/bookings' },
-    { text: 'Dashboard', icon: <PieChartIcon />, path: '/dashboard',adminOnly: true },
+    { text: 'Dashboard', icon: <PieChartIcon />, path: '/dashboard', adminOnly: true },
     { text: 'Settings', icon: <SettingsIcon />, path: '/profile' },
   ];
 
@@ -72,27 +72,43 @@ const Sidebar: React.FC<SidebarProps> = ({ open = true, onClose }) => {
   };
 
   const handleLogout = () => {
+    console.log('Sidebar: Opening logout dialog');
     setLogoutOpen(true);
-  }
+  };
 
-  const logUserOut = () => {
-    console.log('Sidebar: User confirmed logout');
-    setLogoutOpen(false);
-    
-    // Call the logout from AuthContext (this handles everything)
-    logout();
-  }
+  // 🔥 FIXED: Proper async logout handler
+  const logUserOut = async () => {
+    try {
+      console.log('Sidebar: User confirmed logout - starting logout process');
+      setLogoutOpen(false);
+      
+      // Call the logout from AuthContext (this is async)
+      await logout();
+      
+      // Note: If logout is successful, user will be redirected
+      // so this line might not execute
+      console.log('Sidebar: Logout completed');
+      
+    } catch (error) {
+      console.error('Sidebar: Logout failed:', error);
+      
+      // Fallback: force redirect to login page
+      console.log('Sidebar: Logout failed, forcing redirect to login');
+      window.location.href = '/login';
+    }
+  };
 
   const handleLogoutClose = () => {
+    console.log('Sidebar: Logout dialog closed');
     setLogoutOpen(false);
-  }
+  };
 
   const drawerContent = (
     <>
       <Box sx={{ textAlign: 'center', mb: 2 }}>
         <Logo src={logo} alt="First National Title & Insurance Services" />
         <Typography variant="body2" color="text.secondary">
-        First National Title & Insurance Services, Inc.
+          First National Title & Insurance Services, Inc.
         </Typography>
       </Box>
       <List>
@@ -100,31 +116,31 @@ const Sidebar: React.FC<SidebarProps> = ({ open = true, onClose }) => {
           if (item.adminOnly && !isAdmin) {
             return null;
           }
-          return(
-          <ListItem key={item.text}>
-            <ListItemButton
-              component={Link}
-              to={item.path}
-              onClick={handleMenuItemClick}
-              selected={location.pathname === item.path}>
-              <ListItemIcon style={{color: 'black'}}>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItemButton>
-          </ListItem>
-        );
-      }
-        )}
-      <ListItem key="logout">
-        <ListItemButton onClick={handleLogout}>
-          <ListItemIcon style={{ color: 'black' }}>
-            <LogoutIcon />
-          </ListItemIcon>
-          <ListItemText primary="Logout" />
-        </ListItemButton>
-      </ListItem>
+          return (
+            <ListItem key={item.text}>
+              <ListItemButton
+                component={Link}
+                to={item.path}
+                onClick={handleMenuItemClick}
+                selected={location.pathname === item.path}
+              >
+                <ListItemIcon style={{ color: 'black' }}>{item.icon}</ListItemIcon>
+                <ListItemText primary={item.text} />
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
+        <ListItem key="logout">
+          <ListItemButton onClick={handleLogout}>
+            <ListItemIcon style={{ color: 'black' }}>
+              <LogoutIcon />
+            </ListItemIcon>
+            <ListItemText primary="Logout" />
+          </ListItemButton>
+        </ListItem>
       </List>
       <ProfileSection sx={{ bgcolor: '#f5f5f5', borderTop: '1px solid #e0e0e0' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center',justifyContent:'start', width: '100%' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'start', width: '100%' }}>
           <Avatar
             src={user?.profilePicture}
             alt={user?.fullName}
@@ -142,6 +158,13 @@ const Sidebar: React.FC<SidebarProps> = ({ open = true, onClose }) => {
           </Box>
         </Box>
       </ProfileSection>
+
+      {/* 🔥 FIXED: Logout Dialog with proper async handling */}
+      <LogoutDialog
+        open={logoutOpen}
+        onClose={handleLogoutClose}
+        onConfirm={logUserOut}
+      />
     </>
   );
 

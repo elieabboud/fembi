@@ -19,7 +19,7 @@ export class TimezoneService {
     }
 
     try {
-      console.log('🔄 Dynamic conversion for any timezone:', backendTimeString);
+      // console.debug('🔄 Dynamic conversion for any timezone:', backendTimeString);
 
       // Parse the backend time (EST local time)
       const backendTime = parseISO(backendTimeString);
@@ -55,21 +55,21 @@ export class TimezoneService {
       const offsetMs = userTime.getTime() - estTime.getTime();
       const offsetHours = offsetMs / (1000 * 60 * 60);
       
-      console.log(`⏰ Dynamic offset calculation:`);
-      console.log(`   User timezone: ${this.getUserTimezone()}`);
-      console.log(`   EST timezone: ${this.BACKEND_TIMEZONE}`);
-      console.log(`   Offset: ${offsetHours} hours`);
+      // console.debug(`⏰ Dynamic offset calculation:`);
+      // console.debug(`   User timezone: ${this.getUserTimezone()}`);
+      // console.debug(`   EST timezone: ${this.BACKEND_TIMEZONE}`);
+      // console.debug(`   Offset: ${offsetHours} hours`);
       
       // Apply the offset to our target time
       const result = new Date(referenceDate.getTime() + offsetMs);
       
-      console.log('✅ Dynamic conversion result:', {
-        input: backendTimeString,
-        estTime: `${hours}:${minutes}`,
-        userTime: `${result.getHours()}:${result.getMinutes()}`,
-        offsetHours: offsetHours,
-        finalResult: result.toLocaleString()
-      });
+      // console.debug('✅ Dynamic conversion result:', {
+      //   input: backendTimeString,
+      //   estTime: `${hours}:${minutes}`,
+      //   userTime: `${result.getHours()}:${result.getMinutes()}`,
+      //   offsetHours: offsetHours,
+      //   finalResult: result.toLocaleString()
+      // });
       
       return result;
 
@@ -88,7 +88,7 @@ export class TimezoneService {
     }
 
     try {
-      console.log('🚀 Reliable dynamic conversion:', backendTimeString);
+      // console.debug('🚀 Reliable dynamic conversion:', backendTimeString);
 
       const backendTime = parseISO(backendTimeString);
       if (!isValid(backendTime)) {
@@ -122,19 +122,19 @@ export class TimezoneService {
       const offsetDifferenceMinutes = userOffsetMinutes - estOffsetMinutes;
       const offsetDifferenceMs = offsetDifferenceMinutes * 60 * 1000;
       
-      console.log(`🌍 Timezone offset calculation:`);
-      console.log(`   EST offset from UTC: ${estOffsetMinutes} minutes`);
-      console.log(`   User offset from UTC: ${userOffsetMinutes} minutes`);
-      console.log(`   Difference: ${offsetDifferenceMinutes} minutes (${offsetDifferenceMinutes/60} hours)`);
+      // console.debug(`🌍 Timezone offset calculation:`);
+      // console.debug(`   EST offset from UTC: ${estOffsetMinutes} minutes`);
+      // console.debug(`   User offset from UTC: ${userOffsetMinutes} minutes`);
+      // console.debug(`   Difference: ${offsetDifferenceMinutes} minutes (${offsetDifferenceMinutes/60} hours)`);
       
       // Apply the offset
       const result = new Date(baseTime.getTime() + offsetDifferenceMs);
       
-      console.log('✅ Reliable dynamic result:', {
-        estInput: `${hours}:${String(minutes).padStart(2, '0')}`,
-        userOutput: `${result.getHours()}:${String(result.getMinutes()).padStart(2, '0')}`,
-        offsetHours: offsetDifferenceMinutes / 60
-      });
+      // console.debug('✅ Reliable dynamic result:', {
+      //   estInput: `${hours}:${String(minutes).padStart(2, '0')}`,
+      //   userOutput: `${result.getHours()}:${String(result.getMinutes()).padStart(2, '0')}`,
+      //   offsetHours: offsetDifferenceMinutes / 60
+      // });
       
       return result;
 
@@ -188,7 +188,7 @@ export class TimezoneService {
     }
 
     try {
-      console.log('📤 Converting local time to backend EST:', localTime.toLocaleString());
+      // console.debug('📤 Converting local time to backend EST:', localTime.toLocaleString());
 
       // Use Intl to get EST equivalent
       const estFormatter = new Intl.DateTimeFormat('sv-SE', {
@@ -204,7 +204,7 @@ export class TimezoneService {
       const estTimeString = estFormatter.format(localTime);
       const backendFormat = estTimeString.replace(' ', 'T');
 
-      console.log('📤 Backend EST format:', backendFormat);
+      // console.debug('📤 Backend EST format:', backendFormat);
       return backendFormat;
 
     } catch (error) {
@@ -248,11 +248,11 @@ export class TimezoneService {
    */
   static convertTimeSlotToLocal(timeSlot: TimeSlot): TimeSlot & { displayText: string } {
     try {
-      console.log('🕐 Converting time slot for', this.getUserTimezone(), ':', {
-        startTime: timeSlot.startTime,
-        endTime: timeSlot.endTime,
-        originalDisplay: timeSlot.displayText
-      });
+      // console.debug('🕐 Converting time slot for', this.getUserTimezone(), ':', {
+      //   startTime: timeSlot.startTime,
+      //   endTime: timeSlot.endTime,
+      //   originalDisplay: timeSlot.displayText
+      // });
 
       // Use the reliable dynamic conversion
       const startTimeUser = this.convertBackendTimeToLocalReliable(timeSlot.startTime);
@@ -264,14 +264,14 @@ export class TimezoneService {
       
       const displayText = `${startFormatted} - ${endFormatted}`;
 
-      console.log('✅ Time slot converted for', this.getUserTimezone(), ':', {
-        original: timeSlot.displayText,
-        new: displayText,
-        estStart: timeSlot.startTime,
-        userStart: startTimeUser.toLocaleString(),
-        estEnd: timeSlot.endTime,
-        userEnd: endTimeUser.toLocaleString()
-      });
+      // console.debug('✅ Time slot converted for', this.getUserTimezone(), ':', {
+      //   original: timeSlot.displayText,
+      //   new: displayText,
+      //   estStart: timeSlot.startTime,
+      //   userStart: startTimeUser.toLocaleString(),
+      //   estEnd: timeSlot.endTime,
+      //   userEnd: endTimeUser.toLocaleString()
+      // });
 
       return {
         ...timeSlot,
@@ -325,9 +325,9 @@ export class TimezoneService {
    * 🧪 Test dynamic conversion with any timezone
    */
   static testDynamicConversion(): void {
-    console.log('🧪 === TESTING DYNAMIC CONVERSION ===');
-    console.log(`User timezone: ${this.getUserTimezone()}`);
-    console.log(`Backend timezone: ${this.BACKEND_TIMEZONE}`);
+    // console.debug('🧪 === TESTING DYNAMIC CONVERSION ===');
+    // console.debug(`User timezone: ${this.getUserTimezone()}`);
+    // console.debug(`Backend timezone: ${this.BACKEND_TIMEZONE}`);
     
     const testTimes = [
       "2025-05-26T09:00:00", // 9 AM EST
@@ -336,16 +336,16 @@ export class TimezoneService {
     ];
     
     testTimes.forEach(testTime => {
-      console.log(`\n📋 Testing: ${testTime} EST`);
+      // console.debug(`\n📋 Testing: ${testTime} EST`);
       
       const result = this.convertBackendTimeToLocalReliable(testTime);
       const formatted = format(result, 'h:mm a');
       
-      console.log(`   Result: ${formatted} (${result.toLocaleString()})`);
-      console.log(`   Your timezone: ${this.getUserTimezone()}`);
+      // console.debug(`   Result: ${formatted} (${result.toLocaleString()})`);
+      // console.debug(`   Your timezone: ${this.getUserTimezone()}`);
     });
     
-    console.log('\n🌍 This works for ANY timezone automatically!');
-    console.log('🧪 === TEST COMPLETE ===');
+    // console.debug('\n🌍 This works for ANY timezone automatically!');
+    // console.debug('🧪 === TEST COMPLETE ===');
   }
 }

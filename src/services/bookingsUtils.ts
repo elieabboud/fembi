@@ -59,6 +59,7 @@ export const getColorByStatus = (status?: BookingStatus): string => {
 
 // Keep the old random function for backward compatibility if needed
   export const getColorByServiceLocation = (serviceLocation: string): string => {
+    if(!serviceLocation) return 'transparent';
     const colors = [
       '#4285F4', // Blue
       '#EA4335', // Red
@@ -70,10 +71,10 @@ export const getColorByStatus = (status?: BookingStatus): string => {
       '#3F51B5', // Indigo
     ];
 
-    if (serviceLocation.length === 0) return colors[0];
+    if (serviceLocation?.length === 0) return colors[0];
     var hash = 0;
-    for (var i = 0; i < serviceLocation.length; i++) {
-        var charCode = serviceLocation.charCodeAt(i);
+    for (var i = 0; i < serviceLocation?.length; i++) {
+        var charCode = serviceLocation?.charCodeAt(i);
         hash += charCode;
     }
     
@@ -100,12 +101,12 @@ export function addColorToBooking(booking: calendarBooking): calendarBooking {
     const status = booking.status || determineBookingStatus(booking);
     const color = getColorByServiceLocation(booking.serviceName);
 
-    console.log('🎨 Assigning color:', { 
-        bookingId: booking.bookingId, 
-        status, 
-        color,
-        startTime: booking.start?.dateTime 
-    });
+    // console.log('🎨 Assigning color:', { 
+    //     bookingId: booking.bookingId, 
+    //     status, 
+    //     color,
+    //     startTime: booking.start?.dateTime 
+    // });
 
     return {
         ...booking,

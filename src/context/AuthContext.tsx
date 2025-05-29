@@ -40,8 +40,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           
           // Check admin status
           try {
-            const isUserAdmin = await bookingService.getIsAdminUser();
             debugger;
+            const isUserAdmin = await bookingService.getIsAdminUser();
             setIsAdmin(isUserAdmin === "true");
           } catch (error) {
             console.error('Error checking admin status:', error);
@@ -55,6 +55,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             convertAccountToUser(currentAccount);
             
             try {
+              debugger;
               const isUserAdmin = await bookingService.getIsAdminUser();
               setIsAdmin(isUserAdmin === "true");
             } catch (error) {
@@ -96,38 +97,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // FIXED: Proper logout with state clearing BEFORE MSAL logout
+  // 🔥 FIXED: Simple and reliable logout
   const handleLogout = (): void => {
+    console.log('AuthContext: Starting logout process...');
+    
+    // 1. IMMEDIATELY clear React state (this will update UI instantly)
+    console.log('AuthContext: Clearing React state...');
+    setIsAuthenticated(false);
+    setUser(null);
+    setIsAdmin(false);
+    setLoading(false);
+    
+    // 2. Clear storage
     try {
-      console.log('AuthContext: Starting logout...');
-      setLoading(true);
-      
-      // Clear React state FIRST (before MSAL logout which will redirect)
-      setIsAuthenticated(false);
-      setUser(null);
-      setIsAdmin(false);
-      
-      // Clear any local storage
-      try {
-        sessionStorage.removeItem('user');
-        sessionStorage.removeItem('isAdmin');
-        // Don't clear all sessionStorage as MSAL needs some data for logout
-      } catch (storageError) {
-        console.warn('Error clearing storage:', storageError);
-      }
-      
-      console.log('AuthContext: State cleared, calling MSAL logout...');
-      
-      // Call MSAL logout (this will redirect the page)
+      console.log('AuthContext: Clearing storage...');
+      sessionStorage.clear();
+      localStorage.clear();
+    } catch (storageError) {
+      console.warn('Error clearing storage:', storageError);
+    }
+    
+    // 3. Call MSAL logout which will redirect
+    console.log('AuthContext: Calling MSAL logout...');
+    try {
       logout();
-      
     } catch (error) {
-      console.error('Logout error in AuthContext:', error);
-      setLoading(false);
-      
-      // Fallback to force logout
-      console.log('Using force logout fallback...');
-      forceLogout();
+      console.error('MSAL logout error:', error);
+      // Fallback: direct redirect
+      window.location.href = '/login';
     }
   };
 
@@ -151,11 +148,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       // Handle logout events
       if (event.eventType === EventType.LOGOUT_SUCCESS) {
-        console.log('Logout successful');
+        console.log('MSAL: Logout successful');
         setIsAuthenticated(false);
         setUser(null);
         setIsAdmin(false);
         setLoading(false);
+      }
+      
+      // Handle logout start event
+      if (event.eventType === EventType.LOGOUT_START) {
+        console.log('MSAL: Logout started');
+        setLoading(false); // Don't show loading spinner during logout
       }
     });
     

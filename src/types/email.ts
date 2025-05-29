@@ -10,7 +10,8 @@ export interface EmailRequestDTO {
 
 export interface FileRequestDTO {
   FileName: string;
-  ContentBase64: string;
+  Data: string;
+  Extension: string;
 }
 
 export interface EmailResponseDTO {

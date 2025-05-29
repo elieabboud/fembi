@@ -26,17 +26,26 @@ type ConfirmationProps = {
   onClose: () => void;
   booking: CreateAppointmentRequest;
   loanDetails: LoanDetails | null; // Allow null for loading state
+  editMode?: boolean;
 };
 
 const Confirmation: React.FC<ConfirmationProps> = ({
   open,
   onClose,
   booking,
-  loanDetails
+  loanDetails,
+  editMode = false
 }) => {
   // If loanDetails is null, we're still loading
   const isLoading = !loanDetails;
   const {user} = useAuth();
+
+  const appointmentTime = booking.DateTimeInfo.SelectedTime;
+  const formattedTime = new Date(`2000-01-01T${appointmentTime}`).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
 
   const emailSubject = `Appointment Confirmation: ${booking.ServiceName}`;
   const emailBody = `
@@ -44,7 +53,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
     
     Appointment Details:
     - Service Name: ${booking.ServiceName}
-    - Date & Time: ${booking.DateTimeInfo.SelectedDate} at ${booking.DateTimeInfo.SelectedTime}
+    - Date & Time: ${booking.DateTimeInfo.SelectedDate} at ${formattedTime}
     - Loan Officer: ${loanDetails?.loanOfficer || 'Loading...'}
     - Customer: ${booking.BorrowerInformation.FirstName} ${booking.BorrowerInformation.LastName}
     
@@ -55,33 +64,6 @@ const Confirmation: React.FC<ConfirmationProps> = ({
     - Loan Amount: $${loanDetails.loanAmount?.toLocaleString()}
     ` : 'Loading loan details...'}
   `;
-
-  const handleSendEmail = async () => {
-    if (!loanDetails) {
-      alert('Please wait for loan details to load before sending email.');
-      return;
-    }
-
-    try {
-      const emailRequest: EmailRequestDTO = {
-        To: [booking.BorrowerInformation.Email],
-        Subject: emailSubject,
-        Body: emailBody,
-        IsHtml: false,
-      };
-
-      const response = await bookingService.sendEmail(emailRequest);
-
-      if (response.Success) {
-        alert('Email sent successfully!');
-      } else {
-        alert(`Failed to send email: ${response.Message}`);
-      }
-    } catch (error) {
-      alert('Failed to send email.');
-      console.error(error);
-    }
-  };
 
   const handleCopyToClipboard = () => {
     if (!loanDetails) {
@@ -119,7 +101,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
             component="h1"
             sx={{ fontSize: '30px', fontWeight: 'bold', color: 'black' }}
           >
-            Appointment Booked!
+            {editMode? "Appointment Updated!" : "Appointment Booked!"}
           </Typography>
           <CloseIcon 
             sx={{ float: 'right', color: 'gray', cursor: 'pointer' }} 
@@ -138,9 +120,9 @@ const Confirmation: React.FC<ConfirmationProps> = ({
           ) : (
             <>
               <Typography variant="body1" sx={{ mb: 3 }}>
-                Your appointment with <strong>{loanDetails.loanOfficer}</strong> has been scheduled successfully.
+                Your appointment with <strong>{booking.BorrowerInformation.FirstName} {booking.BorrowerInformation.LastName}</strong> has been scheduled successfully.
                 A confirmation email will be sent to your inbox.<br />
-                An email has been sent to both <strong>{booking.BorrowerInformation.FirstName} {booking.BorrowerInformation.LastName}</strong> and <strong>{user?.fullName}</strong>
+                An email has been sent to both <strong>{loanDetails.loanOfficer}</strong> and <strong>{user?.fullName}</strong>
               </Typography>
 
               <Typography variant="h6" sx={{ mb: 2 }}>
@@ -164,7 +146,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
                 <TextField
                   variant="outlined"
                   label="Date & Time"
-                  value={`${booking.DateTimeInfo.SelectedDate || ''} at ${booking.DateTimeInfo.SelectedTime || ''}`}
+                  value={`${booking.DateTimeInfo.SelectedDate || ''} at ${formattedTime || ''}`}
                   fullWidth
                   InputProps={{
                     readOnly: true,
@@ -248,15 +230,6 @@ const Confirmation: React.FC<ConfirmationProps> = ({
               </Typography>
 
               <Stack direction="row" width={'100%'} justifyContent={'space-between'} spacing={2}>
-                <Button 
-                  fullWidth 
-                  variant="contained" 
-                  startIcon={<EmailIcon />} 
-                  onClick={handleSendEmail}
-                  disabled={isLoading}
-                >
-                  Send via Email
-                </Button>
                 <Button 
                   fullWidth 
                   variant="contained" 

@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Grid, Paper, Typography } from '@mui/material';
 import { format, startOfMonth, isSameMonth, isToday } from 'date-fns';
 import { calendarBooking } from '../../types/calendarBooking';
-import { weekdays, formatEventTime, parseDateTime } from '../../services/calendarUtils';
+import { weekdays, formatEventTime, parseDateTime, formatEventTimeMonth } from '../../services/calendarUtils';
 import { TimezoneService } from '../../services/timezoneUtils';
 
 interface MonthViewProps {
@@ -159,10 +159,10 @@ const MonthView: React.FC<MonthViewProps> = ({
                       }}>
                     {event?.start?.dateTime && (
                       <span style={{ marginRight: '4px' }}>
-                        {formatEventTime(event)}
+                        {formatEventTimeMonth(event)}
                       </span>
                     )}
-                      {event?.serviceName}
+                      {event?.customerName}
                     </Box>
                   );
                 })}

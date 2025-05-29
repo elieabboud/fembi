@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { Box, Typography, Paper } from '@mui/material';
 import { format, addDays, startOfWeek, isSameDay } from 'date-fns';
 import { calendarBooking } from '../../types/calendarBooking';
-import { formatEventTime, isToday, parseDateTime } from '../../services/calendarUtils';
+import { formatEventTime, formatEventTimeMonth, isToday, parseDateTime } from '../../services/calendarUtils';
 import { TimezoneService } from '../../services/timezoneUtils';
 
 interface WeekViewProps {
@@ -20,7 +20,7 @@ const WeekView: React.FC<WeekViewProps> = ({
 }) => {
   const start = startOfWeek(currentDate, { weekStartsOn: 0 }); // 0 = Sunday
 
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const weekDays = Array.from({ length: 5 }, (_, i) => addDays(start, i+1));
   const hours = Array.from({ length: 24 }, (_, i) => i); // 0 to 23
 
   // Fixed function to properly filter events by day
@@ -89,7 +89,7 @@ const WeekView: React.FC<WeekViewProps> = ({
                 sx={{
                   flexGrow: 1,
                   minWidth: '120px',
-                  width: '14.28%',
+                  width: '20%',
                   position: 'relative',
                 }}
               >
@@ -198,10 +198,10 @@ const WeekView: React.FC<WeekViewProps> = ({
                         }}
                       >
                         <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: '0.7rem' }}>
-                          {formatEventTime(event)}
+                          {formatEventTimeMonth(event)}
                         </Typography>
                         <Typography variant="caption" sx={{ display: 'block', fontSize: '0.8rem' }}>
-                          {event?.serviceName}
+                          {event?.customerName}
                         </Typography>
                         {event?.serviceLocation?.displayName && (
                           <Typography

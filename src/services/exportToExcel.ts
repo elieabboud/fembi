@@ -191,33 +191,38 @@ export const exportBookingsToExcel = (
       const id = col.id as string;
       let value;
       
-      if (id === 'loanData' && col.label === 'Borrower') {
+      if (id === 'customerName' && col.label === 'Borrower') {
         if (row.loanData) {
-          value = `${row.customerName || ''}`.trim();
+          const fullName = `${row.loanData.borrowerFirstName || ''} ${row.loanData.borrowerLastName || ''}`.trim();
+          value = fullName || row.customerName || '';
         } else {
-          value = `${row.loanData.borrowerFirstName || ''} ${row.loanData.borrowerLastName || ''}`.trim();
+          value = row.customerName || '';
         }
-      } else if (id === 'loanData' && col.label === 'Loan Closer') {
-        value = row.loanData?.loanOfficer;
-      } else if (id === 'loanData' && col.label === 'Loan Officer') {
-        value = row.loanData?.loanOfficer;
-      } else if (id === 'loanData' && col.label === 'DPA Program') {
-        value = row.loanData?.loanType;
+      } else if (id === 'LoanCloser' && col.label === 'Loan Closer') {
+        value = row.loanData?.loanCloser || row.LoanCloser;
+      } else if (id === 'LoanOfficer' && col.label === 'Loan Officer') {
+        value = row.loanData?.loanOfficer || row.LoanOfficer;
+      } else if (id === 'dpa' && col.label === 'DPA Program') {
+        value = row.loanData?.dpa || row.loanData?.loanType || row.dpa;
       } else if (id === 'start' && col.label === 'Closing Date') {
         if (row.start?.dateTime) {
-          // Use timezone conversion for Excel export
           value = TimezoneService.formatDateForUser(row.start.dateTime, 'MMMM d, yyyy');
         }
-      } else if (id === 'end' && col.label === 'Closing Time') {
+      } else if (id === 'start' && col.label === 'Closing Time') {
         if (row.start?.dateTime) {
-          // Use timezone conversion for Excel export
           value = TimezoneService.formatTimeForUser(row.start.dateTime, 'h:mm a');
         }
-      } else if (id === 'serviceLocation') {
-        value = row.serviceLocation?.displayName;
+      } else if (id === 'serviceName' && col.label === 'Service Location') {
+        value = row.serviceName;
       } else if (id === 'status') {
         if (row.status) {
-          value = row.status.charAt(0).toUpperCase() + row.status.slice(1);
+          switch (row.status) {
+            case 'upcoming': value = 'Upcoming'; break;
+            case 'inProgress': value = 'In Progress'; break;
+            case 'completed': value = 'Completed'; break;
+            case 'canceled': value = 'Canceled'; break;
+            // default: value = row.status.charAt(0).toUpperCase() + row.status.slice(1);
+          }
         }
       } else {
         value = row[id as keyof calendarBooking];

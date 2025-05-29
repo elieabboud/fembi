@@ -42,6 +42,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
       </IconButton>
       <InputBase
         sx={{
+          width: '100%',
           fontSize: 14,
           '& .MuiOutlinedInput-root': {
             height: 40,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   FormControl,
   InputLabel,
@@ -39,12 +39,21 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
     onChange(newValue);
   };
 
+  const menuProps = {
+    PaperProps: {
+      style: {
+        maxHeight: 200,
+        width: 'auto',
+      },
+    },
+    disableScrollLock: true,
+  };
+
   return (
     <FormControl
       sx={{ 
         flexGrow: 1,
         width: '120px',
-
       }}
       size="small"
     >
@@ -70,6 +79,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
           }}
           onChange={handleChange}
           input={<OutlinedInput label={label} />}
+          MenuProps={menuProps}
           renderValue={(selected) => (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
               {(selected as string[]).map((selectedId) => {
@@ -100,6 +110,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
           sx={{ fontSize: 14, height: 40, }}
           onChange={handleChange}
           label={label}
+          MenuProps={menuProps}
         >
           <MenuItem value="">
             <em>All</em>

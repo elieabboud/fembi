@@ -36,6 +36,7 @@ import { bookingService } from '../../services/bookingService';
 import { calendarBooking } from '../../types/calendarBooking';
 import { TableSortLabel } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
+import { CreateAppointmentRequest } from '../../types/CreateAppointmentRequest';
 
 interface AppTableProps {
   columns: Column<calendarBooking>[];
@@ -47,6 +48,7 @@ interface AppTableProps {
   onSelectionChange?: (selectedRows: any[]) => void;
   showActions?: boolean;
   onActionClick?: (row: any) => void;
+  onEditSuccess?: (bookingData: CreateAppointmentRequest, response: any) => void;
 }
 
 const AppTable: React.FC<AppTableProps> = ({
@@ -59,6 +61,7 @@ const AppTable: React.FC<AppTableProps> = ({
   onSelectionChange,
   showActions = false,
   onActionClick,
+  onEditSuccess
 }) => {
   const [page, setPage] = React.useState(0);
   const [rowsPerPage, setRowsPerPage] = React.useState(5);
@@ -168,7 +171,6 @@ const AppTable: React.FC<AppTableProps> = ({
     setLoadingDelete(true);
     try {
       await bookingService.deleteBooking(selectedRow.bookingId);
-      // window.location.reload();
     } catch (error) {
       console.error('Delete failed', error);
     } finally {
@@ -537,6 +539,7 @@ const AppTable: React.FC<AppTableProps> = ({
           aria-labelledby="edit-booking-dialog-title"
         >
           <CreateBookingForm
+            onSuccess={onEditSuccess || (() => {})}
             onClose={() => setShowEditBooking(false)}
             initialData={selectedRow}
             isEditMode={true}

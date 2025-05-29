@@ -24,12 +24,12 @@ export class AvailabilityService {
    */
   static async getAvailability(serviceId?: string): Promise<AvailabilitySettings> {
     try {
-      console.log('📅 Fetching availability settings...', serviceId ? `for serviceId: ${serviceId}` : '');
+      // console.log('📅 Fetching availability settings...', serviceId ? `for serviceId: ${serviceId}` : '');
       
       const params = serviceId ? { serviceId } : {};
       const response = await api.get('/api/Application/v1/GetAvailability', { params });
       
-      console.log('📅 Availability settings received:', response.data);
+      // console.log('📅 Availability settings received:', response.data);
       
       return {
         minimumLeadTime: response.data.minimumLeadTime || "00:00:00",
@@ -89,11 +89,11 @@ export class AvailabilityService {
   static calculateDateRange(settings: AvailabilitySettings): DateRange {
     const now = new Date();
     
-    console.log('📅 Calculating date range from:', {
-      now: now.toISOString(),
-      minimumLeadTime: settings.minimumLeadTime,
-      maximumAdvance: settings.maximumAdvance
-    });
+    // console.log('📅 Calculating date range from:', {
+    //   now: now.toISOString(),
+    //   minimumLeadTime: settings.minimumLeadTime,
+    //   maximumAdvance: settings.maximumAdvance
+    // });
 
     // Calculate minimum lead time
     const leadTimeHours = this.parseTimeToHours(settings.minimumLeadTime);
@@ -114,14 +114,14 @@ export class AvailabilityService {
       maxDateTime
     };
 
-    console.log('📅 Calculated date range:', {
-      leadTimeHours,
-      advanceHours,
-      minDate: minDate.toLocaleDateString(),
-      maxDate: maxDate.toLocaleDateString(),
-      minDateTime: minDateTime.toISOString(),
-      maxDateTime: maxDateTime.toISOString()
-    });
+    // console.log('📅 Calculated date range:', {
+    //   leadTimeHours,
+    //   advanceHours,
+    //   minDate: minDate.toLocaleDateString(),
+    //   maxDate: maxDate.toLocaleDateString(),
+    //   minDateTime: minDateTime.toISOString(),
+    //   maxDateTime: maxDateTime.toISOString()
+    // });
 
     return result;
   }
@@ -137,14 +137,14 @@ export class AvailabilityService {
     
     const shouldDisable = isBeforeMin || isAfterMax;
     
-    console.log('📅 Date check:', {
-      date: dateToCheck.toLocaleDateString(),
-      minDate: dateRange.minDate.toLocaleDateString(),
-      maxDate: dateRange.maxDate.toLocaleDateString(),
-      isBeforeMin,
-      isAfterMax,
-      shouldDisable
-    });
+    // console.log('📅 Date check:', {
+    //   date: dateToCheck.toLocaleDateString(),
+    //   minDate: dateRange.minDate.toLocaleDateString(),
+    //   maxDate: dateRange.maxDate.toLocaleDateString(),
+    //   isBeforeMin,
+    //   isAfterMax,
+    //   shouldDisable
+    // });
     
     return shouldDisable;
   }
@@ -161,11 +161,11 @@ export class AvailabilityService {
     return [];
   }
 
-  console.log('🕐 Filtering time slots for date:', selectedDate.toLocaleDateString());
-  console.log('🕐 Date range constraints (UTC):', {
-    minDateTime: dateRange.minDateTime.toISOString(),
-    maxDateTime: dateRange.maxDateTime.toISOString()
-  });
+  // console.log('🕐 Filtering time slots for date:', selectedDate.toLocaleDateString());
+  // console.log('🕐 Date range constraints (UTC):', {
+  //   minDateTime: dateRange.minDateTime.toISOString(),
+  //   maxDateTime: dateRange.maxDateTime.toISOString()
+  // });
 
   const filtered = timeSlots.filter(slot => {
     try {
@@ -199,13 +199,13 @@ export class AvailabilityService {
       const isEndValid = slotEndUTC <= dateRange.maxDateTime;
       const isValid = isStartValid && isEndValid;
 
-      console.log(`🕐 Slot ${isValid ? '✅' : '❌'}:`, {
-        original: `${slot.startTime} - ${slot.endTime}`,
-        estToUtc: `${slotStartUTC.toISOString()} - ${slotEndUTC.toISOString()}`,
-        constraints: `${dateRange.minDateTime.toISOString()} to ${dateRange.maxDateTime.toISOString()}`,
-        startCheck: `${slotStartUTC.toISOString()} >= ${dateRange.minDateTime.toISOString()} = ${isStartValid}`,
-        endCheck: `${slotEndUTC.toISOString()} <= ${dateRange.maxDateTime.toISOString()} = ${isEndValid}`
-      });
+      // console.log(`🕐 Slot ${isValid ? '✅' : '❌'}:`, {
+      //   original: `${slot.startTime} - ${slot.endTime}`,
+      //   estToUtc: `${slotStartUTC.toISOString()} - ${slotEndUTC.toISOString()}`,
+      //   constraints: `${dateRange.minDateTime.toISOString()} to ${dateRange.maxDateTime.toISOString()}`,
+      //   startCheck: `${slotStartUTC.toISOString()} >= ${dateRange.minDateTime.toISOString()} = ${isStartValid}`,
+      //   endCheck: `${slotEndUTC.toISOString()} <= ${dateRange.maxDateTime.toISOString()} = ${isEndValid}`
+      // });
 
       return isValid;
     } catch (error) {
@@ -214,7 +214,7 @@ export class AvailabilityService {
     }
   });
 
-  console.log(`🕐 Final result: ${filtered.length} of ${timeSlots.length} slots available after filtering`);
+  // console.log(`🕐 Final result: ${filtered.length} of ${timeSlots.length} slots available after filtering`);
   
   return filtered;
 }

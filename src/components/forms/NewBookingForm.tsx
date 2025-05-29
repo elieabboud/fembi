@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { format } from 'date-fns';
+import { Buffer } from 'buffer';
 import {
   TextField,
   MenuItem,
@@ -29,7 +30,7 @@ import { calendarBooking } from '../../types/calendarBooking';
 import { mapCalendarBookingToFormData } from '../../services/bookingFormUtils';
 import { toLocalISOString } from '../../utils/general';
 import { TimezoneService } from '../../services/timezoneUtils';
-import { EmailRequestDTO } from '../../types/email';
+import { EmailRequestDTO, FileRequestDTO } from '../../types/email';
 import { AvailabilityService, AvailabilitySettings, DateRange } from '../../services/availabilityService';
 
 type BookingFormProps = {
@@ -153,7 +154,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     
     setIsLoadingAvailability(true);
     try {
-      console.log('📅 Fetching availability settings for create mode...', serviceId ? `serviceId: ${serviceId}` : '');
+      // console.debug('📅 Fetching availability settings for create mode...', serviceId ? `serviceId: ${serviceId}` : '');
       
       const settings = await bookingService.getAvailability(serviceId);
       setAvailabilitySettings(settings);
@@ -163,15 +164,15 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
       
       // 🔥 NEW: Auto-select the first available date
       if (calculatedRange.minDate) {
-        console.log('📅 Auto-selecting first available date:', calculatedRange.minDate.toLocaleDateString());
+        // console.debug('📅 Auto-selecting first available date:', calculatedRange.minDate.toLocaleDateString());
         setSelectedDate(calculatedRange.minDate);
       }
       
-      console.log('📅 Availability constraints applied:', {
-        serviceId,
-        settings,
-        dateRange: calculatedRange
-      });
+      // console.debug('📅 Availability constraints applied:', {
+      //   serviceId,
+      //   settings,
+      //   dateRange: calculatedRange
+      // });
       
     } catch (error) {
       console.error('❌ Error fetching availability settings:', error);
@@ -219,7 +220,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
 
       // NEW: Fetch availability settings when service is selected
       if (!editMode && !readOnlyMode) {
-        console.log('🔧 Service selected, fetching availability for:', selectedService.id);
+        // console.debug('🔧 Service selected, fetching availability for:', selectedService.id);
         fetchAvailabilitySettings(selectedService.id);
       }
     }
@@ -253,12 +254,17 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
       const uniqueEmails = Array.from(new Set(recipientEmails));
       
       if (uniqueEmails.length === 0) {
-        console.log('No valid email addresses found for notification');
+        console.debug('No valid email addresses found for notification');
         return;
       }
       
       const appointmentDate = new Date(bookingData.DateTimeInfo.SelectedDate).toLocaleDateString();
       const appointmentTime = bookingData.DateTimeInfo.SelectedTime;
+      const formattedTime = new Date(`2000-01-01T${appointmentTime}`).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
       const borrowerName = `${bookingData.BorrowerInformation.FirstName} ${bookingData.BorrowerInformation.LastName}`.trim();
       
       const htmlBody = `
@@ -273,15 +279,13 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
                 <h3 style="margin-top: 0; color: #28a745;">Appointment Details</h3>
                 <p><strong>Service:</strong> ${bookingData.ServiceName}</p>
                 <p><strong>Date:</strong> ${appointmentDate}</p>
-                <p><strong>Time:</strong> ${appointmentTime}</p>
-                <p><strong>Loan ID:</strong> ${bookingData.EncompassDetails.EncompassLoanId}</p>
+                <p><strong>Time:</strong> ${formattedTime}</p>
+                <p><strong>Loan ID:</strong> ${loanDetails.loanNumber}</p>
               </div>
               
               <div style="background-color: #e9ecef; border-left: 4px solid #007bff; padding: 15px; margin: 20px 0;">
                 <h3 style="margin-top: 0; color: #007bff;">Borrower Information</h3>
                 <p><strong>Name:</strong> ${borrowerName}</p>
-                <p><strong>Email:</strong> ${bookingData.BorrowerInformation.Email}</p>
-                <p><strong>Phone:</strong> ${bookingData.BorrowerInformation.PhoneNumber}</p>
                 <p><strong>Address:</strong> ${bookingData.BorrowerInformation.Address.Street}, ${bookingData.BorrowerInformation.Address.City}, ${bookingData.BorrowerInformation.Address.State} ${bookingData.BorrowerInformation.Address.ZipCode}</p>
               </div>
               
@@ -289,7 +293,6 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
                 <h3 style="margin-top: 0; color: #856404;">Loan Information</h3>
                 <p><strong>Loan Closer:</strong> ${bookingData.EncompassDetails.LoanCloser}</p>
                 <p><strong>Loan Officer:</strong> ${bookingData.EncompassDetails.LoanOfficer}</p>
-                ${bookingData.EncompassDetails.dpa ? `<p><strong>DPA Program:</strong> ${bookingData.EncompassDetails.dpa}</p>` : ''}
               </div>
               
               <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d;">
@@ -299,14 +302,50 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
           </body>
         </html>
       `;
-      
+      const eventDescription = `
+Appointment Details
+Service:\t\t${bookingData.ServiceName}
+Date:\t\t${appointmentDate}
+Time:\t\t${appointmentTime}
+Loan ID:\t\t${bookingData.EncompassDetails.EncompassLoanId}
+
+
+Borrower Information
+Name:\t\t${borrowerName}
+Address:\t\t${bookingData.BorrowerInformation.Address.Street}, ${bookingData.BorrowerInformation.Address.City}, ${bookingData.BorrowerInformation.Address.State} ${bookingData.BorrowerInformation.Address.ZipCode}
+
+
+Loan Information
+Loan Closer:\t\t${bookingData.EncompassDetails.LoanCloser}
+Loan Officer:\t\t${bookingData.EncompassDetails.LoanOfficer}
+`
+      const attachmentICS = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//FNTIS//NONSGML v1.0//EN
+BEGIN:VEVENT
+SUMMARY:Appointment with ${borrowerName} - ${bookingData.ServiceName}
+DTSTART:${bookingData.DateTimeInfo.FromDate.replaceAll(':', '').replaceAll('-', '')+'Z'}
+DTEND:${bookingData.DateTimeInfo.ToDate.replaceAll(':', '').replaceAll('-', '')+'Z'}
+LOCATION:${bookingData.ServiceName}
+DESCRIPTION:${eventDescription}
+END:VEVENT
+END:VCALENDAR`
       const emailRequest: EmailRequestDTO = {
-        To: uniqueEmails,
+        // To: uniqueEmails,
+        To: ["bruno.farjallah@tacresearch.com"],
         Subject: `New Appointment Scheduled - ${bookingData.ServiceName} for ${borrowerName}`,
         Body: htmlBody,
-        IsHtml: true
+        IsHtml: true,
+        Attachments: [
+          {
+            FileName: "Calendar Item",
+            Extension: "ics",
+            Data: Buffer.from(attachmentICS).toString('base64')
+          }
+        ]
       };
-      
+      debugger;
+      console.log(emailRequest);
       const emailResponse = await bookingService.sendEmail(emailRequest);
 
       console.log("received response:" , emailResponse);
@@ -376,7 +415,6 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
 
     if (onSuccess) {
       onSuccess(bookingData, response);
-      // window.location.reload();
     }
     } catch (error) {
       console.error(`Error ${editMode ? 'updating' : 'creating'} booking:`, error);
@@ -468,24 +506,24 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   const handleDateTimeSelect = useCallback(() => {
     if (!selectedSlot || !selectedDate || readOnlyMode) return;
 
-    console.log('🕐 Form: Handling date/time selection:', { 
-      selectedSlot: selectedSlot.startTime, 
-      selectedDate: selectedDate.toLocaleDateString() 
-    });
+    // console.log('🕐 Form: Handling date/time selection:', { 
+    //   selectedSlot: selectedSlot.startTime, 
+    //   selectedDate: selectedDate.toLocaleDateString() 
+    // });
 
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const startTimeUser = TimezoneService.convertBackendTimeToLocalReliable(selectedSlot.startTime);
     const time24 = format(startTimeUser, 'HH:mm');
 
-    console.log('🕐 Form: Date/time processed:', {
-      dateStr,
-      time24,
-      displayTime: startTimeUser.toLocaleString(),
-      keepingOriginalESTTimes: {
-        fromDate: selectedSlot.startTime,
-        toDate: selectedSlot.endTime
-      }
-    });
+    // console.log('🕐 Form: Date/time processed:', {
+    //   dateStr,
+    //   time24,
+    //   displayTime: startTimeUser.toLocaleString(),
+    //   keepingOriginalESTTimes: {
+    //     fromDate: selectedSlot.startTime,
+    //     toDate: selectedSlot.endTime
+    //   }
+    // });
 
     setBookingData((prev) => ({
       ...prev,
@@ -505,17 +543,17 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
 
     updateLoadingState('timeSlots', true);
     try {
-      console.log('🕐 ===== FETCH TIME SLOTS DEBUG =====');
-      console.log('🕐 selectedDate object:', selectedDate);
-      console.log('🕐 Mode check - editMode:', editMode, 'isViewMode:', isViewMode);
-      console.log('🕐 ServiceId:', bookingData.ServiceId);
+      // console.log('🕐 ===== FETCH TIME SLOTS DEBUG =====');
+      // console.log('🕐 selectedDate object:', selectedDate);
+      // console.log('🕐 Mode check - editMode:', editMode, 'isViewMode:', isViewMode);
+      // console.log('🕐 ServiceId:', bookingData.ServiceId);
       
       const year = selectedDate.getFullYear();
       const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
       const day = String(selectedDate.getDate()).padStart(2, '0');
       const backendDateString = `${year}-${month}-${day}T00:00:00`;
       
-      console.log('🕐 Final backendDateString for API:', backendDateString);
+      // console.log('🕐 Final backendDateString for API:', backendDateString);
       
       // 🔥 UPDATED: Pass edit mode to filter past slots
       const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
@@ -524,28 +562,28 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
         editMode // Pass edit mode flag
       );
 
-      console.log('🕐 Time slots received from backend:', response.length, 'slots');
+      // console.log('🕐 Time slots received from backend:', response.length, 'slots');
 
       // Apply availability filtering for create mode only
       let filteredSlots = response;
       
       if (!editMode && !readOnlyMode && dateRange) {
-        console.log('📅 Applying availability filtering to time slots...');
+        // console.log('📅 Applying availability filtering to time slots...');
         filteredSlots = AvailabilityService.filterTimeSlots(response, selectedDate, dateRange);
-        console.log(`📅 Filtered ${response.length} slots to ${filteredSlots.length} available slots`);
+        // console.log(`📅 Filtered ${response.length} slots to ${filteredSlots.length} available slots`);
       }
 
       setTimeSlots(filteredSlots);
 
       if (editMode && bookingData.DateTimeInfo?.SelectedTime && !selectedSlot) {
         const timeToMatch = bookingData.DateTimeInfo.SelectedTime;
-        console.log("🕐 Edit mode: Looking for time slot matching:", timeToMatch);
+        // console.log("🕐 Edit mode: Looking for time slot matching:", timeToMatch);
         
         const matchingSlot = filteredSlots.find(slot => {
           try {
             const userSlotTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
             const slotTimeFormatted = format(userSlotTime, 'HH:mm');
-            console.log(`🕐 Comparing: backend ${slot.startTime} -> user ${slotTimeFormatted} vs target ${timeToMatch}`);
+            // console.log(`🕐 Comparing: backend ${slot.startTime} -> user ${slotTimeFormatted} vs target ${timeToMatch}`);
             return slotTimeFormatted === timeToMatch;
           } catch (error) {
             console.error('Error comparing slot time:', error);
@@ -554,10 +592,10 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
         });
         
         if (matchingSlot) {
-          console.log("✅ Found matching time slot in edit mode:", matchingSlot);
+          // console.log("✅ Found matching time slot in edit mode:", matchingSlot);
           setSelectedSlot(matchingSlot);
         } else {
-          console.log("❌ No matching time slot found in edit mode");
+          // console.log("❌ No matching time slot found in edit mode");
         }
       }
     } catch (error) {
@@ -618,7 +656,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
       if (editMode && initialData) {
         updateLoadingState('initializing', true);
         
-        console.log('Edit mode activated with initial data:', initialData);
+        // console.log('Edit mode activated with initial data:', initialData);
         
         const formattedData = mapCalendarBookingToFormData(initialData as any);
 
@@ -644,19 +682,19 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
             },
           }));
 
-          console.log("after setting:", formattedData);
+          // console.log("after setting:", formattedData);
 
           if (formattedData.DateTimeInfo?.SelectedDate) {
             const dateStr = formattedData.DateTimeInfo.SelectedDate;
-            console.log('🗓️ Edit mode: Setting selectedDate from dateStr:', dateStr);
+            // console.log('🗓️ Edit mode: Setting selectedDate from dateStr:', dateStr);
             
             if (dateStr.includes('-')) {
               const [year, month, day] = dateStr.split('-').map(Number);
               const correctDate = new Date(year, month - 1, day);
-              console.log('🗓️ Edit mode: Created selectedDate:', correctDate);
+              // console.log('🗓️ Edit mode: Created selectedDate:', correctDate);
               setSelectedDate(correctDate);
             } else {
-              console.warn('🗓️ Edit mode: Invalid date format:', dateStr);
+              // console.warn('🗓️ Edit mode: Invalid date format:', dateStr);
               setSelectedDate(new Date());
             }
           }
@@ -1014,7 +1052,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
               if (!editMode && !readOnlyMode) {
                 // Require service selection first
                 if (!selectedService) {
-                  console.log('📅 Disabling date - no service selected:', date.toLocaleDateString());
+                  // console.log('📅 Disabling date - no service selected:', date.toLocaleDateString());
                   return true;
                 }
                 
@@ -1022,7 +1060,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
                 if (dateRange) {
                   const shouldDisable = AvailabilityService.shouldDisableDate(date, dateRange);
                   if (shouldDisable) {
-                    console.log('📅 Disabling date due to availability constraints:', date.toLocaleDateString());
+                    // console.debug('📅 Disabling date due to availability constraints:', date.toLocaleDateString());
                     return true;
                   }
                 }

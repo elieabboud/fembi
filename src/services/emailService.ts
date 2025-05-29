@@ -1,5 +1,7 @@
 import { calendarBooking } from '../types/calendarBooking';
+import { EmailRequestDTO } from '../types/email';
 import { toLocalISOString } from '../utils/general';
+import { bookingService } from './bookingService';
 import { Column } from './exportToExcel';
 import { TimezoneService } from './timezoneUtils';
 
@@ -15,21 +17,21 @@ export class EmailService {
     const textBody = this.generatePlainTextTable(bookings, columns);
     
     const emlContent = `To: ${recipientEmail || ''}
-Subject: ${subject}
-MIME-Version: 1.0
-Content-Type: multipart/alternative; boundary="boundary123"
+      Subject: ${subject}
+      MIME-Version: 1.0
+      Content-Type: multipart/alternative; boundary="boundary123"
 
---boundary123
-Content-Type: text/plain; charset=utf-8
+      --boundary123
+      Content-Type: text/plain; charset=utf-8
 
-${textBody}
+      ${textBody}
 
---boundary123
-Content-Type: text/html; charset=utf-8
+      --boundary123
+      Content-Type: text/html; charset=utf-8
 
-${htmlBody}
+      ${htmlBody}
 
---boundary123--`;
+      --boundary123--`;
 
     // Create and download EML file
     const blob = new Blob([emlContent], { type: 'message/rfc822' });
@@ -62,6 +64,28 @@ ${htmlBody}
     
     window.location.href = mailtoUrl;
     return true;
+  }
+
+  static async sendEmailWithRecipient(bookings: calendarBooking[], columns: Column[], recipientEmail?: string){
+    const subject = `Bookings Report - ${bookings.length} items`;
+    const body = this.generatePlainTextTable(bookings, columns);
+
+    try {
+      const emailRequest: EmailRequestDTO = {
+        To: [recipientEmail],
+        Subject: subject,
+        Body: body,
+        IsHtml: false,
+      };
+
+      const response = await bookingService.sendEmail(emailRequest);
+
+      if (response.Success) {
+        alert('Email sent successfully!');
+      }
+    } catch (error) {
+      console.error(error);
+    }
   }
 
   /**
@@ -160,14 +184,14 @@ ${htmlBody}
     const userTimezone = TimezoneService.getUserTimezoneDisplay();
     const separator = '-'.repeat(80);
     const header = `BOOKINGS REPORT
-Generated: ${new Date().toLocaleString()}
-Total Records: ${bookings.length}
+    Generated: ${new Date().toLocaleString()}
+    Total Records: ${bookings.length}
 
-TIMEZONE INFORMATION:
-All times displayed in: ${userTimezone}
-(Automatically converted from Eastern Time)
+    TIMEZONE INFORMATION:
+    All times displayed in: ${userTimezone}
+    (Automatically converted from Eastern Time)
 
-${separator}`;
+    ${separator}`;
 
     const tableData = bookings.map((booking, index) => {
       const bookingData = columns.map(column => {
@@ -192,9 +216,10 @@ Note: All times have been converted to your local timezone (${userTimezone}) fro
     const id = column.id as string;
     let value: any;
     
-    if (id === 'loanData' && column.label === 'Borrower') {
+    if (id === 'customerName' && column.label === 'Borrower') {
       if (booking.loanData) {
-        value = `${booking.loanData.borrowerFirstName || ''} ${booking.loanData.borrowerLastName || ''}`.trim();
+        const fullName = `${booking.loanData.borrowerFirstName || ''} ${booking.loanData.borrowerLastName || ''}`.trim();
+        value = fullName || booking.customerName;
       } else {
         value = booking.customerName;
       }
@@ -208,11 +233,11 @@ Note: All times have been converted to your local timezone (${userTimezone}) fro
       if (booking.start?.dateTime) {
         value = TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy');
       }
-    } else if (id === 'end' && column.label === 'Closing Time') {
+    } else if (id === 'start' && column.label === 'Closing Time') {
       if (booking.start?.dateTime) {
         value = TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a');
       }
-    } else if (id === 'serviceName') {
+    } else if (id === 'serviceName' && column.label === 'Service Location') {
       value = booking.serviceName;
     } else if (id === 'status') {
       if (booking.status) {
@@ -221,7 +246,7 @@ Note: All times have been converted to your local timezone (${userTimezone}) fro
           case 'inProgress': value = 'In Progress'; break;
           case 'completed': value = 'Completed'; break;
           case 'canceled': value = 'Canceled'; break;
-          // default:  value = (status as string).charAt(0).toUpperCase() + (status as string).slice(1);/
+          // default: value = booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
         }
       }
     } else {

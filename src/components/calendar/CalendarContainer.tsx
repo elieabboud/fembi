@@ -77,6 +77,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
     StaffMemberIds: ["staff001", "staff002"],
   });
   const [loanDetails, setLoanDetails] = useState<LoanDetails>();
+  const [isLastOperationEdit, setIsLastOperationEdit] = useState(false);
   
   // Track the last applied date/view to prevent unnecessary updates
   const lastAppliedRef = useRef<{ date: Date, view: CalendarViewType } | null>(null);
@@ -141,8 +142,14 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
     updateDateAndView(newDate, currentView);
   }, [currentDate, currentView, updateDateAndView]);
 
+  const onConfirmationClose = () => {
+    setShowSuccessMessage(false);
+    window.location.reload();
+  }
+
   const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
   setShowSuccessMessage(true);
+  setIsLastOperationEdit(showEditBooking);
   setNewBooking(false);
   setShowEditBooking(false);
   setSubmittedData(bookingData);
@@ -285,6 +292,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   
   // Initialize agents on component mount
   useEffect(() => {
+    debugger;
     if (isAdmin) {
       fetchUsersFromDatabase();
     }
@@ -427,9 +435,10 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
         >
           <Confirmation
             open={showSuccessMessage}
-            onClose={() => setShowSuccessMessage(false)}
+            onClose={onConfirmationClose}
             booking={submittedData}
             loanDetails={loanDetails}
+            editMode={isLastOperationEdit}
           />
         </Dialog>
       )}

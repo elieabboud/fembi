@@ -32,60 +32,88 @@ export const loginPopup = async () => {
   }
 };
 
-// FIXED: Function to handle logout with proper error handling
-export const logout = () => {
+// 🔥 FIXED: Simple and reliable logout
+export const logout = (): void => {
   try {
-    console.log('Starting logout process...');
+    console.log('authService: Starting logout...');
     
     const account = msalInstance.getActiveAccount();
+    console.log('authService: Active account:', account?.username || 'None');
+    
+    // Clear the active account
+    msalInstance.setActiveAccount(null);
+    console.log('authService: Active account cleared');
     
     if (account) {
-      console.log('Active account found, logging out:', account.username);
+      console.log('authService: Performing logout redirect...');
       
       const logoutRequest = {
         account: account,
-        postLogoutRedirectUri: window.location.origin + '/login',
-        mainWindowRedirectUri: window.location.origin + '/login'
+        postLogoutRedirectUri: window.location.origin + '/login'
       };
       
-      // Clear the active account first
-      msalInstance.setActiveAccount(null);
+      // Use logoutRedirect - this will cause a page redirect
+      msalInstance.logoutRedirect(logoutRequest);
       
-      // Use logoutRedirect for better reliability
-      return msalInstance.logoutRedirect(logoutRequest);
     } else {
-      console.log('No active account found, redirecting to login');
-      // If no active account, just redirect to login
+      console.log('authService: No active account, redirecting to login...');
       window.location.href = '/login';
     }
   } catch (error) {
-    console.error('Logout error:', error);
-    // Fallback: force redirect to login
-    forceLogout();
+    console.error('authService: Logout error:', error);
+    // Fallback: direct redirect
+    window.location.href = '/login';
   }
 };
 
-// NEW: Force logout utility function
-export const forceLogout = () => {
+// 🔥 IMPROVED: Enhanced force logout with better cleanup
+export const forceLogout = async (): Promise<void> => {
   try {
-    console.log('Force logout initiated...');
+    console.log('authService: Force logout initiated...');
     
-    // Clear all local storage and session storage
-    sessionStorage.clear();
-    localStorage.clear();
-    
-    // Clear MSAL active account
+    // 1. Clear MSAL active account
     msalInstance.setActiveAccount(null);
+    console.log('authService: MSAL active account cleared');
     
-    // Note: MSAL v2 doesn't have clearCache() or removeAccount()
-    // The cache will be cleared when the user logs in again
-    // or when the tokens expire
+    // 2. Try to clear MSAL cache if possible
+    try {
+      const accounts = msalInstance.getAllAccounts();
+      console.log('authService: Found', accounts.length, 'accounts in cache');
+      
+      // For each account, try to remove it
+      for (const account of accounts) {
+        try {
+          await msalInstance.logoutRedirect({
+            account: account,
+            postLogoutRedirectUri: window.location.origin + '/login'
+          });
+          break; // Only need to logout one account
+        } catch (logoutError) {
+          console.warn('authService: Failed to logout account:', account.username, logoutError);
+        }
+      }
+    } catch (cacheError) {
+      console.warn('authService: Error accessing MSAL cache:', cacheError);
+    }
     
-    // Force redirect to login
+    // 3. Clear all storage as fallback
+    try {
+      console.log('authService: Clearing all storage...');
+      sessionStorage.clear();
+      localStorage.clear();
+    } catch (storageError) {
+      console.warn('authService: Error clearing storage:', storageError);
+    }
+    
+    // 4. Final fallback - redirect to login
+    console.log('authService: Redirecting to login...');
     window.location.href = '/login';
+    
   } catch (error) {
-    console.error('Force logout error:', error);
-    // Ultimate fallback - reload the page
+    console.error('authService: Force logout error:', error);
+    
+    // Ultimate fallback - reload the page to clear everything
+    console.log('authService: Ultimate fallback - reloading page...');
     window.location.reload();
   }
 };
@@ -98,21 +126,21 @@ export const getAccount = (): AccountInfo | null => {
 // Function to handle the redirect response
 export const handleRedirectResponse = async () => {
   try {
-    console.log("Handling redirect response...");
+    console.log("authService: Handling redirect response...");
     const response = await msalInstance.handleRedirectPromise();
-    console.log("Redirect response:", response);
+    console.log("authService: Redirect response:", response);
     
     if (response) {
-      console.log("Authentication successful, setting active account");
+      console.log("authService: Authentication successful, setting active account");
       return response.account;
     } else {
-      console.log("No redirect response found");
+      console.log("authService: No redirect response found");
       const account = msalInstance.getActiveAccount();
-      console.log("Current active account:", account);
+      console.log("authService: Current active account:", account);
       return account;
     }
   } catch (error) {
-    console.error("Error handling redirect:", error);
+    console.error("authService: Error handling redirect:", error);
     throw error;
   }
 };
@@ -134,7 +162,7 @@ export const acquireToken = async (): Promise<string> => {
     const response: AuthenticationResult = await msalInstance.acquireTokenSilent(silentRequest);
     return response.accessToken;
   } catch (error) {
-    console.error("Silent token acquisition failed, using redirect:", error);
+    console.error("authService: Silent token acquisition failed, using redirect:", error);
     msalInstance.acquireTokenRedirect(silentRequest);
     return "";
   }

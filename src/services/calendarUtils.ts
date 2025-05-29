@@ -24,17 +24,32 @@ export const formatEventTime = (event: { start: DateTimeInfo; end: DateTimeInfo 
   }
 
   try {
-    console.log('🕐 Formatting event time:', event.start.dateTime, '->', event.end.dateTime);
+    // console.log('🕐 Formatting event time:', event.start.dateTime, '->', event.end.dateTime);
     
     // Use TimezoneService to format times in user's timezone
     const startTimeUser = TimezoneService.formatTimeForUser(event.start.dateTime, 'h:mm a');
     const endTimeUser = TimezoneService.formatTimeForUser(event.end.dateTime, 'h:mm a');
 
     const result = `${startTimeUser} - ${endTimeUser}`;
-    console.log('🕐 Formatted event time result:', result);
+    // console.log('🕐 Formatted event time result:', result);
     return result;
   } catch (error) {
     console.error('❌ Error formatting event time:', error);
+    return 'Time unavailable';
+  }
+};
+
+export const formatEventTimeMonth = (event: { start: DateTimeInfo }) => {
+  if (!event?.start || !event.start.dateTime) {
+    return '';
+  }
+
+  try {
+    const startTimeUser = TimezoneService.formatTimeForUser(event.start.dateTime, 'h:mm a');
+
+    const result = `${startTimeUser}`;
+    return result;
+  } catch (error) {
     return 'Time unavailable';
   }
 };
@@ -57,7 +72,7 @@ export const groupEventsByDate = (events: calendarBooking[]): { [key: string]: c
     if (!event?.start?.dateTime) return;
     
     try {
-      console.log('🗓️ Grouping event:', event.start.dateTime);
+      // console.log('🗓️ Grouping event:', event.start.dateTime);
       
       // Convert backend time to user's timezone
       const userDate = TimezoneService.convertBackendTimeToLocalReliable(event.start.dateTime);
@@ -65,7 +80,7 @@ export const groupEventsByDate = (events: calendarBooking[]): { [key: string]: c
       // Format date in user's timezone
       const dateKey = format(userDate, 'yyyy-MM-dd');
       
-      console.log('🗓️ Event grouped under date:', dateKey);
+      // console.log('🗓️ Event grouped under date:', dateKey);
       
       if (!grouped[dateKey]) {
         grouped[dateKey] = [];
@@ -141,12 +156,12 @@ export function parseDateTime(dateTimeInfo: { dateTime?: string } | undefined): 
       return new Date();
     }
     
-    console.log('🗓️ Parsing dateTime:', dateTimeInfo.dateTime);
+    // console.log('🗓️ Parsing dateTime:', dateTimeInfo.dateTime);
     
     // Use TimezoneService to convert backend time to user's timezone
     const userDate = TimezoneService.convertBackendTimeToLocalReliable(dateTimeInfo.dateTime);
     
-    console.log('🗓️ Parsed to user timezone:', userDate.toLocaleString());
+    // console.log('🗓️ Parsed to user timezone:', userDate.toLocaleString());
     return userDate;
   } catch (error) {
     console.error('Error parsing date:', error);

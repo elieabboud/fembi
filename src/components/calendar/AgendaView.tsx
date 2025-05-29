@@ -68,12 +68,12 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                       }}></Box>
 
                       <Typography variant="body1" sx={{ fontWeight: 'medium', mx: 2, flexGrow: 1 }}>
-                        {event?.serviceName}
+                        {event?.customerName}
                       </Typography>
                       
-                      {event?.serviceLocation?.displayName && (
+                      {event?.serviceName && (
                         <Typography variant="body2" color="textSecondary" sx={{ ml: 'auto' }}>
-                          {event.serviceLocation.displayName}
+                          {event.serviceName}
                         </Typography>
                       )}
                     </Box>

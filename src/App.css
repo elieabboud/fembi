@@ -85,11 +85,11 @@ html, body {
 }
 
 #bookings-header #search-bar {
-  flex: 0 0 30%;
+  flex: 0 0 20%;
 }
 
 #bookings-header #filters {
-  flex: 0 0 45%;
+  flex: 0 0 60%;
   display: flex;
   justify-content: space-between;
   gap: 4px;

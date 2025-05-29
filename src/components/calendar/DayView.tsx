@@ -231,14 +231,14 @@ const DayView: React.FC<DayViewProps> = ({
                   {formatEventTime(event)}
                 </Typography>
                 <Typography variant="body1" sx={{ fontWeight: 'bold', fontSize: '0.85rem' }}>
-                  {event?.serviceName}
+                  {event?.customerName}
                 </Typography>
-                {event?.serviceLocation?.displayName && (
+                {event?.serviceName && (
                   <Typography
                     variant="caption"
                     sx={{ display: 'block', fontSize: '0.7rem', opacity: 0.9 }}
                   >
-                    {event?.serviceLocation?.displayName}
+                    {event?.serviceName}
                   </Typography>
                 )}
               </Paper>

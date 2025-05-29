@@ -100,7 +100,10 @@ const Bookings: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<BookingStatus[]>([]);
   const [officersFilter, setOfficersFilter] = useState<string[]>([]);
   const [serviceFilter, setServiceFilter] = useState<string>('');
+  const [dateFilter, setDateFilter] = useState<string>('');
+
   const [dataFetched, setDataFetched] = useState(false);
+  const [isLastOperationEdit, setIsLastOperationEdit] = useState(false);
 
   // Email functionality state
   const [emailMenuAnchor, setEmailMenuAnchor] = useState<null | HTMLElement>(null);
@@ -116,6 +119,7 @@ const Bookings: React.FC = () => {
   ];
   const [loanOfficersOptions, setLoanOfficersOptions] = useState<{id: string, label: string}[]>([]);
   const [serviceOptions, setServiceOptions] = useState<{ id: string, label: string }[]>([]);
+  const [dateOptions, setDateOptions] = useState<{ id: string, label: string }[]>([]);
 
   const handleConfirmationClose = () => {
     setShowSuccessMessage(false);
@@ -131,6 +135,26 @@ const Bookings: React.FC = () => {
   // New handler for selection change
   const handleSelectionChange = (selectedRows: calendarBooking[]) => {
     setSelectedBookings(selectedRows);
+  };
+
+  const getUniqueDatesFromBookings = (bookings: calendarBooking[]): { id: string, label: string }[] => {
+    const dateMap = new Map<string, string>();
+    
+    bookings.forEach(booking => {
+      if (booking.start?.dateTime) {
+        try {
+          const dateId = TimezoneService.formatDateForUser(booking.start.dateTime, 'yyyy-MM-dd');
+          const dateLabel = TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy');
+          dateMap.set(dateId, dateLabel);
+        } catch (error) {
+          console.warn('Error processing date for booking:', booking.bookingId, error);
+        }
+      }
+    });
+    
+    return Array.from(dateMap.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => new Date(a.id).getTime() - new Date(b.id).getTime());
   };
 
   const fetchBookingsData = useCallback(async () => {
@@ -156,6 +180,9 @@ const Bookings: React.FC = () => {
       const loanOfficers = Array.from(new Set(sortedBookings.map(booking => booking.loanData.loanOfficer)))
         .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
       setLoanOfficersOptions(loanOfficers);
+
+      const uniqueDates = getUniqueDatesFromBookings(sortedBookings);
+      setDateOptions(uniqueDates);
     } catch (error) {
       console.error('Error fetching calendar data:', error);
     }
@@ -322,10 +349,15 @@ const Bookings: React.FC = () => {
       filtered = filtered.filter(booking => booking.serviceName === serviceFilter);
     }
 
+    // Apply date filter
+    if (dateFilter) {
+      filtered = filtered.filter(booking => isBookingOnDate(booking, dateFilter));
+    }
+
     // Apply sorting to filtered results
     const sortedFiltered = sortBookings(filtered);
     setFilteredBookings(sortedFiltered);
-  }, [searchQuery, bookings, statusFilter, officersFilter, serviceFilter]);
+  }, [searchQuery, bookings, statusFilter, officersFilter, serviceFilter, dateFilter]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -341,6 +373,22 @@ const Bookings: React.FC = () => {
 
   const handleServiceFilterChange = (value: string | string[]) => {
     setServiceFilter(value as string);
+  };
+
+  const handleDateFilterChange = (value: string | string[]) => {
+    setDateFilter(value as string);
+  };
+
+  const isBookingOnDate = (booking: calendarBooking, selectedDate: string): boolean => {
+    if (!booking.start?.dateTime || !selectedDate) return true;
+    
+    try {
+      const bookingDateId = TimezoneService.formatDateForUser(booking.start.dateTime, 'yyyy-MM-dd');
+      return bookingDateId === selectedDate;
+    } catch (error) {
+      console.warn('Error comparing dates:', error);
+      return false;
+    }
   };
 
   // Email functionality handlers
@@ -385,9 +433,9 @@ const Bookings: React.FC = () => {
     handleEmailMenuClose();
   };
 
-  const handleSendEmailWithRecipient = () => {
+  const handleSendEmailWithRecipient = async () => {
     const dataToEmail = selectedBookings.length > 0 ? selectedBookings : filteredBookings;
-    EmailService.createEMLFile(dataToEmail, columns, recipientEmail);
+    await EmailService.sendEmailWithRecipient(dataToEmail, columns, recipientEmail);
     setEmailDialogOpen(false);
     setRecipientEmail('');
   };
@@ -410,11 +458,34 @@ const Bookings: React.FC = () => {
     );
   }
 
- const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
+const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
   try {
     setNewBooking(false);
     setLoadingPostResponse(true);
     setSubmittedData(bookingData);
+    
+    setIsLastOperationEdit(false);
+    
+    const realLoanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
+    setLoanDetails(realLoanDetails);
+    
+    setShowSuccessMessage(true);
+    
+    await fetchBookingsData();
+  } catch (error) {
+    console.error('Error fetching Loan Details:', error);
+    setShowSuccessMessage(true);
+  } finally {
+    setLoadingPostResponse(false);
+  }
+};
+
+const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
+  try {
+    setLoadingPostResponse(true);
+    setSubmittedData(bookingData);
+    
+    setIsLastOperationEdit(true);
     
     const realLoanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
     setLoanDetails(realLoanDetails);
@@ -491,6 +562,14 @@ const Bookings: React.FC = () => {
             value={serviceFilter}
             onChange={handleServiceFilterChange}
           />
+
+          <FilterDropdown
+            id="date-filter"
+            label="Date"
+            options={dateOptions}
+            value={dateFilter}
+            onChange={handleDateFilterChange}
+          />
         </Box>
         
         <Box id="actions">
@@ -527,27 +606,7 @@ const Bookings: React.FC = () => {
             width: '250px',
           },
         }}
-      >
-        <MenuItem onClick={() => handleEmailOption('eml')}>
-          <ListItemIcon>
-            <AttachFileIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText 
-            primary="Create EML File" 
-            secondary="Opens in email client"
-          />
-        </MenuItem>
-        
-        <MenuItem onClick={() => handleEmailOption('mailto')}>
-          <ListItemIcon>
-            <EmailIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText 
-            primary="Quick Email" 
-            secondary="Default email app"
-          />
-        </MenuItem>
-        
+      >        
         <MenuItem onClick={() => handleEmailOption('copy')}>
           <ListItemIcon>
             <CopyIcon fontSize="small" />
@@ -592,7 +651,7 @@ const Bookings: React.FC = () => {
         <DialogActions>
           <Button onClick={() => setEmailDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleSendEmailWithRecipient} variant="contained">
-            Create Email File
+            Send
           </Button>
         </DialogActions>
       </Dialog>
@@ -645,7 +704,7 @@ const Bookings: React.FC = () => {
           >
             <CircularProgress size={60} />
             <Typography variant="h6" sx={{ mt: 2 }}>
-              Creating booking...
+              {isLastOperationEdit ? "Updating booking...": "Creating booking..."}
             </Typography>
           </Box>
         </Dialog>
@@ -666,6 +725,7 @@ const Bookings: React.FC = () => {
             onClose={handleConfirmationClose}
             booking={submittedData}
             loanDetails={loanDetails}
+            editMode={isLastOperationEdit}
           />
         </Dialog>
       )}
@@ -677,6 +737,7 @@ const Bookings: React.FC = () => {
         followers={followers}
         rows={filteredBookings}
         onSelectionChange={handleSelectionChange}
+        onEditSuccess={handleEditSuccess}
       />
     </Box>
   );
