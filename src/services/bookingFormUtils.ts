@@ -70,6 +70,9 @@ export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): 
     PostBuffer: calendarBooking.postBuffer || "PT30M",
     PriceType: calendarBooking.priceType || "notSet",
     StaffMemberIds: calendarBooking.staffMemberIds || [],
+    LoanDetails:{
+      notes: ""
+    }
   };
 
   return formData;

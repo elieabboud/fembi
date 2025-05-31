@@ -32,4 +32,7 @@ export interface CreateAppointmentRequest {
   PostBuffer: string;       // ISO 8601 duration
   PriceType: string;
   StaffMemberIds: string[];
+  LoanDetails?: {
+    notes: string;
+  };
 }

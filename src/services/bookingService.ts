@@ -148,41 +148,49 @@ export const bookingService = {
 
   //update appointment - SIMPLIFIED FIX
   updateBooking: async (updateData: UpdateBookingRequest) => {    
+  
+  // Same logic for updates
+  const isEstFormat = (timeString: string) => {
+    return timeString && !timeString.endsWith('Z') && !timeString.includes('+');
+  };
+
+  let backendUpdateData = updateData;
+
+  if (!isEstFormat(updateData.fromDate)) {
     
-    // Same logic for updates
-    const isEstFormat = (timeString: string) => {
-      return timeString && !timeString.endsWith('Z') && !timeString.includes('+');
+    backendUpdateData = {
+      ...updateData,
+      fromDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.fromDate)),
+      toDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.toDate)),
     };
+  } 
 
-    let backendUpdateData = updateData;
+  
+  const requestBody = {
+    DateTimeInfo: {
+      SelectedDate: backendUpdateData.selectedDate,
+      SelectedTime: backendUpdateData.selectedTime,
+      FromDate: backendUpdateData.fromDate,
+      ToDate: backendUpdateData.toDate,
+    }
+  };
 
-    if (!isEstFormat(updateData.fromDate)) {
-      
-      backendUpdateData = {
-        ...updateData,
-        fromDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.fromDate)),
-        toDate: TimezoneService.convertLocalTimeToBackend(new Date(updateData.toDate)),
-      };
-    } 
+  // if (backendUpdateData.notes !== undefined) {
+  //     requestBody.LoanDetails = {
+  //       notes: backendUpdateData.notes
+  //     };
+  // }
 
-    
-    const response = await api.post(`/api/Application/v1/UpdateAppointment?appointmentId=${backendUpdateData.id}`, {
-      DateTimeInfo: {
-        SelectedDate: backendUpdateData.selectedDate,
-        SelectedTime: backendUpdateData.selectedTime,
-        FromDate: backendUpdateData.fromDate,
-        ToDate: backendUpdateData.toDate,
-      }
-    });
+  const response = await api.post(`/api/Application/v1/UpdateAppointment?appointmentId=${backendUpdateData.id}`, requestBody);
 
-   
-    
-    return {
-      success: true,
-      message: 'Booking updated successfully',
-      data: backendUpdateData
-    };
-  },
+  
+  
+  return {
+    success: true,
+    message: 'Booking updated successfully',
+    data: backendUpdateData
+  };
+},
 
   //delete appointment
   async deleteBooking(appointmentId: string): Promise<void> {

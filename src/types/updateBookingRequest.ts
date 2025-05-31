@@ -5,4 +5,5 @@ export interface UpdateBookingRequest {
   fromDate: string;
   toDate: string;
   staffMemberIds: string[];
+  notes?: string;
 }

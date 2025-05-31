@@ -32,6 +32,7 @@ import { toLocalISOString } from '../../utils/general';
 import { TimezoneService } from '../../services/timezoneUtils';
 import { EmailRequestDTO, FileRequestDTO } from '../../types/email';
 import { AvailabilityService, AvailabilitySettings, DateRange } from '../../services/availabilityService';
+import EnhancedFollowers from './EnhancedFollowers';
 
 type BookingFormProps = {
   onClose: () => void;
@@ -82,6 +83,9 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [error, setError] = useState<string>("");
 
+  const [loanDetailsFollowers, setLoanDetailsFollowers] = useState<string[]>([]);
+  const [selectedLoanFollowers, setSelectedLoanFollowers] = useState<string[]>([]);
+  const [notes, setNotes] = useState<string>('');
   
   
   // NEW: State to track if loan details have been loaded and validated
@@ -122,6 +126,9 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     PostBuffer: "PT30M",
     PriceType: "notSet",
     StaffMemberIds: [],
+    LoanDetails: {
+      notes: ""
+    }
   });
 
   const editMode = isEditMode || !!initialData;
@@ -382,31 +389,41 @@ END:VCALENDAR`
     updateLoadingState('submitting', true);
     setLoading?.(true);
 
-  try {
-    let response;
-    
-    if (editMode) {
-      const updateData = {
-        id: initialData?.bookingId || '',
-        selectedDate: bookingData.DateTimeInfo.SelectedDate,
-        selectedTime: bookingData.DateTimeInfo.SelectedTime,
-        fromDate: bookingData.DateTimeInfo.FromDate,
-        toDate: bookingData.DateTimeInfo.ToDate,
-        staffMemberIds: bookingData.StaffMemberIds
-      };
+    try {
+      let response;
       
-      response = await bookingService.updateBooking(updateData);
-    } else {
-      response = await bookingService.postBooking(bookingData);
-    }
+      if (editMode) {
+        const updateData = {
+          id: initialData?.bookingId || '',
+          selectedDate: bookingData.DateTimeInfo.SelectedDate,
+          selectedTime: bookingData.DateTimeInfo.SelectedTime,
+          fromDate: bookingData.DateTimeInfo.FromDate,
+          toDate: bookingData.DateTimeInfo.ToDate,
+          staffMemberIds: bookingData.StaffMemberIds,
+          // 🔥 ADD NOTES FOR EDIT MODE
+          notes: notes
+        };
+        
+        response = await bookingService.updateBooking(updateData);
+      } else {
+        // 🔥 ADD NOTES TO CREATE REQUEST
+        const createData = {
+          ...bookingData,
+          LoanDetails: {
+            notes: notes
+          }
+        };
+        
+        response = await bookingService.postBooking(createData);
+      }
 
-    if (response) {
-      await sendEmailNotifications(response);
-    }
+      if (response) {
+        await sendEmailNotifications(response);
+      }
 
-    if (onSuccess) {
-      onSuccess(bookingData, response);
-    }
+      if (onSuccess) {
+        onSuccess(bookingData, response);
+      }
     } catch (error) {
       console.error(`Error ${editMode ? 'updating' : 'creating'} booking:`, error);
       setError(`Failed to ${editMode ? 'update' : 'create'} booking. Please try again.`);
@@ -416,7 +433,7 @@ END:VCALENDAR`
     }
   };
 
-  const fetchLoanDetails = async () => {
+ const fetchLoanDetails = async () => {
     if (loadingStates.submitting || readOnlyMode) return;
 
     if (!bookingData.EncompassDetails.EncompassLoanId.trim()) {
@@ -431,6 +448,19 @@ END:VCALENDAR`
       const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
 
       setLoanDetails(loanDetails);
+      
+      // 🔥 SET NOTES from loan details (for display, but editable in create mode)
+      setNotes(loanDetails.notes || '');
+      
+      // Handle loan details followers
+      if (loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0) {
+        console.log('Loan details followers loaded:', loanDetails.followers);
+        setLoanDetailsFollowers(loanDetails.followers);
+        setSelectedLoanFollowers(loanDetails.followers);
+      } else {
+        setLoanDetailsFollowers([]);
+        setSelectedLoanFollowers([]);
+      }
       
       setBookingData((prev) => ({
         ...prev,
@@ -464,6 +494,7 @@ END:VCALENDAR`
       updateLoadingState('loanDetails', false);
     }
   };
+
 
   const handleLoanIdKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -569,9 +600,9 @@ END:VCALENDAR`
     updateLoadingState('followers', true);
     try {
       if(editMode === true && initialData?.followers !== null && initialData?.followers !== ""){
-
         setFetchedFollowers(initialData?.followers.split(','));
-      }else{
+      } else {
+        // Keep the original logic for regular followers
         const regularFollowersPromise = bookingService.getFollowers();
         
         const promises = [regularFollowersPromise];
@@ -591,25 +622,44 @@ END:VCALENDAR`
         const uniqueFollowers = Array.from(new Set(allFollowers));
         setFetchedFollowers(uniqueFollowers);
       }
-     
-      
     } catch (error) {
       console.error('Failed to fetch followers', error);
       setFetchedFollowers([]);
     } finally {
       updateLoadingState('followers', false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, editMode, initialData]);
 
-  const handleAddFollower = (newFollower: string) => {
+
+  const handleToggleLoanFollower = (follower: string) => {
     if (readOnlyMode) return;
     
-    if (!fetchedFollowers.includes(newFollower) && !addedFollowers.includes(newFollower)) {
+    setSelectedLoanFollowers(prev => {
+      if (prev.includes(follower)) {
+        // Remove from selected
+        return prev.filter(f => f !== follower);
+      } else {
+        // Add to selected
+        return [...prev, follower];
+      }
+    });
+  };
+
+ const handleAddFollower = (newFollower: string) => {
+    if (readOnlyMode) return;
+    
+    const allExistingFollowers = [
+      ...fetchedFollowers, 
+      ...selectedLoanFollowers, 
+      ...addedFollowers
+    ];
+    
+    if (!allExistingFollowers.includes(newFollower)) {
       setAddedFollowers(prev => [...prev, newFollower]);
     }
   };
 
-  useEffect(() => {
+ useEffect(() => {
     const initializeEditMode = async () => {
       if (editMode && initialData) {
         updateLoadingState('initializing', true);
@@ -621,6 +671,24 @@ END:VCALENDAR`
           setLoanDetails(loanDetails);
           setShowLoanDetails(true);
           setIsLoanDetailsValidated(true);
+          
+          // 🔥 SET NOTES from initialData (calendar booking) in edit mode
+          setNotes(initialData.loanData?.notes || loanDetails.notes || '');
+          
+          // Handle loan details followers in edit mode
+          if (loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0) {
+            setLoanDetailsFollowers(loanDetails.followers);
+            
+            if (formattedData.Followers) {
+              const existingFollowers = formattedData.Followers.split(',');
+              const selectedFromLoan = loanDetails.followers.filter(lf => 
+                existingFollowers.includes(lf)
+              );
+              setSelectedLoanFollowers(selectedFromLoan);
+            } else {
+              setSelectedLoanFollowers(loanDetails.followers);
+            }
+          }
           
           setBookingData((prev) => ({
             ...formattedData,
@@ -664,16 +732,26 @@ END:VCALENDAR`
     initializeEditMode();
   }, [editMode, initialData]);
 
-  // UPDATED: Remove automatic availability fetching on mount
-  useEffect(() => {
+ useEffect(() => {
     fetchAvailableServicesData();
-    fetchAllFollowers();
+    fetchAllFollowers(); 
     
-    // Note: Availability settings will be fetched when service is selected
   }, [fetchAvailableServicesData, fetchAllFollowers]);
 
   useEffect(() => {
-    const allFollowers = [...fetchedFollowers, ...addedFollowers];
+    if (!editMode && loanDetails) {
+      fetchAllFollowers();
+    }
+  }, [loanDetails, editMode, fetchAllFollowers]);
+
+ useEffect(() => {
+    // Combine all types: regular (read-only) + selected loan followers + manually added
+    const allFollowers = [
+      ...fetchedFollowers,           // Regular system followers (read-only)
+      ...selectedLoanFollowers,      // Selected loan details followers
+      ...addedFollowers              // Manually added followers
+    ];
+    
     const uniqueFollowers = Array.from(new Set(allFollowers));
     const followersString = uniqueFollowers.join(',');
     
@@ -681,7 +759,14 @@ END:VCALENDAR`
       ...prev,
       Followers: followersString,
     }));
-  }, [fetchedFollowers, addedFollowers]);
+    
+    console.log('Updated followers:', {
+      regular: fetchedFollowers,
+      loanSelected: selectedLoanFollowers,
+      added: addedFollowers,
+      final: followersString
+    });
+  }, [fetchedFollowers, selectedLoanFollowers, addedFollowers]);
 
   useEffect(() => {
     if (!readOnlyMode && selectedDate && bookingData.ServiceId) {
@@ -940,11 +1025,14 @@ END:VCALENDAR`
                 multiline
                 rows={3}
                 label="Notes"
+                variant="outlined"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
                 InputProps={{
-                  readOnly: true,
+                  readOnly: readOnlyMode || isEditMode,
                 }}
-                variant='outlined'
-                value={loanDetails?.notes || ''}
+                placeholder={readOnlyMode ? "No notes available" : "Add any additional notes for this appointment..."}
+                helperText={readOnlyMode ? "" : "Optional notes that will be saved with this appointment"}
               />
             </Grid>
           </Grid>
@@ -1109,19 +1197,21 @@ END:VCALENDAR`
             readOnly={readOnlyMode}
           />)}
           
-          <Followers
+          <EnhancedFollowers
             editMode={editMode || readOnlyMode}
-            fetchedFollowers={fetchedFollowers}
-            addedFollowers={addedFollowers}
-            onAddFollower={handleAddFollower}
-            loading={loadingStates.followers}
-            onRemoveFollower={(followerToRemove) => {
+            regularFollowers={fetchedFollowers}              // Read-only system followers
+            loanDetailsFollowers={loanDetailsFollowers}      // Available loan followers
+            selectedLoanFollowers={selectedLoanFollowers}    // Selected loan followers
+            addedFollowers={addedFollowers}                  // Manually added followers
+            onToggleLoanFollower={handleToggleLoanFollower}  // Toggle loan follower
+            onAddFollower={handleAddFollower}                // Add manual follower
+            onRemoveAddedFollower={(followerToRemove) => {   // Remove manual follower
               if (!readOnlyMode) {
                 setAddedFollowers(prev => prev.filter(f => f !== followerToRemove));
               }
             }}
+            loading={loadingStates.followers}
           />
-
           {error.length > 0 && !readOnlyMode && (
             <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>
               {error}
