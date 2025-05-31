@@ -39,7 +39,6 @@ import { CreateAppointmentRequest } from '../types/CreateAppointmentRequest';
 import { LoanDetails } from '../types/loanDetails';
 import Confirmation from '../components/forms/Confirmation';
 import { EmailService } from '../services/emailService'; 
-import { dummyData } from '../assets/dummyData';
 import { TimezoneService } from '../services/timezoneUtils';
 
 // Custom sorting function for bookings

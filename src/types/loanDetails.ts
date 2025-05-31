@@ -15,5 +15,6 @@ export interface LoanDetails {
     notes: string;
     loanCloser: string;
     dpa: string;
+    followers: string[];
   }
   

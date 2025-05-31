@@ -179,7 +179,8 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
       loanOfficer: bookingData.EncompassDetails.LoanOfficer || "N/A",
       notes: "",
       loanCloser: bookingData.EncompassDetails.LoanCloser || "N/A",
-      dpa: bookingData.EncompassDetails.dpa || "N/A"
+      dpa: bookingData.EncompassDetails.dpa || "N/A",
+      followers: null
     };
     setLoanDetails(fallbackLoanDetails);
   }
