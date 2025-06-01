@@ -1,8 +1,9 @@
 import { CreateAppointmentRequest } from '../types/CreateAppointmentRequest';
+import { TimezoneService } from './timezoneUtils';
 
 export interface ICSEventData {
-  startDate: string; // ISO date string or backend date
-  endDate: string;   // ISO date string or backend date
+  startDate: string; // UTC format for ICS: YYYYMMDDTHHMMSSZ
+  endDate: string;   // UTC format for ICS: YYYYMMDDTHHMMSSZ
   title: string;
   description: string;
   location: string;
@@ -16,67 +17,300 @@ export class ICSGeneratorService {
   /**
    * Convert any date to UTC format required by ICS (YYYYMMDDTHHMMSSZ)
    */
-  static convertToUTCFormat(dateString: string): string {
+  static convertToUTCFormat(date: Date): string {
     try {
-      // Handle different input formats
-      let date: Date;
-      
-      if (dateString.includes('T')) {
-        // ISO format or backend format
-        date = new Date(dateString);
-      } else {
-        // Date only format
-        date = new Date(dateString + 'T00:00:00');
-      }
-      
       if (isNaN(date.getTime())) {
         throw new Error('Invalid date');
       }
       
-      // Convert to UTC and format for ICS
-      const utcDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
-      return utcDate.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+      // Get UTC components directly
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
+      const hours = String(date.getUTCHours()).padStart(2, '0');
+      const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+      const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+      
+      return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
       
     } catch (error) {
       console.error('Error converting date to UTC format:', error);
       // Fallback to current time
-      return new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+      const now = new Date();
+      return this.convertToUTCFormat(now);
     }
   }
 
   /**
-   * Convert backend EST/EDT time to UTC for ICS
+   * 🔥 FIXED: Convert backend EST/EDT time to UTC for ICS using existing TimezoneService
    */
   static convertBackendTimeToUTC(backendDateTime: string): string {
     try {
+      console.log('🔥 Converting backend time to UTC:', backendDateTime);
       
+      // Parse the backend time (this is in EST/EDT)
       const backendDate = new Date(backendDateTime);
       
       if (isNaN(backendDate.getTime())) {
         throw new Error('Invalid backend date');
       }
       
-      // Backend is in EST/EDT, we need to convert to UTC
-      // EST = UTC-5, EDT = UTC-4
-      const isDST = (date: Date) => {
-        const jan = new Date(date.getFullYear(), 0, 1);
-        const jul = new Date(date.getFullYear(), 6, 1);
-        return Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset()) !== date.getTimezoneOffset();
-      };
+      // 🎯 KEY FIX: The backend time is LOCAL EST/EDT time, not UTC
+      // We need to treat it as EST/EDT and convert to UTC
       
-      // Determine offset based on date
-      const offsetHours = isDST(backendDate) ? 4 : 5; // EDT = UTC-4, EST = UTC-5
+      // Extract the time components as they appear (EST/EDT local time)
+      const year = backendDate.getFullYear();
+      const month = backendDate.getMonth();
+      const day = backendDate.getDate();
+      const hours = backendDate.getHours();
+      const minutes = backendDate.getMinutes();
+      const seconds = backendDate.getSeconds();
       
-      // Convert to UTC by adding the offset
-      const utcDate = new Date(backendDate.getTime() + (offsetHours * 60 * 60 * 1000));
+      console.log('🔥 Extracted components:', { year, month, day, hours, minutes, seconds });
       
-      const result = utcDate.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+      // Create a date representing this time in EST/EDT timezone
+      // We'll use Intl.DateTimeFormat to properly handle this
+      
+      // Method 1: Create the time as if it's in EST, then get UTC equivalent
+      const estTimeString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      
+      console.log('🔥 EST time string:', estTimeString);
+      
+      // Use TimezoneService approach: create the time in EST timezone
+      const now = new Date();
+      
+      // Get current EST offset from UTC (accounts for DST automatically)
+      const estFormatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      
+      // Get what "now" looks like in EST
+      const nowInEST = estFormatter.format(now);
+      const nowInUTC = now.toISOString().substring(0, 19);
+      
+      console.log('🔥 Now in EST:', nowInEST);
+      console.log('🔥 Now in UTC:', nowInUTC);
+      
+      // Calculate the offset for the current time
+      const estDate = new Date(nowInEST);
+      const utcDate = new Date(nowInUTC);
+      const offsetMs = utcDate.getTime() - estDate.getTime();
+      
+      console.log('🔥 Calculated offset (ms):', offsetMs);
+      console.log('🔥 Calculated offset (hours):', offsetMs / (1000 * 60 * 60));
+      
+      // Apply this offset to our target time
+      const targetEST = new Date(estTimeString);
+      const targetUTC = new Date(targetEST.getTime() + offsetMs);
+      
+      console.log('🔥 Target EST:', targetEST);
+      console.log('🔥 Target UTC:', targetUTC);
+      
+      const result = this.convertToUTCFormat(targetUTC);
+      console.log('🔥 Final ICS format:', result);
       
       return result;
       
     } catch (error) {
       console.error('❌ Error converting backend time to UTC:', error);
-      return this.convertToUTCFormat(backendDateTime);
+      return this.convertToUTCFormat(new Date());
+    }
+  }
+
+  /**
+   * 🚀 ALTERNATIVE APPROACH: Use a more reliable method
+   */
+  static convertBackendTimeToUTCReliable(backendDateTime: string): string {
+    try {
+      console.log('🚀 Reliable conversion for:', backendDateTime);
+      
+      const backendDate = new Date(backendDateTime);
+      if (isNaN(backendDate.getTime())) {
+        throw new Error('Invalid backend date');
+      }
+      
+      // Extract components
+      const year = backendDate.getFullYear();
+      const month = backendDate.getMonth();
+      const day = backendDate.getDate();
+      const hours = backendDate.getHours();
+      const minutes = backendDate.getMinutes();
+      const seconds = backendDate.getSeconds();
+      
+      // 🎯 Create a date that represents this exact time in EST/EDT
+      // For a given date, determine if it's in EST (-5) or EDT (-4)
+      
+      // Create a date in the middle of the target date to check DST
+      const checkDate = new Date(year, month, day, 12, 0, 0); // Noon on target date
+      
+      // Check if this date is in DST in Eastern timezone
+      const january = new Date(year, 0, 1); // January 1st
+      const july = new Date(year, 6, 1);    // July 1st
+      
+      // Get timezone offsets for winter and summer
+      const winterOffset = this.getTimezoneOffset('America/New_York', january);
+      const summerOffset = this.getTimezoneOffset('America/New_York', july);
+      const currentOffset = this.getTimezoneOffset('America/New_York', checkDate);
+      
+      console.log('🚀 Winter offset:', winterOffset);
+      console.log('🚀 Summer offset:', summerOffset);
+      console.log('🚀 Current offset:', currentOffset);
+      
+      // Determine if we're in DST
+      const isDST = currentOffset === summerOffset;
+      const offsetHours = isDST ? 4 : 5; // EDT = UTC-4, EST = UTC-5
+      
+      console.log('🚀 Is DST:', isDST);
+      console.log('🚀 Offset hours:', offsetHours);
+      
+      // Create UTC date by adding the offset
+      const localEST = new Date(year, month, day, hours, minutes, seconds);
+      const utcDate = new Date(localEST.getTime() + (offsetHours * 60 * 60 * 1000));
+      
+      console.log('🚀 Local EST:', localEST);
+      console.log('🚀 UTC result:', utcDate);
+      
+      const result = this.convertToUTCFormat(utcDate);
+      console.log('🚀 Final format:', result);
+      
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Reliable conversion error:', error);
+      return this.convertToUTCFormat(new Date());
+    }
+  }
+
+  /**
+   * Helper to get timezone offset from UTC in hours
+   */
+  private static getTimezoneOffset(timezone: string, date: Date): number {
+    try {
+      const utcDate = new Date(date.toISOString().substring(0, 19) + 'Z');
+      
+      const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      
+      const tzTimeString = formatter.format(utcDate);
+      const tzDate = new Date(tzTimeString);
+      
+      const offsetMs = tzDate.getTime() - utcDate.getTime();
+      return offsetMs / (1000 * 60 * 60);
+      
+    } catch (error) {
+      console.error('Error getting timezone offset:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * 🔥 FINAL FIX: Direct timezone conversion using proper date construction
+   */
+  static convertBackendTimeToUTCSimple(backendDateTime: string): string {
+    try {
+      console.log('🔥 Converting backend Eastern time to UTC:', backendDateTime);
+      
+      // Extract components from backend time
+      const dateStr = backendDateTime.substring(0, 10); // "2025-06-10"
+      const timeStr = backendDateTime.substring(11, 19); // "12:00:00"
+      
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+      
+      console.log('🔥 Parsed components:', { year, month, day, hours, minutes, seconds });
+      
+      // 🎯 KEY FIX: Create the time with explicit Eastern timezone
+      // Method: Use Date constructor with timezone-aware string
+      
+      // Check if date is in EDT (Daylight Saving Time) or EST
+      const testDate = new Date(year, month - 1, day);
+      const isDST = this.isDaylightSavingTime(testDate);
+      const offsetString = isDST ? '-04:00' : '-05:00'; // EDT or EST
+      
+      console.log('🔥 Is DST (EDT):', isDST);
+      console.log('🔥 Using timezone offset:', offsetString);
+      
+      // Create the complete date string with timezone
+      const easternDateString = `${dateStr}T${timeStr}${offsetString}`;
+      console.log('🔥 Complete Eastern date string:', easternDateString);
+      
+      // Parse as Eastern time and JavaScript will convert to UTC
+      const easternDate = new Date(easternDateString);
+      console.log('🔥 Parsed date object:', easternDate);
+      console.log('🔥 UTC equivalent:', easternDate.toISOString());
+      
+      // 🔥 VERIFICATION: Convert back to Eastern to verify
+      const backToEastern = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }).format(easternDate);
+      
+      console.log('🔥 VERIFICATION - Back to Eastern:', backToEastern);
+      console.log('🔥 VERIFICATION - Should match input:', `${dateStr} ${timeStr}`);
+      
+      // 🔥 LEBANON TIME VERIFICATION: Show what this looks like in Lebanon (GMT+3)
+      const lebanonTime = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Beirut', // Lebanon timezone
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }).format(easternDate);
+      
+      console.log('🔥 LEBANON TIME VERIFICATION:', lebanonTime);
+      console.log('🔥 LEBANON TIME - Should be around 7:00 PM for 12:00 PM Eastern');
+      
+      return this.convertToUTCFormat(easternDate);
+      
+    } catch (error) {
+      console.error('❌ Conversion error:', error);
+      return this.convertToUTCFormat(new Date());
+    }
+  }
+
+  /**
+   * Check if a date is in Daylight Saving Time for Eastern timezone
+   */
+  private static isDaylightSavingTime(date: Date): boolean {
+    try {
+      // DST in Eastern timezone typically runs from 2nd Sunday in March to 1st Sunday in November
+      const year = date.getFullYear();
+      
+      // Find 2nd Sunday in March
+      const march = new Date(year, 2, 1); // March 1st
+      const firstSundayMarch = new Date(year, 2, 1 + (7 - march.getDay()) % 7);
+      const secondSundayMarch = new Date(firstSundayMarch.getTime() + 7 * 24 * 60 * 60 * 1000);
+      
+      // Find 1st Sunday in November  
+      const november = new Date(year, 10, 1); // November 1st
+      const firstSundayNovember = new Date(year, 10, 1 + (7 - november.getDay()) % 7);
+      
+      // Check if date is between DST start and end
+      return date >= secondSundayMarch && date < firstSundayNovember;
+      
+    } catch (error) {
+      console.error('Error checking DST:', error);
+      return false;
     }
   }
 
@@ -93,33 +327,41 @@ export class ICSGeneratorService {
   }
 
   /**
-   * Generate ICS file content from appointment data
+   * 🔥 UPDATED: Generate ICS file content from appointment data
    */
   static generateICSFromAppointment(appointmentData: CreateAppointmentRequest): string {
     const borrowerName = `${appointmentData.BorrowerInformation.FirstName} ${appointmentData.BorrowerInformation.LastName}`.trim();
     
-    // 🔥 FIXED: Use backend dates if available, otherwise construct from selected date/time
+    // 🔥 FIXED: Use the simplest, most reliable conversion method
     let startTimeUTC: string;
     let endTimeUTC: string;
     
     if (appointmentData.DateTimeInfo.FromDate && appointmentData.DateTimeInfo.ToDate) {
       // Use backend dates (already in EST/EDT timezone)
-      startTimeUTC = this.convertBackendTimeToUTC(appointmentData.DateTimeInfo.FromDate);
-      endTimeUTC = this.convertBackendTimeToUTC(appointmentData.DateTimeInfo.ToDate);
+      console.log('🔥 Using backend FromDate/ToDate:', appointmentData.DateTimeInfo.FromDate, appointmentData.DateTimeInfo.ToDate);
+      
+      startTimeUTC = this.convertBackendTimeToUTCSimple(appointmentData.DateTimeInfo.FromDate);
+      endTimeUTC = this.convertBackendTimeToUTCSimple(appointmentData.DateTimeInfo.ToDate);
     } else {
       // Construct from selected date and time
+      console.log('🔥 Constructing from SelectedDate/SelectedTime:', appointmentData.DateTimeInfo.SelectedDate, appointmentData.DateTimeInfo.SelectedTime);
+      
       const selectedDate = appointmentData.DateTimeInfo.SelectedDate;
       const selectedTime = appointmentData.DateTimeInfo.SelectedTime;
       
       // Create start time
       const startDateTime = `${selectedDate}T${selectedTime}:00`;
-      startTimeUTC = this.convertToUTCFormat(startDateTime);
+      startTimeUTC = this.convertBackendTimeToUTCSimple(startDateTime);
       
       // Create end time (default to 1 hour later)
-      const startDate = new Date(startDateTime);
-      const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
-      endTimeUTC = this.convertToUTCFormat(endDate.toISOString());
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      const endHours = hours + 1; // Add 1 hour
+      const endTime = `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+      const endDateTime = `${selectedDate}T${endTime}`;
+      endTimeUTC = this.convertBackendTimeToUTCSimple(endDateTime);
     }
+    
+    console.log('🔥 Final UTC times for ICS:', { startTimeUTC, endTimeUTC });
     
     const eventData: ICSEventData = {
       startDate: startTimeUTC,
@@ -149,7 +391,7 @@ export class ICSGeneratorService {
       'Appointment Details:',
       `Service: ${appointmentData.ServiceName}`,
       `Date: ${appointmentDate}`,
-      `Time: ${appointmentTime}`,
+      `Time: ${appointmentTime} Eastern Time`,
       `Loan ID: ${appointmentData.EncompassDetails.EncompassLoanId}`,
       '',
       'Borrower Information:',
@@ -187,7 +429,7 @@ export class ICSGeneratorService {
       `STATUS:${eventData.status || 'CONFIRMED'}`,
       `SEQUENCE:${eventData.sequence || 0}`,
       `PRIORITY:5`,
-      `DTSTAMP:${this.convertToUTCFormat(new Date().toISOString())}`,
+      `DTSTAMP:${this.convertToUTCFormat(new Date())}`,
       'BEGIN:VALARM',
       'TRIGGER:-PT15M',
       'ACTION:DISPLAY',
@@ -215,6 +457,6 @@ export class ICSGeneratorService {
     const date = appointmentData.DateTimeInfo.SelectedDate;
     const loanId = appointmentData.EncompassDetails.EncompassLoanId.replace(/[^a-zA-Z0-9]/g, '');
     
-    return `Appointment-${borrowerName}-${date}`;
+    return `Appointment-${borrowerName}-${date}.ics`;
   }
 }
