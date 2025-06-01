@@ -46,67 +46,75 @@ export const bookingService = {
     return response.data;
   },
 
-  async getAvailableTimeSlots(
+ async getAvailableTimeSlots(
     serviceId: string, 
     selectedDateTime: string, 
-    isEditMode: boolean = false
+    isEditMode: boolean = false,
+    currentSelectedSlot?: { startTime: string; endTime: string }
   ): Promise<TimeSlot[]> {
-    
-    let estDateString: string;
-    
-    // Check if selectedDateTime already includes time (format: YYYY-MM-DDTHH:mm:ss)
-    if (selectedDateTime.includes('T')) {
-      // Extract just the date part if it's already a full datetime
-      const dateOnly = selectedDateTime.split('T')[0];
-      estDateString = dateOnly;
-    } else {
-      // If it's just a date string, use it as-is
-      estDateString = selectedDateTime;
-    }
-        
-    const response = await api.get('/api/Application/v1/GetAvailableTimeSlots', {
-      params: {
-        serviceId,
-        selectedDateTime: `${estDateString}T00:00:00` // Send as EST date
+      
+      let estDateString: string;
+      
+      // Check if selectedDateTime already includes time (format: YYYY-MM-DDTHH:mm:ss)
+      if (selectedDateTime.includes('T')) {
+        // Extract just the date part if it's already a full datetime
+        const dateOnly = selectedDateTime.split('T')[0];
+        estDateString = dateOnly;
+      } else {
+        // If it's just a date string, use it as-is
+        estDateString = selectedDateTime;
       }
-    });
-    
-    let timeSlots = response.data || [];
-    
-    // 🔥 NEW: Filter out past time slots in edit mode
-    if (isEditMode && timeSlots.length > 0) {
-      
-      const now = new Date();
-      
-      const filteredSlots = timeSlots.filter((slot: TimeSlot) => {
-        try {
-          // Parse the slot start time (backend EST time)
-          const slotStartTime = new Date(slot.startTime);
           
-          // Check if this slot is in the future
-          const isFuture = slotStartTime > now;
-          
-          
-          return isFuture;
-        } catch (error) {
-          console.error('❌ Error checking slot time:', error);
-          return false; // Filter out slots with invalid times
+      const response = await api.get('/api/Application/v1/GetAvailableTimeSlots', {
+        params: {
+          serviceId,
+          selectedDateTime: `${estDateString}T00:00:00` // Send as EST date
         }
       });
       
-      timeSlots = filteredSlots;
-    }
-    
-    // Backend returns time slots in EST/EDT
-    // They will be converted to user timezone in the TimeSelector component
-    return timeSlots;
-  },
-  //get available services
-  async getAvailableServices(): Promise<BookingService[]> {
-    const response = await api.get('/api/Application/v1/GetAvailableServices');
-    const services = response.data.value;
-    return services || [];
-  },
+      let timeSlots = response.data || [];
+      
+      // 🔥 ENHANCED: Filter past time slots in edit mode with special handling for current slot
+      if (isEditMode && timeSlots.length > 0) {
+        const now = new Date();
+        
+        const filteredSlots = timeSlots.filter((slot: TimeSlot) => {
+          try {
+            // Parse the slot start time (backend EST time)
+            const slotStartTime = new Date(slot.startTime);
+            
+            // 🔥 NEW: Always allow the current selected slot (even if it's in the past)
+            if (currentSelectedSlot && 
+                slot.startTime === currentSelectedSlot.startTime && 
+                slot.endTime === currentSelectedSlot.endTime) {
+              return true;
+            }
+            
+            // Allow slots that start from the current selected slot time onwards
+            if (currentSelectedSlot) {
+              const currentSlotTime = new Date(currentSelectedSlot.startTime);
+              const isAfterOrEqualToCurrentSlot = slotStartTime >= currentSlotTime;
+
+              return isAfterOrEqualToCurrentSlot;
+            }
+            
+            // Fallback: check if this slot is in the future
+            const isFuture = slotStartTime > now;
+            return isFuture;
+            
+          } catch (error) {
+            console.error('❌ Error checking slot time:', error);
+            return false; // Filter out slots with invalid times
+          }
+        });
+
+        timeSlots = filteredSlots;
+      }
+      
+      // Backend returns time slots in EST/EDT
+      // They will be converted to user timezone in the TimeSelector component
+      return timeSlots;
+    },
 
   //get loan details
   async getLoanDetails(loanId: string): Promise<LoanDetails>{    
@@ -119,6 +127,12 @@ export const bookingService = {
     return response.data;
   },
 
+  async getAvailableServices(): Promise<BookingService[]> {
+    const response = await api.get('/api/Application/v1/GetAvailableServices');
+    const services = response.data.value;
+    return services || [];
+  },
+  
   //create appointment
  async postBooking(appointmentData: CreateAppointmentRequest): Promise<void> {
     // Check if FromDate/ToDate look like EST times (no timezone suffix)

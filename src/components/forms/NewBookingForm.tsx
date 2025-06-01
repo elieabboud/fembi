@@ -33,6 +33,7 @@ import { TimezoneService } from '../../services/timezoneUtils';
 import { EmailRequestDTO, FileRequestDTO } from '../../types/email';
 import { AvailabilityService, AvailabilitySettings, DateRange } from '../../services/availabilityService';
 import EnhancedFollowers from './EnhancedFollowers';
+import { ICSGeneratorService } from '../../services/icsGeneratorService';
 
 type BookingFormProps = {
   onClose: () => void;
@@ -99,7 +100,9 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     EncompassDetails: {
       EncompassLoanId: "",
       LoanCloser: "",
+      loanCloserEmail: "",
       LoanOfficer: "",
+      loanOfficerEmail: "",
       dpa: ""
     },
     BorrowerInformation: {
@@ -161,7 +164,6 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     
     setIsLoadingAvailability(true);
     try {
-      // console.debug('📅 Fetching availability settings for create mode...', serviceId ? `serviceId: ${serviceId}` : '');
       
       const settings = await bookingService.getAvailability(serviceId);
       setAvailabilitySettings(settings);
@@ -171,15 +173,8 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
       
       // 🔥 NEW: Auto-select the first available date
       if (calculatedRange.minDate) {
-        // console.debug('📅 Auto-selecting first available date:', calculatedRange.minDate.toLocaleDateString());
         setSelectedDate(calculatedRange.minDate);
       }
-      
-      // console.debug('📅 Availability constraints applied:', {
-      //   serviceId,
-      //   settings,
-      //   dateRange: calculatedRange
-      // });
       
     } catch (error) {
       console.error('❌ Error fetching availability settings:', error);
@@ -227,20 +222,23 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
 
       // NEW: Fetch availability settings when service is selected
       if (!editMode && !readOnlyMode) {
-        // console.debug('🔧 Service selected, fetching availability for:', selectedService.id);
         fetchAvailabilitySettings(selectedService.id);
       }
     }
   };
 
   const sendEmailNotifications = async (response: any) => {
-    if (readOnlyMode || editMode) return;
+    if (readOnlyMode) return;
+
     updateLoadingState('sendingEmail', true);
     
     try {
       const currentUserEmail = user?.email || '';
+
+      const globalFollowers = await bookingService.getGlobalFollowers();
       
       const recipientEmails: string[] = [];
+      const ccEmails: string[] = [loanDetails.loanCloserEmail, loanDetails.loanOfficerEmail, ...globalFollowers];
       const mainRecipientEmail : string[] = [];
       
       if (currentUserEmail) {
@@ -248,8 +246,7 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
       }
       
       if (bookingData.BorrowerInformation.Email) {
-        mainRecipientEmail.push(bookingData.BorrowerInformation.Email)
-        //recipientEmails.push(bookingData.BorrowerInformation.Email);
+        mainRecipientEmail.push(bookingData.BorrowerInformation.Email);
       }
       
       if (bookingData.Followers) {
@@ -263,7 +260,6 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
       const uniqueEmails = Array.from(new Set(recipientEmails));
       
       if (uniqueEmails.length === 0) {
-        console.debug('No valid email addresses found for notification');
         return;
       }
       
@@ -275,18 +271,51 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
         hour12: true
       });
       const borrowerName = `${bookingData.BorrowerInformation.FirstName} ${bookingData.BorrowerInformation.LastName}`.trim();
+
+      const title = `${editMode ? "Appointment Updated" : "New Appointment Scheduled"}`;
       
       const htmlBody = `
         <html>
           <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
             <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #2c5aa0; border-bottom: 2px solid #2c5aa0; padding-bottom: 10px;">
-                New Appointment Scheduled
+                ${title}
               </h2>
-              
+
+              <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <p><strong>Greetings,</strong></p>
+                <p>
+                  We are pleased to confirm your upcoming closing appointment with <strong>FEMBi Mortgage</strong>.
+                  This email serves as your official appointment confirmation.
+                </p>
+                <p>
+                  Should you have any questions or require further assistance, please do not hesitate to contact your 
+                  <strong>FEMBi Mortgage Loan Officer</strong>. We are here to support you throughout this process.
+                </p>
+                <p>
+                  Thank you for choosing <strong>FEMBi Mortgage</strong>. We look forward to assisting you at your closing.
+                </p>
+
+                <hr style="margin: 30px 0;">
+
+                <p><strong>Saludos,</strong></p>
+                <p>
+                  Nos complace confirmar su cita para el cierre próximo con <strong>FEMBi Mortgage</strong>.
+                  Este correo electrónico constituye la confirmación oficial de su cita.
+                </p>
+                <p>
+                  Si tiene alguna pregunta o necesita asistencia adicional, no dude en comunicarse con su 
+                  <strong>Oficial de Préstamos de FEMBi Mortgage</strong>. Estamos a su disposición para asistirle durante este proceso.
+                </p>
+                <p>
+                  Gracias por confiar en <strong>FEMBi Mortgage</strong>. Esperamos poder asistirle en su cierre.
+                </p>
+              </div>
+
               <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0;">
                 <h3 style="margin-top: 0; color: #28a745;">Appointment Details</h3>
-                <p><strong>Service:</strong> ${bookingData.ServiceName}</p>
+                <p><strong>Location:</strong> ${bookingData.ServiceName}</p>
+                <p><strong>Settlement Agent:</strong> First National Title Services, Inc.</p>
                 <p><strong>Date:</strong> ${appointmentDate}</p>
                 <p><strong>Time:</strong> ${formattedTime}</p>
                 <p><strong>Loan ID:</strong> ${loanDetails.loanNumber}</p>
@@ -300,64 +329,43 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
               
               <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
                 <h3 style="margin-top: 0; color: #856404;">Loan Information</h3>
-                <p><strong>Loan Closer:</strong> ${bookingData.EncompassDetails.LoanCloser}</p>
-                <p><strong>Loan Officer:</strong> ${bookingData.EncompassDetails.LoanOfficer}</p>
+                <p><strong>Loan Closer:</strong> ${loanDetails.loanCloser}</p>
+                <p><strong>Loan Officer:</strong> ${loanDetails.loanOfficer}</p>
               </div>
               
               <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d;">
-                <p>This is an automated notification. Please do not reply to this email.</p>
+                <p>📅 <strong>Calendar attachment included</strong> - Add this appointment to your calendar by opening the attached .ics file.</p>
               </div>
             </div>
           </body>
         </html>
       `;
-      const eventDescription = `
-Appointment Details
-Service:\t\t${bookingData.ServiceName}
-Date:\t\t${appointmentDate}
-Time:\t\t${appointmentTime}
-Loan ID:\t\t${bookingData.EncompassDetails.EncompassLoanId}
+
+      const icsContent = ICSGeneratorService.generateICSFromAppointment(bookingData);
+      const icsFilename = ICSGeneratorService.generateICSFilename(bookingData);
 
 
-Borrower Information
-Name:\t\t${borrowerName}
-Address:\t\t${bookingData.BorrowerInformation.Address.Street}, ${bookingData.BorrowerInformation.Address.City}, ${bookingData.BorrowerInformation.Address.State} ${bookingData.BorrowerInformation.Address.ZipCode}
-
-
-Loan Information
-Loan Closer:\t\t${bookingData.EncompassDetails.LoanCloser}
-Loan Officer:\t\t${bookingData.EncompassDetails.LoanOfficer}
-`
-      const attachmentICS = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//FNTIS//NONSGML v1.0//EN
-BEGIN:VEVENT
-SUMMARY:Appointment with ${borrowerName} - ${bookingData.ServiceName}
-DTSTART:${bookingData.DateTimeInfo.FromDate.replaceAll(':', '').replaceAll('-', '')+'Z'}
-DTEND:${bookingData.DateTimeInfo.ToDate.replaceAll(':', '').replaceAll('-', '')+'Z'}
-LOCATION:${bookingData.ServiceName}
-DESCRIPTION:${eventDescription}
-END:VEVENT
-END:VCALENDAR`
       const emailRequest: EmailRequestDTO = {
-         To: mainRecipientEmail,
-         Bcc: recipientEmails,
-        //To: ["bruno.farjallah@tacresearch.com"],
+        To: mainRecipientEmail,
+        Bcc: uniqueEmails,
+        Cc: ccEmails,
         Subject: `New Appointment Scheduled - ${bookingData.ServiceName} for ${borrowerName}`,
         Body: htmlBody,
         IsHtml: true,
         Attachments: [
           {
-            FileName: "Calendar Item",
+            FileName: icsFilename,
             Extension: "ics",
-            Data: Buffer.from(attachmentICS).toString('base64')
+            Data: Buffer.from(icsContent).toString('base64')
           }
         ]
       };
+
       const emailResponse = await bookingService.sendEmail(emailRequest);
       
     } catch (error) {
-      console.error('Error sending email notifications:', error);
+      console.error('❌ Error sending email notifications:', error);
+      
     } finally {
       updateLoadingState('sendingEmail', false);
     }
@@ -454,7 +462,6 @@ END:VCALENDAR`
       
       // Handle loan details followers
       if (loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0) {
-        console.log('Loan details followers loaded:', loanDetails.followers);
         setLoanDetailsFollowers(loanDetails.followers);
         setSelectedLoanFollowers(loanDetails.followers);
       } else {
@@ -467,7 +474,9 @@ END:VCALENDAR`
         EncompassDetails: {
           EncompassLoanId: loanDetails?.loanId,
           LoanCloser: loanDetails?.loanCloser,
+          loanCloserEmail: loanDetails?.loanCloserEmail,
           LoanOfficer: loanDetails?.loanOfficer,
+          loanOfficerEmail: loanDetails?.loanOfficerEmail,
           dpa: loanDetails?.dpa
         },
         BorrowerInformation: {
@@ -545,57 +554,72 @@ END:VCALENDAR`
 
   // UPDATED: Apply availability filtering to time slots
   const fetchAvailableTimeSlots = useCallback(async () => {     
-    if (!selectedDate || !bookingData?.ServiceId) return;
+  if (!selectedDate || !bookingData?.ServiceId) return;
 
-    updateLoadingState('timeSlots', true);
-    try {
-     
-      const year = selectedDate.getFullYear();
-      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-      const day = String(selectedDate.getDate()).padStart(2, '0');
-      const backendDateString = `${year}-${month}-${day}T00:00:00`;
-  
-      const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
-        bookingData.ServiceId,
-        backendDateString,
-        editMode // Pass edit mode flag
-      );
+  updateLoadingState('timeSlots', true);
+  try {
+   
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const backendDateString = `${year}-${month}-${day}T00:00:00`;
 
-      // Apply availability filtering for create mode only
-      let filteredSlots = response;
+    // 🔥 NEW: Prepare current selected slot for filtering
+    let currentSelectedSlot: { startTime: string; endTime: string } | undefined;
+    
+    if (editMode && bookingData.DateTimeInfo?.FromDate && bookingData.DateTimeInfo?.ToDate) {
+      currentSelectedSlot = {
+        startTime: bookingData.DateTimeInfo.FromDate,
+        endTime: bookingData.DateTimeInfo.ToDate
+      };
       
-      if (!editMode && !readOnlyMode && dateRange) {
-        filteredSlots = AvailabilityService.filterTimeSlots(response, selectedDate, dateRange);
-      }
-
-      setTimeSlots(filteredSlots);
-
-      if (editMode && bookingData.DateTimeInfo?.SelectedTime && !selectedSlot) {
-        const timeToMatch = bookingData.DateTimeInfo.SelectedTime;
-        
-        const matchingSlot = filteredSlots.find(slot => {
-          try {
-            const userSlotTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
-            const slotTimeFormatted = format(userSlotTime, 'HH:mm');
-            return slotTimeFormatted === timeToMatch;
-          } catch (error) {
-            console.error('Error comparing slot time:', error);
-            return false;
-          }
-        });
-        
-        if (matchingSlot) {
-          setSelectedSlot(matchingSlot);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching time slots for selected service:', error);
-      setTimeSlots([]);
-    } finally {
-      updateLoadingState('timeSlots', false);
     }
-  }, [selectedService, selectedDate, editMode, isViewMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, selectedSlot, dateRange]);
-  
+
+    // 🔥 UPDATED: Pass current selected slot to the API call
+    const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
+      bookingData.ServiceId,
+      backendDateString,
+      editMode, // Pass edit mode flag
+      currentSelectedSlot // 🔥 NEW: Pass current selected slot
+    );
+
+    // Apply availability filtering for create mode only
+    let filteredSlots = response;
+    
+    if (!editMode && !readOnlyMode && dateRange) {
+      filteredSlots = AvailabilityService.filterTimeSlots(response, selectedDate, dateRange);
+    }
+
+    setTimeSlots(filteredSlots);
+
+    // 🔥 ENHANCED: Auto-select matching slot in edit mode
+    if (editMode && bookingData.DateTimeInfo?.SelectedTime && !selectedSlot) {
+      const timeToMatch = bookingData.DateTimeInfo.SelectedTime;
+      
+      const matchingSlot = filteredSlots.find(slot => {
+        try {
+          const userSlotTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
+          const slotTimeFormatted = format(userSlotTime, 'HH:mm');
+          return slotTimeFormatted === timeToMatch;
+        } catch (error) {
+          console.error('Error comparing slot time:', error);
+          return false;
+        }
+      });
+      
+      if (matchingSlot) {
+        setSelectedSlot(matchingSlot);
+      } else {
+        console.warn('⚠️ Could not find matching slot for time:', timeToMatch);
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching time slots for selected service:', error);
+    setTimeSlots([]);
+  } finally {
+    updateLoadingState('timeSlots', false);
+  }
+}, [selectedService, selectedDate, editMode, isViewMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, selectedSlot, dateRange, bookingData.DateTimeInfo?.FromDate, bookingData.DateTimeInfo?.ToDate]); // 🔥 Added new dependencies
   const fetchAllFollowers = useCallback(async () => {
     updateLoadingState('followers', true);
     try {
@@ -703,6 +727,14 @@ END:VCALENDAR`
                 State: loanDetails.borrowerState,
                 ZipCode: loanDetails.borrowerZipCode,
               },
+              EncompassDetails: {
+                EncompassLoanId: loanDetails?.loanId,
+                LoanCloser: loanDetails?.loanCloser,
+                loanCloserEmail: loanDetails?.loanCloserEmail,
+                LoanOfficer: loanDetails?.loanOfficer,
+                loanOfficerEmail: loanDetails?.loanOfficerEmail,
+                dpa: loanDetails?.dpa
+              },
             },
           }));
 
@@ -760,12 +792,6 @@ END:VCALENDAR`
       Followers: followersString,
     }));
     
-    console.log('Updated followers:', {
-      regular: fetchedFollowers,
-      loanSelected: selectedLoanFollowers,
-      added: addedFollowers,
-      final: followersString
-    });
   }, [fetchedFollowers, selectedLoanFollowers, addedFollowers]);
 
   useEffect(() => {
@@ -1104,13 +1130,21 @@ END:VCALENDAR`
                 return false;
               }
               
-              // For edit mode, allow the currently selected date even if it's in the past
-              if (editMode && selectedDate && date.toDateString() === selectedDate.toDateString()) {
-                return false;
-              }
-              
-              // For edit mode, disable past dates (but allow current selected date)
+              // 🔥 NEW LOGIC FOR EDIT MODE: Only disable dates before the selected date
               if (editMode) {
+                // Always allow the currently selected date
+                if (selectedDate && date.toDateString() === selectedDate.toDateString()) {
+                  return false;
+                }
+                
+                // If we have a selected date, disable dates before it
+                if (selectedDate) {
+                  const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+                  const dateToCheck = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                  return dateToCheck < selectedDateOnly;
+                }
+                
+                // Fallback: disable past dates
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 const dateToCheck = new Date(date);
@@ -1121,7 +1155,7 @@ END:VCALENDAR`
               // Default: don't disable
               return false;
             }}
-            // ADDED: Disable past dates in create mode by default
+            // Keep disablePast for create mode only
             disablePast={!editMode && !readOnlyMode}
           />
           
@@ -1190,12 +1224,20 @@ END:VCALENDAR`
         <Grid container sx={{display: 'flex', flexDirection: 'column', width: '100%', padding: '16px'}}>
           {(timeSlots.length > 0 || selectedSlot || (editMode && selectedDate)) && (
             <TimeSelector
-            timeSlots={timeSlots}
-            selectedSlot={selectedSlot}
-            onSelect={!readOnlyMode ? setSelectedSlot : () => {}}
-            loading={loadingStates.timeSlots}
-            readOnly={readOnlyMode}
-          />)}
+              timeSlots={timeSlots}
+              selectedSlot={selectedSlot}
+              onSelect={!readOnlyMode ? setSelectedSlot : () => {}}
+              loading={loadingStates.timeSlots}
+              readOnly={readOnlyMode}
+              editMode={editMode} // 🔥 NEW: Pass edit mode
+              originalSlot={editMode && initialData ? { // 🔥 NEW: Pass original slot data
+                startTime: initialData.start?.dateTime || '',
+                endTime: initialData.end?.dateTime || '',
+                displayText: '',
+                staffMemberId: initialData.staffMemberIds?.[0] || ''
+              } : null}
+            />
+          )}
           
           <EnhancedFollowers
             editMode={editMode || readOnlyMode}

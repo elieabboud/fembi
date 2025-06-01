@@ -5,7 +5,9 @@ export interface CreateAppointmentRequest {
   EncompassDetails: {
     EncompassLoanId: string;
     LoanCloser: string;
+    loanCloserEmail?: string;
     LoanOfficer: string;
+    loanOfficerEmail?: string;
     dpa: string;
   };
   BorrowerInformation: {

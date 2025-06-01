@@ -9,6 +9,8 @@ interface TimeSelectorProps {
   selectedSlot?: TimeSlot | null;
   loading?: boolean;
   readOnly?: boolean;
+  editMode?: boolean; // 🔥 NEW: Add edit mode prop
+  originalSlot?: TimeSlot | null; // 🔥 NEW: Track original slot
 }
 
 const TimeSelector: React.FC<TimeSelectorProps> = ({ 
@@ -16,7 +18,9 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
   onSelect, 
   selectedSlot, 
   loading = false,
-  readOnly = false 
+  readOnly = false,
+  editMode = false, // 🔥 NEW
+  originalSlot = null // 🔥 NEW
 }) => {
   // 🔥 FIXED: Convert time slots ONLY once when they change
   const convertedTimeSlots = useMemo(() => {
@@ -41,6 +45,15 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
     return converted;
   }, [selectedSlot]);
 
+  // 🔥 NEW: Convert original slot for display
+  const originalSlotDisplay = useMemo(() => {
+    if (!originalSlot) {
+      return null;
+    }
+    const converted = TimezoneService.convertTimeSlotToLocal(originalSlot);
+    return converted;
+  }, [originalSlot]);
+
   const showTimezoneWarning = TimezoneService.shouldShowTimezoneWarning();
   const userTimezone = TimezoneService.getUserTimezoneDisplay();
 
@@ -56,8 +69,20 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
   return (
     <Box sx={{ justifySelf: 'start'}}>
       <Typography variant="h6" gutterBottom>
-        {readOnly ? 'Selected Time' : 'Select Time'}
+        {readOnly ? 'Selected Time' : editMode ? 'Update Time' : 'Select Time'}
       </Typography>
+
+      {/* 🔥 NEW: Show info about original slot in edit mode */}
+      {editMode && originalSlotDisplay && !readOnly && (
+        <Alert 
+          severity="info" 
+          sx={{ mb: 2, fontSize: '0.875rem' }}
+        >
+          <strong>Current appointment:</strong> {originalSlotDisplay.displayText}
+          <br />
+          <em>Select a new time slot to reschedule, or keep the current time.</em>
+        </Alert>
+      )}
 
       {/* Timezone Warning - only show if not in EST and not read-only */}
       {showTimezoneWarning && !readOnly && (
@@ -121,17 +146,23 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
           )}
         </Box>
       ) : !readOnly && !loading ? (
-        /* Edit mode - show all available time slots */
+        /* Edit/Create mode - show all available time slots */
         <Grid container spacing={2}>
           {convertedTimeSlots.map((convertedSlot, index) => {
             // Check if this slot is selected by comparing with original slot
-            const originalSlot = timeSlots[index];
+            const originalSlotAtIndex = timeSlots[index];
             const isSelected = selectedSlot && 
-              selectedSlot.startTime === originalSlot.startTime && 
-              selectedSlot.staffMemberId === originalSlot.staffMemberId;
+              selectedSlot.startTime === originalSlotAtIndex.startTime && 
+              selectedSlot.staffMemberId === originalSlotAtIndex.staffMemberId;
+            
+            // 🔥 NEW: Check if this is the original slot in edit mode
+            const isOriginalSlot = editMode && originalSlot && 
+              originalSlotAtIndex.startTime === originalSlot.startTime &&
+              originalSlotAtIndex.endTime === originalSlot.endTime &&
+              originalSlotAtIndex.staffMemberId === originalSlot.staffMemberId;
             
             return (
-              <Grid item xs={4} key={`${originalSlot.startTime}-${originalSlot.staffMemberId}`}>
+              <Grid item xs={4} key={`${originalSlotAtIndex.startTime}-${originalSlotAtIndex.staffMemberId}`}>
                 <Button
                   fullWidth
                   variant="contained"
@@ -140,14 +171,60 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
                   sx={{
                     textTransform: 'none',
                     borderRadius: '24px',
-                    backgroundColor: isSelected ? 'primary.main' : 'grey.400',
-                    color: isSelected ? 'common.white' : 'text.primary',
+                    backgroundColor: isSelected 
+                      ? 'primary.main' 
+                      : isOriginalSlot 
+                        ? 'warning.light' // 🔥 NEW: Different color for original slot
+                        : 'grey.400',
+                    color: isSelected || isOriginalSlot ? 'common.white' : 'text.primary',
+                    border: isOriginalSlot ? '2px solid #ff9800' : 'none', // 🔥 NEW: Border for original
+                    position: 'relative',
+                    minHeight: '48px', // Ensure enough space for text
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
                     '&:hover': {
-                      backgroundColor: isSelected ? 'primary.dark' : 'grey.500',
+                      backgroundColor: isSelected 
+                        ? 'primary.dark' 
+                        : isOriginalSlot 
+                          ? 'warning.main'
+                          : 'grey.500',
                     },
                   }}
                 >
-                  {convertedSlot.displayText}
+                  <Typography variant="body2" sx={{ lineHeight: 1.2 }}>
+                    {convertedSlot.displayText}
+                  </Typography>
+                  
+                  {/* 🔥 NEW: Add indicator for original slot */}
+                  {isOriginalSlot && !isSelected && (
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        fontSize: '0.65rem', 
+                        opacity: 0.9,
+                        fontWeight: 'bold',
+                        lineHeight: 1
+                      }}
+                    >
+                      Current
+                    </Typography>
+                  )}
+                  
+                  {/* Show "Selected" indicator for currently selected slot */}
+                  {isSelected && (
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        fontSize: '0.65rem', 
+                        opacity: 0.9,
+                        fontWeight: 'bold',
+                        lineHeight: 1
+                      }}
+                    >
+                      Selected
+                    </Typography>
+                  )}
                 </Button>
               </Grid>
             );
@@ -165,20 +242,6 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
         </Typography>
       ) : null}
 
-      {/* Debug info (remove in production) */}
-      {/* {process.env.NODE_ENV === 'development' && !loading && (
-        <Box sx={{ mt: 2, p: 1, bgcolor: 'grey.100', borderRadius: 1, fontSize: '0.75rem' }}>
-          <Typography variant="caption" display="block">
-            <strong>Debug:</strong> {convertedTimeSlots.length} slots converted
-          </Typography>
-          <Typography variant="caption" display="block">
-            <strong>Selected:</strong> {selectedSlot ? selectedSlot.startTime : 'None'}
-          </Typography>
-          <Typography variant="caption" display="block">
-            <strong>User TZ:</strong> {TimezoneService.getUserTimezone()}
-          </Typography>
-        </Box>
-      )} */}
     </Box>
   );
 };
