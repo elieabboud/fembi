@@ -664,7 +664,6 @@ const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response
             placeholder="Enter recipient's email address"
           />
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            This will create an EML file with the bookings data that you can send via email.
             {selectedBookings.length > 0 && ` Including ${selectedBookings.length} selected bookings.`}
           </Typography>
         </DialogContent>

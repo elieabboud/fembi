@@ -13,25 +13,25 @@ export class EmailService {
    */
   static createEMLFile(bookings: calendarBooking[], columns: Column[], recipientEmail?: string) {
     const subject = `Bookings Report - ${bookings.length} items (${new Date().toLocaleDateString()})`;
-    const htmlBody = this.generateHTMLTable(bookings, columns);
+    const htmlBody = this.generateHTMLTableForEmail(bookings, columns);
     const textBody = this.generatePlainTextTable(bookings, columns);
     
     const emlContent = `To: ${recipientEmail || ''}
-      Subject: ${subject}
-      MIME-Version: 1.0
-      Content-Type: multipart/alternative; boundary="boundary123"
+Subject: ${subject}
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="boundary123"
 
-      --boundary123
-      Content-Type: text/plain; charset=utf-8
+--boundary123
+Content-Type: text/plain; charset=utf-8
 
-      ${textBody}
+${textBody}
 
-      --boundary123
-      Content-Type: text/html; charset=utf-8
+--boundary123
+Content-Type: text/html; charset=utf-8
 
-      ${htmlBody}
+${htmlBody}
 
-      --boundary123--`;
+--boundary123--`;
 
     // Create and download EML file
     const blob = new Blob([emlContent], { type: 'message/rfc822' });
@@ -67,33 +67,34 @@ export class EmailService {
   }
 
   static async sendEmailWithRecipient(bookings: calendarBooking[], columns: Column[], recipientEmail?: string){
-    const subject = `Bookings Report - ${bookings.length} items`;
-    const body = this.generatePlainTextTable(bookings, columns);
+    const subject = `Bookings Report - ${bookings.length} items (${new Date().toLocaleDateString()})`;
+    const htmlBody = this.generateHTMLTableForEmail(bookings, columns);
 
     try {
       const emailRequest: EmailRequestDTO = {
-        To: [recipientEmail],
+        To: [recipientEmail || ''],
         Subject: subject,
-        Body: body,
-        IsHtml: false,
+        Body: htmlBody,
+        IsHtml: true, // This ensures the HTML table is rendered properly
       };
 
       const response = await bookingService.sendEmail(emailRequest);
 
-      if (response.Success) {
-        alert('Email sent successfully!');
-      }
+
     } catch (error) {
-      console.error(error);
+      console.error('❌ Error sending email:', error);
+      alert('Error sending email. Please check your connection and try again.');
     }
   }
+
+
 
   /**
    * Option 3: Copy formatted data to clipboard
    * User can paste into any email client
    */
   static async copyToClipboard(bookings: calendarBooking[], columns: Column[]) {
-    const htmlTable = this.generateHTMLTable(bookings, columns);
+    const htmlTable = this.generateHTMLTableForEmail(bookings, columns);
     const plainText = this.generatePlainTextTable(bookings, columns);
     
     try {
@@ -118,95 +119,194 @@ export class EmailService {
   }
 
   /**
-   * Generate HTML table for email body
+   * Generate HTML table specifically optimized for email clients
    */
-  private static generateHTMLTable(bookings: calendarBooking[], columns: Column[]): string {
+  private static generateHTMLTableForEmail(bookings: calendarBooking[], columns: Column[]): string {
     const userTimezone = TimezoneService.getUserTimezoneDisplay();
     
-    const tableRows = bookings.map(booking => {
+    // Generate table rows with inline styles
+    const tableRows = bookings.map((booking, index) => {
+      const rowBgColor = index % 2 === 0 ? '#f8f9fa' : '#ffffff';
+      
       const cells = columns.map(column => {
         let value = this.getCellValue(booking, column);
-        return `<td style="border: 1px solid #ddd; padding: 8px; text-align: left;">${value}</td>`;
+        
+        // Special styling for status column
+        if (column.label === 'Status') {
+          let statusBadge = '';
+          switch (value) {
+            case 'Upcoming':
+              statusBadge = `<span style="background-color: #d32f2f; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">${value}</span>`;
+              break;
+            case 'In Progress':
+              statusBadge = `<span style="background-color: #ff9800; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">${value}</span>`;
+              break;
+            case 'Completed':
+              statusBadge = `<span style="background-color: #2196f3; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">${value}</span>`;
+              break;
+            default:
+              statusBadge = `<span style="background-color: #9e9e9e; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">${value}</span>`;
+          }
+          return `<td style="border: 1px solid #ddd; padding: 8px; text-align: center; font-family: Arial, sans-serif;">${statusBadge}</td>`;
+        }
+        
+        return `<td style="border: 1px solid #ddd; padding: 8px; font-family: Arial, sans-serif; font-size: 13px;">${value}</td>`;
       }).join('');
-      return `<tr>${cells}</tr>`;
+      
+      return `<tr style="background-color: ${rowBgColor};">${cells}</tr>`;
     }).join('');
 
+    // Generate header cells
     const headerCells = columns.map(column => 
-      `<th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; text-align: left;">${column.label}</th>`
+      `<th style="border: 1px solid #ddd; padding: 10px 8px; background-color: #1976d2; color: white; font-weight: bold; font-size: 13px; font-family: Arial, sans-serif; text-align: left;">${column.label}</th>`
     ).join('');
 
+    // Create email-optimized HTML
     return `
-<!DOCTYPE html>
-<html>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <style>
-    table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background-color: #f2f2f2; font-weight: bold; }
-    .header { margin-bottom: 20px; }
-    .timezone-info { background-color: #e3f2fd; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
-  </style>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bookings Report</title>
 </head>
-<body>
-  <div class="header">
-    <h2>Bookings Report</h2>
-    <p>Generated on: ${new Date().toLocaleString()}</p>
-    <p>Total Records: ${bookings.length}</p>
-  </div>
-  
-  <div class="timezone-info">
-    <strong>📍 Timezone Information:</strong><br>
-    All times are displayed in: <strong>${userTimezone}</strong><br>
-    <em>Times have been automatically converted from Eastern Time (EST/EDT)</em>
-  </div>
-  
-  <table>
-    <thead>
-      <tr>${headerCells}</tr>
-    </thead>
-    <tbody>
-      ${tableRows}
-    </tbody>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f5f5f5;">
+    <tr>
+      <td align="center">
+        <!-- Main Container -->
+        <table border="0" cellpadding="0" cellspacing="0" width="800" style="background-color: white; margin: 20px auto; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #1976d2; color: white; padding: 30px; text-align: center;">
+              <h1 style="margin: 0 0 10px 0; font-size: 28px; font-weight: bold; color: white;">📊 Bookings Report</h1>
+              <p style="margin: 5px 0; font-size: 16px; color: white;">Generated on: ${new Date().toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}</p>
+              
+              <!-- Stats -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 20px;">
+                <tr>
+                  <td width="33%" style="text-align: center; color: white;">
+                    <div style="font-size: 24px; font-weight: bold;">${bookings.length}</div>
+                    <div style="font-size: 12px; opacity: 0.8;">Total Records</div>
+                  </td>
+                  <td width="33%" style="text-align: center; color: white;">
+                    <div style="font-size: 24px; font-weight: bold;">${bookings.filter(b => b.status === 'upcoming').length}</div>
+                    <div style="font-size: 12px; opacity: 0.8;">Upcoming</div>
+                  </td>
+                  <td width="33%" style="text-align: center; color: white;">
+                    <div style="font-size: 24px; font-weight: bold;">${bookings.filter(b => b.status === 'completed').length}</div>
+                    <div style="font-size: 12px; opacity: 0.8;">Completed</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td style="padding: 30px;">
+              
+              <!-- Timezone Info -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #e3f2fd; border: 1px solid #1976d2; border-radius: 4px; margin-bottom: 20px;">
+                <tr>
+                  <td style="padding: 15px;">
+                    <p style="margin: 0; font-size: 14px; color: #1976d2;">
+                      <strong>🌍 Timezone Information:</strong><br>
+                      All times are displayed in: <strong>${userTimezone}</strong><br>
+                      <em>Times have been automatically converted from Eastern Time (EST/EDT)</em>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Data Table -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse; border: 1px solid #ddd;">
+                <thead>
+                  <tr>${headerCells}</tr>
+                </thead>
+                <tbody>
+                  ${tableRows}
+                </tbody>
+              </table>
+              
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 20px; background-color: #f8f9fa; text-align: center; border-top: 1px solid #ddd;">
+              <p style="margin: 5px 0; font-size: 14px; color: #666;">
+                <strong>📅 Generated by FEMBi Bookings System</strong>
+              </p>
+              <p style="margin: 5px 0; font-size: 12px; color: #666;">
+                All times automatically converted to your timezone: <strong>${userTimezone}</strong>
+              </p>
+              <p style="margin: 5px 0; font-size: 12px; color: #666;">
+                For questions about this report, please contact your system administrator.
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
   </table>
-  
-  <div style="margin-top: 20px; font-size: 12px; color: #666;">
-    <p>This report was generated from the FEMBI Bookings System.</p>
-    <p>Times automatically converted to ${userTimezone}</p>
-  </div>
 </body>
 </html>`;
   }
 
   /**
-   * Generate plain text table for email body
+   * Generate plain text table for email body - Enhanced formatting
    */
   private static generatePlainTextTable(bookings: calendarBooking[], columns: Column[]): string {
     const userTimezone = TimezoneService.getUserTimezoneDisplay();
-    const separator = '-'.repeat(80);
-    const header = `BOOKINGS REPORT
-    Generated: ${new Date().toLocaleString()}
-    Total Records: ${bookings.length}
+    const separator = '='.repeat(80);
+    const lineSeparator = '-'.repeat(80);
+    
+    const header = `
+${separator}
+📊 BOOKINGS REPORT
+${separator}
 
-    TIMEZONE INFORMATION:
-    All times displayed in: ${userTimezone}
-    (Automatically converted from Eastern Time)
+📅 Generated: ${new Date().toLocaleString()}
+📊 Total Records: ${bookings.length}
+📍 Timezone: ${userTimezone} (converted from Eastern Time)
 
-    ${separator}`;
+📈 Summary:
+   • Upcoming: ${bookings.filter(b => b.status === 'upcoming').length}
+   • In Progress: ${bookings.filter(b => b.status === 'inProgress').length}  
+   • Completed: ${bookings.filter(b => b.status === 'completed').length}
+
+${separator}`;
 
     const tableData = bookings.map((booking, index) => {
       const bookingData = columns.map(column => {
         const value = this.getCellValue(booking, column);
         return `${column.label}: ${value}`;
-      }).join('\n');
+      }).join('\n   ');
       
-      return `Record ${index + 1}:
-${bookingData}
+      return `
+📋 Record ${index + 1}:
+   ${bookingData}
+${lineSeparator}`;
+    }).join('');
+
+    const footer = `
+${separator}
+📧 Generated by FEMBi Bookings System
+🌍 All times converted to your timezone: ${userTimezone}
+📞 For support, contact your system administrator
 ${separator}`;
-    }).join('\n\n');
 
-    return `${header}\n\n${tableData}
-
-Note: All times have been converted to your local timezone (${userTimezone}) from Eastern Time.`;
+    return `${header}${tableData}${footer}`;
   }
 
   /**
@@ -246,7 +346,7 @@ Note: All times have been converted to your local timezone (${userTimezone}) fro
           case 'inProgress': value = 'In Progress'; break;
           case 'completed': value = 'Completed'; break;
           case 'canceled': value = 'Canceled'; break;
-          // default: value = booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
+          default: value = booking.status;
         }
       }
     } else {

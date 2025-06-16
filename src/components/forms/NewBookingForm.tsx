@@ -256,15 +256,18 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
       const globalFollowers = await bookingService.getGlobalFollowers();
       
       const recipientEmails: string[] = [];
-      const ccEmails: string[] = [loanDetails.loanCloserEmail, loanDetails.loanOfficerEmail, ...globalFollowers];
+      const ccEmails: string[] = [...globalFollowers];
       const mainRecipientEmail : string[] = [];
       
       if (currentUserEmail) {
         recipientEmails.push(currentUserEmail);
+        recipientEmails.push(loanDetails.loanCloserEmail);
+        recipientEmails.push(loanDetails.loanOfficerEmail);
+        recipientEmails.push(bookingData.BorrowerInformation.Email);
       }
       
       if (bookingData.BorrowerInformation.Email) {
-        mainRecipientEmail.push(bookingData.BorrowerInformation.Email);
+        //mainRecipientEmail.push(bookingData.BorrowerInformation.Email);
       }
       
       if (bookingData.Followers) {
