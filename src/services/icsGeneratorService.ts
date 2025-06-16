@@ -46,7 +46,6 @@ export class ICSGeneratorService {
    */
   static convertBackendTimeToUTC(backendDateTime: string): string {
     try {
-      console.log('🔥 Converting backend time to UTC:', backendDateTime);
       
       // Parse the backend time (this is in EST/EDT)
       const backendDate = new Date(backendDateTime);
@@ -66,16 +65,13 @@ export class ICSGeneratorService {
       const minutes = backendDate.getMinutes();
       const seconds = backendDate.getSeconds();
       
-      console.log('🔥 Extracted components:', { year, month, day, hours, minutes, seconds });
       
       // Create a date representing this time in EST/EDT timezone
       // We'll use Intl.DateTimeFormat to properly handle this
       
       // Method 1: Create the time as if it's in EST, then get UTC equivalent
       const estTimeString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-      
-      console.log('🔥 EST time string:', estTimeString);
-      
+            
       // Use TimezoneService approach: create the time in EST timezone
       const now = new Date();
       
@@ -94,26 +90,20 @@ export class ICSGeneratorService {
       const nowInEST = estFormatter.format(now);
       const nowInUTC = now.toISOString().substring(0, 19);
       
-      console.log('🔥 Now in EST:', nowInEST);
-      console.log('🔥 Now in UTC:', nowInUTC);
+
       
       // Calculate the offset for the current time
       const estDate = new Date(nowInEST);
       const utcDate = new Date(nowInUTC);
       const offsetMs = utcDate.getTime() - estDate.getTime();
       
-      console.log('🔥 Calculated offset (ms):', offsetMs);
-      console.log('🔥 Calculated offset (hours):', offsetMs / (1000 * 60 * 60));
       
       // Apply this offset to our target time
       const targetEST = new Date(estTimeString);
       const targetUTC = new Date(targetEST.getTime() + offsetMs);
       
-      console.log('🔥 Target EST:', targetEST);
-      console.log('🔥 Target UTC:', targetUTC);
       
       const result = this.convertToUTCFormat(targetUTC);
-      console.log('🔥 Final ICS format:', result);
       
       return result;
       
@@ -128,7 +118,6 @@ export class ICSGeneratorService {
    */
   static convertBackendTimeToUTCReliable(backendDateTime: string): string {
     try {
-      console.log('🚀 Reliable conversion for:', backendDateTime);
       
       const backendDate = new Date(backendDateTime);
       if (isNaN(backendDate.getTime())) {
@@ -158,26 +147,18 @@ export class ICSGeneratorService {
       const summerOffset = this.getTimezoneOffset('America/New_York', july);
       const currentOffset = this.getTimezoneOffset('America/New_York', checkDate);
       
-      console.log('🚀 Winter offset:', winterOffset);
-      console.log('🚀 Summer offset:', summerOffset);
-      console.log('🚀 Current offset:', currentOffset);
       
       // Determine if we're in DST
       const isDST = currentOffset === summerOffset;
       const offsetHours = isDST ? 4 : 5; // EDT = UTC-4, EST = UTC-5
       
-      console.log('🚀 Is DST:', isDST);
-      console.log('🚀 Offset hours:', offsetHours);
-      
       // Create UTC date by adding the offset
       const localEST = new Date(year, month, day, hours, minutes, seconds);
       const utcDate = new Date(localEST.getTime() + (offsetHours * 60 * 60 * 1000));
       
-      console.log('🚀 Local EST:', localEST);
-      console.log('🚀 UTC result:', utcDate);
+     
       
       const result = this.convertToUTCFormat(utcDate);
-      console.log('🚀 Final format:', result);
       
       return result;
       
@@ -221,7 +202,6 @@ export class ICSGeneratorService {
    */
   static convertBackendTimeToUTCSimple(backendDateTime: string): string {
     try {
-      console.log('🔥 Converting backend Eastern time to UTC:', backendDateTime);
       
       // Extract components from backend time
       const dateStr = backendDateTime.substring(0, 10); // "2025-06-10"
@@ -230,7 +210,6 @@ export class ICSGeneratorService {
       const [year, month, day] = dateStr.split('-').map(Number);
       const [hours, minutes, seconds] = timeStr.split(':').map(Number);
       
-      console.log('🔥 Parsed components:', { year, month, day, hours, minutes, seconds });
       
       // 🎯 KEY FIX: Create the time with explicit Eastern timezone
       // Method: Use Date constructor with timezone-aware string
@@ -240,17 +219,13 @@ export class ICSGeneratorService {
       const isDST = this.isDaylightSavingTime(testDate);
       const offsetString = isDST ? '-04:00' : '-05:00'; // EDT or EST
       
-      console.log('🔥 Is DST (EDT):', isDST);
-      console.log('🔥 Using timezone offset:', offsetString);
+    
       
       // Create the complete date string with timezone
       const easternDateString = `${dateStr}T${timeStr}${offsetString}`;
-      console.log('🔥 Complete Eastern date string:', easternDateString);
       
       // Parse as Eastern time and JavaScript will convert to UTC
       const easternDate = new Date(easternDateString);
-      console.log('🔥 Parsed date object:', easternDate);
-      console.log('🔥 UTC equivalent:', easternDate.toISOString());
       
       // 🔥 VERIFICATION: Convert back to Eastern to verify
       const backToEastern = new Intl.DateTimeFormat('sv-SE', {
@@ -263,8 +238,6 @@ export class ICSGeneratorService {
         second: '2-digit'
       }).format(easternDate);
       
-      console.log('🔥 VERIFICATION - Back to Eastern:', backToEastern);
-      console.log('🔥 VERIFICATION - Should match input:', `${dateStr} ${timeStr}`);
       
       // 🔥 LEBANON TIME VERIFICATION: Show what this looks like in Lebanon (GMT+3)
       const lebanonTime = new Intl.DateTimeFormat('sv-SE', {
@@ -277,8 +250,7 @@ export class ICSGeneratorService {
         second: '2-digit'
       }).format(easternDate);
       
-      console.log('🔥 LEBANON TIME VERIFICATION:', lebanonTime);
-      console.log('🔥 LEBANON TIME - Should be around 7:00 PM for 12:00 PM Eastern');
+
       
       return this.convertToUTCFormat(easternDate);
       
@@ -338,13 +310,11 @@ export class ICSGeneratorService {
     
     if (appointmentData.DateTimeInfo.FromDate && appointmentData.DateTimeInfo.ToDate) {
       // Use backend dates (already in EST/EDT timezone)
-      console.log('🔥 Using backend FromDate/ToDate:', appointmentData.DateTimeInfo.FromDate, appointmentData.DateTimeInfo.ToDate);
       
       startTimeUTC = this.convertBackendTimeToUTCSimple(appointmentData.DateTimeInfo.FromDate);
       endTimeUTC = this.convertBackendTimeToUTCSimple(appointmentData.DateTimeInfo.ToDate);
     } else {
       // Construct from selected date and time
-      console.log('🔥 Constructing from SelectedDate/SelectedTime:', appointmentData.DateTimeInfo.SelectedDate, appointmentData.DateTimeInfo.SelectedTime);
       
       const selectedDate = appointmentData.DateTimeInfo.SelectedDate;
       const selectedTime = appointmentData.DateTimeInfo.SelectedTime;
@@ -361,7 +331,6 @@ export class ICSGeneratorService {
       endTimeUTC = this.convertBackendTimeToUTCSimple(endDateTime);
     }
     
-    console.log('🔥 Final UTC times for ICS:', { startTimeUTC, endTimeUTC });
     
     const eventData: ICSEventData = {
       startDate: startTimeUTC,
@@ -377,7 +346,7 @@ export class ICSGeneratorService {
   }
 
   /**
-   * Create formatted description for appointment
+   * 🔥 FIXED: Create formatted description for appointment
    */
   static createAppointmentDescription(appointmentData: CreateAppointmentRequest, borrowerName: string): string {
     const appointmentDate = new Date(appointmentData.DateTimeInfo.SelectedDate).toLocaleDateString();
@@ -387,6 +356,7 @@ export class ICSGeneratorService {
       hour12: true
     });
     
+    // 🔥 KEY FIX: Use actual newlines (\n) instead of literal \\n
     const description = [
       'Appointment Details:',
       `Service: ${appointmentData.ServiceName}`,
@@ -404,8 +374,9 @@ export class ICSGeneratorService {
       `Loan Closer: ${appointmentData.EncompassDetails.LoanCloser}`,
       `Loan Officer: ${appointmentData.EncompassDetails.LoanOfficer}`,
       appointmentData.EncompassDetails.dpa ? `DPA Program: ${appointmentData.EncompassDetails.dpa}` : ''
-    ].filter(line => line !== '').join('\\n');
+    ].filter(line => line !== '').join('\n'); // 🔥 CHANGED: Use \n instead of \\n
     
+    // Now escape the description for ICS format
     return this.escapeICSText(description);
   }
 

@@ -61,6 +61,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
     Loan Information:
     - Loan Number: ${loanDetails.loanNumber}
     - Loan Type: ${loanDetails.loanType}
+    - Loan Purpose: ${loanDetails.loanPurpose}
     - Loan Amount: $${loanDetails.loanAmount?.toLocaleString()}
     ` : 'Loading loan details...'}
   `;

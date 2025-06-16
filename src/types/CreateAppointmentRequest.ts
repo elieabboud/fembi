@@ -36,5 +36,7 @@ export interface CreateAppointmentRequest {
   StaffMemberIds: string[];
   LoanDetails?: {
     notes: string;
+    loanType: string;
+    loanPurpose: string;
   };
 }

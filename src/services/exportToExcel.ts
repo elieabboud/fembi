@@ -128,6 +128,23 @@ export const createBookingColumns = (): Column[] => {
       priority: 6
     },
     { 
+      id: 'LoanPurpose',
+      label: 'Loan Purpose',
+      format: (value, row) => {
+        if (row?.loanData) {
+          return row.loanData.loanPurpose || '-';
+        }
+        return value || '-';
+      },
+      comparator: (a: calendarBooking, b: calendarBooking) => {
+        const purposeA = a.loanData?.loanPurpose || '';
+        const purposeB = b.loanData?.loanPurpose || '';
+        
+        return purposeA.toLowerCase().localeCompare(purposeB.toLowerCase());
+      },
+      priority: 7
+    },
+    { 
       id: 'dpa',
       label: 'DPA Program',
       format: (value, row) => {
@@ -139,7 +156,7 @@ export const createBookingColumns = (): Column[] => {
         
         return dpaA.toLowerCase().localeCompare(dpaB.toLowerCase());
       },
-      priority: 7
+      priority: 8
     },
     { 
       id: 'status',
@@ -172,7 +189,7 @@ export const createBookingColumns = (): Column[] => {
         
         return priorityA - priorityB;
       },
-      priority: 8
+      priority: 9
     }
   ];
 

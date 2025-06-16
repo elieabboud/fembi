@@ -19,6 +19,7 @@ import { bookingService } from '../../services/bookingService';
 import { LoanDetails } from '../../types/loanDetails';
 import { User } from '../../types/userModel';
 import LoanAgentsInput from './LoanAgentsInput';
+import BookingColorLegend from './BookingColorLegend';
 
 interface CalendarContainerProps {
   bookings: calendarBooking[];
@@ -182,7 +183,8 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
       loanCloser: bookingData.EncompassDetails.LoanCloser || "N/A",
       loanCloserEmail: bookingData.EncompassDetails.loanCloserEmail || "N/A",
       dpa: bookingData.EncompassDetails.dpa || "N/A",
-      followers: null
+      followers: null,
+      loanPurpose: "N/A"
     };
     setLoanDetails(fallbackLoanDetails);
   }
@@ -338,6 +340,17 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
         onViewChange={handleViewChange}
         currentView={currentView}
       />
+
+      {/* COLOR LEGEND */}
+      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+        <BookingColorLegend 
+          bookings={filteredBookings}
+          variant="compact"
+          orientation="horizontal"
+          showCounts={true}
+          maxItems={6}
+        />
+      </Box>
 
       {/* LOADING INDICATOR */}
       {isFetchingMore && (

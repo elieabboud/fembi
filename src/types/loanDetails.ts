@@ -18,5 +18,6 @@ export interface LoanDetails {
     loanCloserEmail?: string;
     dpa: string;
     followers: string[];
+    loanPurpose: string
   }
   

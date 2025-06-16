@@ -130,7 +130,9 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     PriceType: "notSet",
     StaffMemberIds: [],
     LoanDetails: {
-      notes: ""
+      notes: "",
+      loanType: "",
+      loanPurpose: ""
     }
   });
 
@@ -331,6 +333,8 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
                 <h3 style="margin-top: 0; color: #856404;">Loan Information</h3>
                 <p><strong>Loan Closer:</strong> ${loanDetails.loanCloser}</p>
                 <p><strong>Loan Officer:</strong> ${loanDetails.loanOfficer}</p>
+                <p><strong>Loan Type:</strong> ${loanDetails.loanType}</p>
+                <p><strong>Loan Purpose:</strong> ${loanDetails.loanPurpose}</p>
               </div>
               
               <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d;">
@@ -418,7 +422,9 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
         const createData = {
           ...bookingData,
           LoanDetails: {
-            notes: notes
+            notes: notes,
+            loanType: loanDetails.loanType,
+            loanPurpose: loanDetails.loanPurpose
           }
         };
         
@@ -1005,14 +1011,15 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
               />
             </Grid>
             <Grid item xs={6}>
-            <TextField
-              fullWidth
-              value={loanDetails?.loanType || ''}
-              label="Loan Type"
-              InputProps={{
-                readOnly: true,
-              }}
-              variant="outlined"/>
+              <TextField
+                fullWidth
+                label="Loan Type"
+                variant="outlined"    
+                value={loanDetails?.loanType || ''}
+                InputProps={{
+                  readOnly: true,
+                }}
+              />
             </Grid>
             <Grid item xs={6}>
               <TextField
@@ -1033,6 +1040,17 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
                 readOnly: true,
               }}
               variant="outlined"/>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Loan Purpose"
+                variant="outlined"    
+                value={loanDetails?.loanPurpose || ''}
+                InputProps={{
+                  readOnly: true,
+                }}
+              />
             </Grid>
             <Grid item xs={12}>
               <TextField

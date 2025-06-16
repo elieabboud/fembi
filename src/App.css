@@ -70,56 +70,94 @@ html, body {
   color: #61dafb;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 #bookings-header {
   margin-bottom: 24px;
-  display: flex;
+  display: grid;
+  gap: 20px;
 }
 
-#bookings-header #search-bar {
-  flex: 0 0 20%;
-}
-
-#bookings-header #filters {
-  flex: 0 0 60%;
-  display: flex;
-  justify-content: space-between;
-  gap: 4px;
-}
-
-#actions {
-  flex: 0 0 25%;
-  display: flex;
-  justify-content: space-between;
-  max-width: fit-content;
-  gap: 4px;
-  height: 100%;
-}
-
+/* Small screens - single column */
 @media (max-width: 899px) {
-  #bookings-header {
-    flex-direction: column;
-    row-gap: 20px;
+  #new-booking-desktop{
+    display: none;
   }
 
-  #bookings-header #actions Button {
+  #bookings-header {
+    grid-template-columns: 1fr;
+    grid-template-areas: 
+      "search"
+      "dateFilter"
+      "filters" 
+      "actions";
+  }
+
+  #bookings-header #search-bar {
+    grid-area: search;
+  }
+
+  #bookings-header #date-filter {
+    grid-area: dateFilter;
+  }
+
+  #bookings-header #filters {
+    grid-area: filters;
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  #bookings-header #actions {
+    grid-area: actions;
+    display: flex;
+    gap: 4px;
+  }
+
+  #bookings-header #actions #button{
     width: 100%;
   }
+
 }
 
 @media (min-width: 900px) {
+  #new-booking-mobile{
+    display: none;
+  }
+
   #bookings-header {
-    flex-direction: row;
+    grid-template-columns: 1fr 1fr 2fr; /* Three columns for second row */
+    grid-template-areas: 
+      "newBooking . actions"
+      "search dateFilter filters";
+    gap: 16px;
+    align-items: center;
+  }
+
+  #bookings-header #search-bar {
+    grid-area: search;
+  }
+
+  #bookings-header #date-filter {
+    grid-area: dateFilter;
+  }
+
+  #bookings-header #filters {
+    grid-area: filters;
+    display: flex;
     justify-content: space-between;
-    gap: 4px;
+    gap: 8px;
+  }
+
+  #bookings-header #new-booking {
+    grid-area: newBooking;
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  #bookings-header #actions {
+    grid-area: actions;
+    display: flex;
+    justify-content: flex-end; /* Align actions to the right */
+    gap: 8px;
   }
 }
 

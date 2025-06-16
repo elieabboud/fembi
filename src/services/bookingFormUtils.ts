@@ -71,7 +71,9 @@ export const mapCalendarBookingToFormData = (calendarBooking: calendarBooking): 
     PriceType: calendarBooking.priceType || "notSet",
     StaffMemberIds: calendarBooking.staffMemberIds || [],
     LoanDetails:{
-      notes: ""
+      notes: "",
+      loanType: "",
+      loanPurpose: ""
     }
   };
 

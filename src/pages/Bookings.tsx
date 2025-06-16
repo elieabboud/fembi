@@ -16,6 +16,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  InputAdornment,
+  IconButton,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Email as EmailIcon,
@@ -40,6 +43,8 @@ import { LoanDetails } from '../types/loanDetails';
 import Confirmation from '../components/forms/Confirmation';
 import { EmailService } from '../services/emailService'; 
 import { TimezoneService } from '../services/timezoneUtils';
+import { ClearIcon, DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
 // Custom sorting function for bookings
 const sortBookings = (bookings: calendarBooking[]): calendarBooking[] => {
@@ -79,6 +84,8 @@ const sortBookings = (bookings: calendarBooking[]): calendarBooking[] => {
 
 const Bookings: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
   const [dateRange, setDateRange] = useState({
     start: startOfYear(new Date()),
     end: endOfYear(new Date()),
@@ -100,6 +107,7 @@ const Bookings: React.FC = () => {
   const [officersFilter, setOfficersFilter] = useState<string[]>([]);
   const [serviceFilter, setServiceFilter] = useState<string>('');
   const [dateFilter, setDateFilter] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const [dataFetched, setDataFetched] = useState(false);
   const [isLastOperationEdit, setIsLastOperationEdit] = useState(false);
@@ -118,7 +126,6 @@ const Bookings: React.FC = () => {
   ];
   const [loanOfficersOptions, setLoanOfficersOptions] = useState<{id: string, label: string}[]>([]);
   const [serviceOptions, setServiceOptions] = useState<{ id: string, label: string }[]>([]);
-  const [dateOptions, setDateOptions] = useState<{ id: string, label: string }[]>([]);
 
   const handleConfirmationClose = () => {
     setShowSuccessMessage(false);
@@ -134,26 +141,6 @@ const Bookings: React.FC = () => {
   // New handler for selection change
   const handleSelectionChange = (selectedRows: calendarBooking[]) => {
     setSelectedBookings(selectedRows);
-  };
-
-  const getUniqueDatesFromBookings = (bookings: calendarBooking[]): { id: string, label: string }[] => {
-    const dateMap = new Map<string, string>();
-    
-    bookings.forEach(booking => {
-      if (booking.start?.dateTime) {
-        try {
-          const dateId = TimezoneService.formatDateForUser(booking.start.dateTime, 'yyyy-MM-dd');
-          const dateLabel = TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy');
-          dateMap.set(dateId, dateLabel);
-        } catch (error) {
-          console.warn('Error processing date for booking:', booking.bookingId, error);
-        }
-      }
-    });
-    
-    return Array.from(dateMap.entries())
-      .map(([id, label]) => ({ id, label }))
-      .sort((a, b) => new Date(a.id).getTime() - new Date(b.id).getTime());
   };
 
   const fetchBookingsData = useCallback(async () => {
@@ -180,8 +167,6 @@ const Bookings: React.FC = () => {
         .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
       setLoanOfficersOptions(loanOfficers);
 
-      const uniqueDates = getUniqueDatesFromBookings(sortedBookings);
-      setDateOptions(uniqueDates);
     } catch (error) {
       console.error('Error fetching calendar data:', error);
     }
@@ -374,10 +359,6 @@ const Bookings: React.FC = () => {
     setServiceFilter(value as string);
   };
 
-  const handleDateFilterChange = (value: string | string[]) => {
-    setDateFilter(value as string);
-  };
-
   const isBookingOnDate = (booking: calendarBooking, selectedDate: string): boolean => {
     if (!booking.start?.dateTime || !selectedDate) return true;
     
@@ -501,6 +482,7 @@ const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response
 };
 
   return (
+    <LocalizationProvider dateAdapter={AdapterDateFns}>
     <Box>
       <Box 
         sx={{ 
@@ -518,12 +500,15 @@ const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response
         >
           Bookings
         </Typography>
-        <Button
-          variant="contained"
-          onClick={() => setNewBooking(!newBooking)}
-        >
-          New Booking
-        </Button>
+        <Box id="new-booking-mobile">
+          <Button
+            id= "newBooking"
+            variant="contained"
+            onClick={() => setNewBooking(!newBooking)}
+          >
+            New Booking
+          </Button>
+        </Box>
       </Box>
 
       <Box
@@ -537,7 +522,41 @@ const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response
           />
         </Box>
         
+        <Box id="date-filter" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <DatePicker 
+            label="Filter by Date" 
+            value={selectedDate}
+            onChange={(newValue) => {
+              setSelectedDate(newValue);
+              if (newValue) {
+                const formattedDate = TimezoneService.formatDateForUser(newValue.toISOString(), 'yyyy-MM-dd');
+                setDateFilter(formattedDate);
+              } else {
+                setDateFilter('');
+              }
+            }}
+            componentsProps={{
+              actionBar: {
+                actions: ['clear'],
+              },
+            }}
+            slotProps={{ 
+              textField: { 
+                size: 'small',
+                placeholder: 'Select date to filter',
+              },
+              actionBar: {
+                actions: ['clear'],
+              },
+            }}
+            sx={{
+              width: '100%',
+            }}
+          />
+        </Box>
+
         <Box id="filters">
+
           <FilterDropdown
             id="status-filter"
             label="Status"
@@ -562,19 +581,21 @@ const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response
             onChange={handleServiceFilterChange}
           />
 
-          <FilterDropdown
-            id="date-filter"
-            label="Date"
-            options={dateOptions}
-            value={dateFilter}
-            onChange={handleDateFilterChange}
-          />
         </Box>
         
         <Box id="actions">
+          <Box id="new-booking-desktop">
+            <Button
+              id= "newBooking"
+              variant="contained"
+              onClick={() => setNewBooking(!newBooking)}
+            >
+              New Booking
+            </Button>
+          </Box>
           <Button
             id='button'
-            variant="contained"
+            variant={isSmall ? 'contained' : 'outlined'}
             onClick={handleExport}
           >
             {selectedBookings.length > 0 
@@ -585,7 +606,7 @@ const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response
   
           <Button
             id='button'
-            variant="contained"
+            variant={isSmall ? 'contained' : 'outlined'}
             onClick={handleEmailMenuOpen}
             endIcon={<ExpandMoreIcon />}
           >
@@ -739,6 +760,7 @@ const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response
         onEditSuccess={handleEditSuccess}
       />
     </Box>
+    </LocalizationProvider>
   );
 };
 

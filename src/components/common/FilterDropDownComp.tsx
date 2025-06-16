@@ -57,7 +57,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
       }}
       size="small"
     >
-      <InputLabel id={`${id}-label`} sx={{ fontSize: 14 }}>{label}</InputLabel>
+      <InputLabel id={`${id}-label`} sx={{ fontSize: {sm: 12, md: 14} }}>{label}</InputLabel>
       {multiSelect ? (
         <Select
           variant='outlined'
