@@ -44,6 +44,12 @@ type BookingFormProps = {
   setLoading?: (loading: boolean) => void;
 }
 
+interface FollowerWithType {
+  email: string;
+  type: string;
+}
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const CreateBookingForm: React.FC<BookingFormProps> = ({ 
   onClose, 
   onSuccess, 
@@ -84,8 +90,8 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [error, setError] = useState<string>("");
 
-  const [loanDetailsFollowers, setLoanDetailsFollowers] = useState<string[]>([]);
-  const [selectedLoanFollowers, setSelectedLoanFollowers] = useState<string[]>([]);
+  const [loanDetailsFollowers, setLoanDetailsFollowers] = useState<FollowerWithType[]>([]);
+  const [selectedLoanFollowers, setSelectedLoanFollowers] = useState<FollowerWithType[]>([]);
   const [notes, setNotes] = useState<string>('');
   
   
@@ -142,6 +148,16 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   // Helper function to update loading states
   const updateLoadingState = (key: keyof typeof loadingStates, value: boolean) => {
     setLoadingStates(prev => ({ ...prev, [key]: value }));
+  };
+
+const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
+    return followers.map(follower => {
+      if (follower.includes('#')) {
+        const [type, email] = follower.split('#');
+        return { type, email };
+      }
+      return { type: 'Other', email: follower };
+    });
   };
 
   // Check if any loading is in progress
@@ -462,14 +478,13 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
       const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
 
       setLoanDetails(loanDetails);
-      
-      // 🔥 SET NOTES from loan details (for display, but editable in create mode)
       setNotes(loanDetails.notes || '');
       
-      // Handle loan details followers
+      // 🔥 UPDATED: Handle loan details followers with types
       if (loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0) {
-        setLoanDetailsFollowers(loanDetails.followers);
-        setSelectedLoanFollowers(loanDetails.followers);
+        const followersWithTypes = parseFollowersWithTypes(loanDetails.followers);
+        setLoanDetailsFollowers(followersWithTypes);
+        setSelectedLoanFollowers(followersWithTypes); // Select all by default
       } else {
         setLoanDetailsFollowers([]);
         setSelectedLoanFollowers([]);
@@ -661,31 +676,38 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   }, [isAdmin, editMode, initialData]);
 
 
-  const handleToggleLoanFollower = (follower: string) => {
-    if (readOnlyMode) return;
-    
-    setSelectedLoanFollowers(prev => {
-      if (prev.includes(follower)) {
-        // Remove from selected
-        return prev.filter(f => f !== follower);
-      } else {
-        // Add to selected
-        return [...prev, follower];
-      }
-    });
-  };
+  const handleToggleLoanFollower = (follower: FollowerWithType) => {
+  if (readOnlyMode) return;
+  
+  setSelectedLoanFollowers(prev => {
+    const isSelected = prev.find(f => f.email === follower.email);
+    if (isSelected) {
+      // Remove from selected
+      return prev.filter(f => f.email !== follower.email);
+    } else {
+      // Add to selected
+      return [...prev, follower];
+    }
+  });
+};
 
  const handleAddFollower = (newFollower: string) => {
     if (readOnlyMode) return;
     
+    const cleanedFollower = newFollower.trim();
+    
+    if (!emailRegex.test(cleanedFollower)) {
+      return;
+    }
+    
     const allExistingFollowers = [
       ...fetchedFollowers, 
-      ...selectedLoanFollowers, 
+      ...selectedLoanFollowers.map(slf => slf.email), 
       ...addedFollowers
     ];
     
-    if (!allExistingFollowers.includes(newFollower)) {
-      setAddedFollowers(prev => [...prev, newFollower]);
+    if (!allExistingFollowers.includes(cleanedFollower)) {
+      setAddedFollowers(prev => [...prev, cleanedFollower]);
     }
   };
 
@@ -707,16 +729,17 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
           
           // Handle loan details followers in edit mode
           if (loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0) {
-            setLoanDetailsFollowers(loanDetails.followers);
+            const followersWithTypes = parseFollowersWithTypes(loanDetails.followers);
+            setLoanDetailsFollowers(followersWithTypes);
             
             if (formattedData.Followers) {
-              const existingFollowers = formattedData.Followers.split(',');
-              const selectedFromLoan = loanDetails.followers.filter(lf => 
-                existingFollowers.includes(lf)
+              const existingFollowerEmails = formattedData.Followers.split(',');
+              const selectedFromLoan = followersWithTypes.filter(lf => 
+                existingFollowerEmails.includes(lf.email)
               );
               setSelectedLoanFollowers(selectedFromLoan);
             } else {
-              setSelectedLoanFollowers(loanDetails.followers);
+              setSelectedLoanFollowers(followersWithTypes);
             }
           }
           
@@ -785,9 +808,9 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
  useEffect(() => {
     // Combine all types: regular (read-only) + selected loan followers + manually added
     const allFollowers = [
-      ...fetchedFollowers,           // Regular system followers (read-only)
-      ...selectedLoanFollowers,      // Selected loan details followers
-      ...addedFollowers              // Manually added followers
+      ...fetchedFollowers,                                    // Regular system followers (read-only)
+      ...selectedLoanFollowers.map(slf => slf.email),       // Selected loan details followers (extract emails)
+      ...addedFollowers                                       // Manually added followers
     ];
     
     const uniqueFollowers = Array.from(new Set(allFollowers));
@@ -1260,8 +1283,8 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
           <EnhancedFollowers
             editMode={editMode || readOnlyMode}
             regularFollowers={fetchedFollowers}              // Read-only system followers
-            loanDetailsFollowers={loanDetailsFollowers}      // Available loan followers
-            selectedLoanFollowers={selectedLoanFollowers}    // Selected loan followers
+            loanDetailsFollowers={loanDetailsFollowers}      // Available loan followers with types
+            selectedLoanFollowers={selectedLoanFollowers}    // Selected loan followers with types
             addedFollowers={addedFollowers}                  // Manually added followers
             onToggleLoanFollower={handleToggleLoanFollower}  // Toggle loan follower
             onAddFollower={handleAddFollower}                // Add manual follower
