@@ -93,18 +93,18 @@ const Confirmation: React.FC<ConfirmationProps> = ({
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <Box sx={{ p: 4, position: 'relative', color: 'gray' }}>
         <Grid item xs={12} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography
-            variant="h4"
-            component="h1"
-            sx={{ fontSize: '30px', fontWeight: 'bold', color: 'black' }}
-          >
-            {editMode? "Appointment Updated!" : "Appointment Booked!"}
-          </Typography>
-          <CloseIcon 
-            sx={{ float: 'right', color: 'gray', cursor: 'pointer' }} 
-            onClick={onClose} 
-          />
-        </Grid>
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ fontSize: '30px', fontWeight: 'bold', color: 'black' }}
+        >
+          {editMode ? "Appointment Rescheduled!" : "Appointment Booked!"}
+        </Typography>
+        <CloseIcon 
+          sx={{ float: 'right', color: 'gray', cursor: 'pointer' }} 
+          onClick={onClose} 
+        />
+      </Grid>
 
         <DialogContent sx={{ py: 2, px: 0 }}>
           {isLoading ? (
@@ -117,7 +117,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
           ) : (
             <>
               <Typography variant="body1" sx={{ mb: 3 }}>
-                Your appointment with <strong>{booking.BorrowerInformation.FirstName} {booking.BorrowerInformation.LastName}</strong> has been scheduled successfully.
+                Your appointment with <strong>{booking.BorrowerInformation.FirstName} {booking.BorrowerInformation.LastName}</strong> has been {editMode ? 'rescheduled' : 'scheduled'} successfully.
                 A confirmation email will be sent to your inbox.<br />
                 An email has been sent to both <strong>{loanDetails.loanOfficer}</strong> and <strong>{user?.fullName}</strong>
               </Typography>

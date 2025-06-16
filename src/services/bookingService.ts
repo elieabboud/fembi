@@ -117,10 +117,11 @@ export const bookingService = {
     },
 
   //get loan details
-  async getLoanDetails(loanId: string): Promise<LoanDetails>{    
+  async getLoanDetails(loanId: string, isCreate?: boolean): Promise<LoanDetails>{    
     const response = await api.get('/api/Encompass/v1/GetLoanDetails', {
       params: {
-        loanId: loanId
+        loanId: loanId,
+        isCreate: isCreate
       },
     });
     
@@ -280,4 +281,161 @@ export const bookingService = {
       console.error('Error sending appointment notification:', error);
     }
   },
+
+
+  async sendCancellationEmail(appointmentId: string, appointmentData: any): Promise<void> {
+  try {
+    const globalFollowers = await this.getGlobalFollowers();
+    
+    const recipientEmails: string[] = [];
+    const ccEmails: string[] = [...globalFollowers];
+    
+    // Add key stakeholders to recipients
+    if (appointmentData.loanDetails?.loanCloserEmail) {
+      recipientEmails.push(appointmentData.loanDetails.loanCloserEmail);
+    }
+    if (appointmentData.loanDetails?.loanOfficerEmail) {
+      recipientEmails.push(appointmentData.loanDetails.loanOfficerEmail);
+    }
+    if (appointmentData.customerEmailAddress) {
+      recipientEmails.push(appointmentData.customerEmailAddress);
+    }
+    
+    // Add followers if they exist
+    if (appointmentData.followers) {
+      const followerEmails = appointmentData.followers
+        .split(',')
+        .map((email: string) => email.trim())
+        .filter((email: string) => email.length > 0 && email.includes('@'));
+      recipientEmails.push(...followerEmails);
+    }
+    
+    const uniqueEmails = Array.from(new Set(recipientEmails));
+    
+    if (uniqueEmails.length === 0) {
+      console.warn('No recipients found for cancellation email');
+      return;
+    }
+    
+    const appointmentDate = appointmentData.start?.dateTime 
+      ? new Date(appointmentData.start.dateTime).toLocaleDateString()
+      : 'N/A';
+    const appointmentTime = appointmentData.start?.dateTime
+      ? new Date(appointmentData.start.dateTime).toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        })
+      : 'N/A';
+    
+    const borrowerName = appointmentData.customerName || 
+      `${appointmentData.loanData?.borrowerFirstName || ''} ${appointmentData.loanData?.borrowerLastName || ''}`.trim() ||
+      'N/A';
+    
+    const htmlBody = `
+      <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #d32f2f; border-bottom: 2px solid #d32f2f; padding-bottom: 10px;">
+              ❌ Appointment Cancelled
+            </h2>
+
+            <div style="background-color: #ffebee; border-left: 4px solid #d32f2f; padding: 15px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #d32f2f;">Important Notice</h3>
+              <p style="margin: 0; font-weight: bold;">
+                Your closing appointment has been cancelled.
+              </p>
+            </div>
+
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+              <p><strong>Greetings,</strong></p>
+              <p>
+                We regret to inform you that your closing appointment with <strong>FEMBi Mortgage</strong> has been cancelled.
+                This email serves as your official cancellation notification.
+              </p>
+              <p>
+                If you need to reschedule or have any questions about this cancellation, please contact your 
+                <strong>FEMBi Mortgage Loan Officer</strong> immediately.
+              </p>
+              <p>
+                We apologize for any inconvenience this may cause and are ready to assist you in rescheduling at your earliest convenience.
+              </p>
+
+              <hr style="margin: 30px 0;">
+
+              <p><strong>Saludos,</strong></p>
+              <p>
+                Lamentamos informarle que su cita de cierre con <strong>FEMBi Mortgage</strong> ha sido cancelada.
+                Este correo electrónico constituye su notificación oficial de cancelación.
+              </p>
+              <p>
+                Si necesita reprogramar o tiene alguna pregunta sobre esta cancelación, comuníquese con su 
+                <strong>Oficial de Préstamos de FEMBi Mortgage</strong> inmediatamente.
+              </p>
+              <p>
+                Nos disculpamos por cualquier inconveniente que esto pueda causar y estamos listos para ayudarle a reprogramar lo antes posible.
+              </p>
+            </div>
+
+            <div style="background-color: #f8f9fa; border-left: 4px solid #6c757d; padding: 15px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #6c757d;">Cancelled Appointment Details</h3>
+              <p><strong>Location:</strong> ${appointmentData.serviceName || 'N/A'}</p>
+              <p><strong>Original Date:</strong> ${appointmentDate}</p>
+              <p><strong>Original Time:</strong> ${appointmentTime}</p>
+              <p><strong>Loan ID:</strong> ${appointmentData.loanData?.loanNumber || appointmentData.encompassLoanId || 'N/A'}</p>
+              <p><strong>Cancellation Date:</strong> ${new Date().toLocaleDateString()}</p>
+            </div>
+            
+            <div style="background-color: #e9ecef; border-left: 4px solid #007bff; padding: 15px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #007bff;">Borrower Information</h3>
+              <p><strong>Name:</strong> ${borrowerName}</p>
+              ${appointmentData.loanData?.borrowerAddress ? `
+                <p><strong>Address:</strong> ${appointmentData.loanData.borrowerAddress}, ${appointmentData.loanData.borrowerCity || ''}, ${appointmentData.loanData.borrowerState || ''} ${appointmentData.loanData.borrowerZipCode || ''}</p>
+              ` : ''}
+            </div>
+            
+            <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #856404;">Contact Information</h3>
+              <p><strong>Loan Closer:</strong> ${appointmentData.loanData?.loanCloser || appointmentData.LoanCloser || 'N/A'}</p>
+              <p><strong>Loan Officer:</strong> ${appointmentData.loanData?.loanOfficer || appointmentData.LoanOfficer || 'N/A'}</p>
+              ${appointmentData.loanData?.loanOfficerEmail ? `<p><strong>Loan Officer Email:</strong> ${appointmentData.loanData.loanOfficerEmail}</p>` : ''}
+            </div>
+
+            <div style="background-color: #d1ecf1; border-left: 4px solid #17a2b8; padding: 15px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #0c5460;">Next Steps</h3>
+              <ul style="margin: 0; padding-left: 20px;">
+                <li>Contact your loan officer to reschedule</li>
+                <li>Check your email for rescheduling options</li>
+                <li>Call our office if you need immediate assistance</li>
+              </ul>
+            </div>
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; text-align: center;">
+              <p><strong>📞 Need Help?</strong></p>
+              <p>Contact your FEMBi Mortgage team for immediate assistance with rescheduling.</p>
+              <p style="color: #d32f2f; font-weight: bold;">This appointment has been removed from all calendars.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const emailRequest: EmailRequestDTO = {
+      To: [],
+      Bcc: uniqueEmails,
+      Cc: ccEmails,
+      Subject: `Appointment Cancelled - ${appointmentData.serviceName || 'Closing'} for ${borrowerName}`,
+      Body: htmlBody,
+      IsHtml: true
+    };
+
+    await this.sendEmail(emailRequest);
+    console.log('✅ Cancellation email sent successfully');
+    
+  } catch (error) {
+    console.error('❌ Error sending cancellation email:', error);
+    throw error;
+  }
+},
+
 }

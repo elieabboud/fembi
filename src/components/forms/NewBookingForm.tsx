@@ -246,153 +246,161 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
   };
 
   const sendEmailNotifications = async (response: any) => {
-    if (readOnlyMode) return;
+  if (readOnlyMode) return;
 
-    updateLoadingState('sendingEmail', true);
+  updateLoadingState('sendingEmail', true);
+  
+  try {
+    const currentUserEmail = user?.email || '';
+
+    const globalFollowers = await bookingService.getGlobalFollowers();
     
-    try {
-      const currentUserEmail = user?.email || '';
-
-      const globalFollowers = await bookingService.getGlobalFollowers();
-      
-      const recipientEmails: string[] = [];
-      const ccEmails: string[] = [...globalFollowers];
-      const mainRecipientEmail : string[] = [];
-      
-      if (currentUserEmail) {
-        recipientEmails.push(currentUserEmail);
-        recipientEmails.push(loanDetails.loanCloserEmail);
-        recipientEmails.push(loanDetails.loanOfficerEmail);
-        recipientEmails.push(bookingData.BorrowerInformation.Email);
-      }
-      
-      if (bookingData.BorrowerInformation.Email) {
-        //mainRecipientEmail.push(bookingData.BorrowerInformation.Email);
-      }
-      
-      if (bookingData.Followers) {
-        const followerEmails = bookingData.Followers
-          .split(',')
-          .map(email => email.trim())
-          .filter(email => email.length > 0 && email.includes('@'));
-        recipientEmails.push(...followerEmails);
-      }
-      
-      const uniqueEmails = Array.from(new Set(recipientEmails));
-      
-      if (uniqueEmails.length === 0) {
-        return;
-      }
-      
-      const appointmentDate = new Date(bookingData.DateTimeInfo.SelectedDate).toLocaleDateString();
-      const appointmentTime = bookingData.DateTimeInfo.SelectedTime;
-      const formattedTime = new Date(`2000-01-01T${appointmentTime}`).toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
-      const borrowerName = `${bookingData.BorrowerInformation.FirstName} ${bookingData.BorrowerInformation.LastName}`.trim();
-
-      const title = `${editMode ? "Appointment Updated" : "New Appointment Scheduled"}`;
-      
-      const htmlBody = `
-        <html>
-          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #2c5aa0; border-bottom: 2px solid #2c5aa0; padding-bottom: 10px;">
-                ${title}
-              </h2>
-
-              <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                <p><strong>Greetings,</strong></p>
-                <p>
-                  We are pleased to confirm your upcoming closing appointment with <strong>FEMBi Mortgage</strong>.
-                  This email serves as your official appointment confirmation.
-                </p>
-                <p>
-                  Should you have any questions or require further assistance, please do not hesitate to contact your 
-                  <strong>FEMBi Mortgage Loan Officer</strong>. We are here to support you throughout this process.
-                </p>
-                <p>
-                  Thank you for choosing <strong>FEMBi Mortgage</strong>. We look forward to assisting you at your closing.
-                </p>
-
-                <hr style="margin: 30px 0;">
-
-                <p><strong>Saludos,</strong></p>
-                <p>
-                  Nos complace confirmar su cita para el cierre próximo con <strong>FEMBi Mortgage</strong>.
-                  Este correo electrónico constituye la confirmación oficial de su cita.
-                </p>
-                <p>
-                  Si tiene alguna pregunta o necesita asistencia adicional, no dude en comunicarse con su 
-                  <strong>Oficial de Préstamos de FEMBi Mortgage</strong>. Estamos a su disposición para asistirle durante este proceso.
-                </p>
-                <p>
-                  Gracias por confiar en <strong>FEMBi Mortgage</strong>. Esperamos poder asistirle en su cierre.
-                </p>
-              </div>
-
-              <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0;">
-                <h3 style="margin-top: 0; color: #28a745;">Appointment Details</h3>
-                <p><strong>Location:</strong> ${bookingData.ServiceName}</p>
-                <p><strong>Settlement Agent:</strong> First National Title Services, Inc.</p>
-                <p><strong>Date:</strong> ${appointmentDate}</p>
-                <p><strong>Time:</strong> ${formattedTime}</p>
-                <p><strong>Loan ID:</strong> ${loanDetails.loanNumber}</p>
-              </div>
-              
-              <div style="background-color: #e9ecef; border-left: 4px solid #007bff; padding: 15px; margin: 20px 0;">
-                <h3 style="margin-top: 0; color: #007bff;">Borrower Information</h3>
-                <p><strong>Name:</strong> ${borrowerName}</p>
-                <p><strong>Address:</strong> ${bookingData.BorrowerInformation.Address.Street}, ${bookingData.BorrowerInformation.Address.City}, ${bookingData.BorrowerInformation.Address.State} ${bookingData.BorrowerInformation.Address.ZipCode}</p>
-              </div>
-              
-              <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
-                <h3 style="margin-top: 0; color: #856404;">Loan Information</h3>
-                <p><strong>Loan Closer:</strong> ${loanDetails.loanCloser}</p>
-                <p><strong>Loan Officer:</strong> ${loanDetails.loanOfficer}</p>
-                <p><strong>Loan Type:</strong> ${loanDetails.loanType}</p>
-                <p><strong>Loan Purpose:</strong> ${loanDetails.loanPurpose}</p>
-              </div>
-              
-              <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d;">
-                <p>📅 <strong>Calendar attachment included</strong> - Add this appointment to your calendar by opening the attached .ics file.</p>
-              </div>
-            </div>
-          </body>
-        </html>
-      `;
-
-      const icsContent = ICSGeneratorService.generateICSFromAppointment(bookingData);
-      const icsFilename = ICSGeneratorService.generateICSFilename(bookingData);
-
-
-      const emailRequest: EmailRequestDTO = {
-        To: mainRecipientEmail,
-        Bcc: uniqueEmails,
-        Cc: ccEmails,
-        Subject: `New Appointment Scheduled - ${bookingData.ServiceName} for ${borrowerName}`,
-        Body: htmlBody,
-        IsHtml: true,
-        Attachments: [
-          {
-            FileName: icsFilename,
-            Extension: "ics",
-            Data: Buffer.from(icsContent).toString('base64')
-          }
-        ]
-      };
-
-      const emailResponse = await bookingService.sendEmail(emailRequest);
-      
-    } catch (error) {
-      console.error('❌ Error sending email notifications:', error);
-      
-    } finally {
-      updateLoadingState('sendingEmail', false);
+    const recipientEmails: string[] = [];
+    const ccEmails: string[] = [...globalFollowers];
+    const mainRecipientEmail : string[] = [];
+    
+    if (currentUserEmail) {
+      recipientEmails.push(currentUserEmail);
+      recipientEmails.push(loanDetails.loanCloserEmail);
+      recipientEmails.push(loanDetails.loanOfficerEmail);
+      recipientEmails.push(bookingData.BorrowerInformation.Email);
     }
-  };
+    
+    if (bookingData.Followers) {
+      const followerEmails = bookingData.Followers
+        .split(',')
+        .map(email => email.trim())
+        .filter(email => email.length > 0 && email.includes('@'));
+      recipientEmails.push(...followerEmails);
+    }
+    
+    const uniqueEmails = Array.from(new Set(recipientEmails));
+    
+    if (uniqueEmails.length === 0) {
+      return;
+    }
+    
+    const appointmentDate = new Date(bookingData.DateTimeInfo.SelectedDate).toLocaleDateString();
+    const appointmentTime = bookingData.DateTimeInfo.SelectedTime;
+    const formattedTime = new Date(`2000-01-01T${appointmentTime}`).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+    const borrowerName = `${bookingData.BorrowerInformation.FirstName} ${bookingData.BorrowerInformation.LastName}`.trim();
+
+    // 🔥 NEW: Different titles based on operation type
+    let title: string;
+    let headerTitle: string;
+    let actionText: string;
+    
+    if (editMode) {
+      title = "Appointment Rescheduled";
+      headerTitle = "📅 Appointment Rescheduled";
+      actionText = "has been rescheduled successfully";
+    } else {
+      title = "New Appointment Scheduled";
+      headerTitle = "📊 New Appointment Scheduled";
+      actionText = "has been scheduled successfully";
+    }
+    
+    const htmlBody = `
+      <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #2c5aa0; border-bottom: 2px solid #2c5aa0; padding-bottom: 10px;">
+              ${headerTitle}
+            </h2>
+
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+              <p><strong>Greetings,</strong></p>
+              <p>
+                We are pleased to confirm your ${editMode ? 'rescheduled' : 'upcoming'} closing appointment with <strong>FEMBi Mortgage</strong>.
+                This email serves as your official appointment ${editMode ? 'reschedule' : ''} confirmation.
+              </p>
+              <p>
+                Should you have any questions or require further assistance, please do not hesitate to contact your 
+                <strong>FEMBi Mortgage Loan Officer</strong>. We are here to support you throughout this process.
+              </p>
+              <p>
+                Thank you for choosing <strong>FEMBi Mortgage</strong>. We look forward to assisting you at your closing.
+              </p>
+
+              <hr style="margin: 30px 0;">
+
+              <p><strong>Saludos,</strong></p>
+              <p>
+                Nos complace confirmar su cita ${editMode ? 'reagendada' : 'próxima'} para el cierre con <strong>FEMBi Mortgage</strong>.
+                Este correo electrónico constituye la confirmación oficial de su cita ${editMode ? 'reagendada' : ''}.
+              </p>
+              <p>
+                Si tiene alguna pregunta o necesita asistencia adicional, no dude en comunicarse con su 
+                <strong>Oficial de Préstamos de FEMBi Mortgage</strong>. Estamos a su disposición para asistirle durante este proceso.
+              </p>
+              <p>
+                Gracias por confiar en <strong>FEMBi Mortgage</strong>. Esperamos poder asistirle en su cierre.
+              </p>
+            </div>
+
+            <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #28a745;">Appointment Details</h3>
+              <p><strong>Location:</strong> ${bookingData.ServiceName}</p>
+              <p><strong>Settlement Agent:</strong> First National Title Services, Inc.</p>
+              <p><strong>Date:</strong> ${appointmentDate}</p>
+              <p><strong>Time:</strong> ${formattedTime}</p>
+              <p><strong>Loan ID:</strong> ${loanDetails.loanNumber}</p>
+            </div>
+            
+            <div style="background-color: #e9ecef; border-left: 4px solid #007bff; padding: 15px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #007bff;">Borrower Information</h3>
+              <p><strong>Name:</strong> ${borrowerName}</p>
+              <p><strong>Address:</strong> ${bookingData.BorrowerInformation.Address.Street}, ${bookingData.BorrowerInformation.Address.City}, ${bookingData.BorrowerInformation.Address.State} ${bookingData.BorrowerInformation.Address.ZipCode}</p>
+            </div>
+            
+            <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #856404;">Loan Information</h3>
+              <p><strong>Loan Closer:</strong> ${loanDetails.loanCloser}</p>
+              <p><strong>Loan Officer:</strong> ${loanDetails.loanOfficer}</p>
+              <p><strong>Loan Type:</strong> ${loanDetails.loanType}</p>
+              <p><strong>Loan Purpose:</strong> ${loanDetails.loanPurpose}</p>
+            </div>
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d;">
+              <p>📅 <strong>Calendar attachment included</strong> - Add this appointment to your calendar by opening the attached .ics file.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const icsContent = ICSGeneratorService.generateICSFromAppointment(bookingData);
+    const icsFilename = ICSGeneratorService.generateICSFilename(bookingData);
+
+    const emailRequest: EmailRequestDTO = {
+      To: mainRecipientEmail,
+      Bcc: uniqueEmails,
+      Cc: ccEmails,
+      Subject: `${title} - ${bookingData.ServiceName} for ${borrowerName}`,
+      Body: htmlBody,
+      IsHtml: true,
+      Attachments: [
+        {
+          FileName: icsFilename,
+          Extension: "ics",
+          Data: Buffer.from(icsContent).toString('base64')
+        }
+      ]
+    };
+
+    const emailResponse = await bookingService.sendEmail(emailRequest);
+    
+  } catch (error) {
+    console.error('❌ Error sending email notifications:', error);
+    
+  } finally {
+    updateLoadingState('sendingEmail', false);
+  }
+};
   
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -478,8 +486,13 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     setError("");
     
     try{
-      const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
+      const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId, true);
 
+      if(loanDetails.notes === "Loan Id Already Used"){
+         setError("Loan Id Already Used!");
+         setIsLoanDetailsValidated(false);
+         return;
+      }
       setLoanDetails(loanDetails);
       setNotes(loanDetails.notes || '');
       

@@ -167,18 +167,33 @@ const AppTable: React.FC<AppTableProps> = ({
   };
 
     const handleConfirmDelete = async () => {
-    if (!selectedRow) return;
-    setLoadingDelete(true);
+  if (!selectedRow) return;
+  setLoadingDelete(true);
+  
+  try {
+    console.log('Sending cancellation email for appointment:', selectedRow.bookingId);
+    
     try {
-      await bookingService.deleteBooking(selectedRow.bookingId);
-    } catch (error) {
-      console.error('Delete failed', error);
-    } finally {
-      setLoadingDelete(false);
-      setConfirmDelete(false);
-      setSelectedRow(null);
+      await bookingService.sendCancellationEmail(selectedRow.bookingId, selectedRow);
+      console.log('✅ Cancellation email sent successfully');
+    } catch (emailError) {
+      console.error('❌ Failed to send cancellation email:', emailError);
     }
-  };
+    
+    // Delete the booking
+    await bookingService.deleteBooking(selectedRow.bookingId);
+    console.log('✅ Booking deleted successfully');
+
+    
+  } catch (error) {
+    console.error('❌ Delete operation failed:', error);
+  } finally {
+    setLoadingDelete(false);
+    setConfirmDelete(false);
+    setSelectedRow(undefined);
+    window.location.reload(); 
+  }
+};
 
   const handleCloseModal = () => {
     setShowEditBooking(false);
