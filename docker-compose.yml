@@ -1,18 +1,51 @@
-version: '3.8'
-
 services:
-  frontend:
+  # Pokemon API Wrapper Service
+  wrapper-api:
     build:
       context: .
-      dockerfile: Dockerfile
-    env_file:
-      - .env
-    image: frontend:1.0.0
+      dockerfile: PokeApi.Wrapper/Dockerfile
+    container_name: pokemon-wrapper-api
     ports:
-      - "${EXPOSED_DOCKER_PORT}:3000"
-    container_name: fbc-frontend
+      - "5001:5001"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5001
     networks:
-      - fembi-network
+      - pokemon-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # Pokemon Internal API Service
+  internal-api:
+    build:
+      context: .
+      dockerfile: PokeApi.Internal/Dockerfile
+    container_name: pokemon-internal-api
+    ports:
+      - "5000:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5000
+      - WrapperApi__BaseUrl=http://wrapper-api:5001
+    depends_on:
+      wrapper-api:
+        condition: service_healthy
+    networks:
+      - pokemon-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
 networks:
-  fembi-network:
-    external: true
+  pokemon-network:
+    driver: bridge
+    name: pokemon-api-network

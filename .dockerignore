@@ -1,0 +1,44 @@
+# Build folders
+**/bin/
+**/obj/
+**/out/
+
+# Visual Studio files
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# NuGet packages
+packages/
+
+# Test results
+TestResults/
+
+# Build artifacts
+*.log
+*.tmp
+
+# Docker files
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+*.md
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
