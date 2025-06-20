@@ -5,6 +5,7 @@ namespace PokeApi.Wrapper.Interfaces
 {
     public interface IPokeApiService
     {
-        Task<ApiResponseDTO<PokemonListResponse>> GetPokemonList(int limit, int offset);
+        Task<PaginatedResponseDTO<PokemonListResponse>> GetPokemonList(int limit, int offset);
     }
 }
+

@@ -1,0 +1,12 @@
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Shared\bin\Debug\net9.0\PokeApi.Shared.deps.json
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Shared\bin\Debug\net9.0\PokeApi.Shared.dll
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Shared\bin\Debug\net9.0\PokeApi.Shared.pdb
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Shared\obj\Debug\net9.0\PokeApi.Shared.csproj.AssemblyReference.cache
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Shared\obj\Debug\net9.0\PokeApi.Shared.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Shared\obj\Debug\net9.0\PokeApi.Shared.AssemblyInfoInputs.cache
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Shared\obj\Debug\net9.0\PokeApi.Shared.AssemblyInfo.cs
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Shared\obj\Debug\net9.0\PokeApi.Shared.csproj.CoreCompileInputs.cache
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Shared\obj\Debug\net9.0\PokeApi.Shared.dll
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Shared\obj\Debug\net9.0\refint\PokeApi.Shared.dll
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Shared\obj\Debug\net9.0\PokeApi.Shared.pdb
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Shared\obj\Debug\net9.0\ref\PokeApi.Shared.dll

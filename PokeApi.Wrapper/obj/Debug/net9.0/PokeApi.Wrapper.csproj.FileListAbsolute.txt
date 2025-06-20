@@ -1,0 +1,8 @@
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Wrapper\obj\Debug\net9.0\PokeApi.Wrapper.csproj.AssemblyReference.cache
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Wrapper\obj\Debug\net9.0\rpswa.dswa.cache.json
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Wrapper\obj\Debug\net9.0\PokeApi.Wrapper.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Wrapper\obj\Debug\net9.0\PokeApi.Wrapper.AssemblyInfoInputs.cache
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Wrapper\obj\Debug\net9.0\PokeApi.Wrapper.AssemblyInfo.cs
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Wrapper\obj\Debug\net9.0\PokeApi.Wrapper.csproj.CoreCompileInputs.cache
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Wrapper\obj\Debug\net9.0\PokeApi.Wrapper.MvcApplicationPartsAssemblyInfo.cs
+C:\Users\elie_\OneDrive\Desktop\PokeApiChallenge\PokeApi.Wrapper\obj\Debug\net9.0\PokeApi.Wrapper.MvcApplicationPartsAssemblyInfo.cache

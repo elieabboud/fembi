@@ -10,6 +10,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5001
+      - ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Information
+      - ExternalApis__PokeApi__BaseUrl=https://pokeapi.co/api/v2/
+      - ExternalApis__PokeApi__TimeoutSeconds=30
+      - ExternalApis__PokeApi__CacheExpirationMinutes=10
+      - RateLimit__RequestsPerMinute=100
+      - RateLimit__RequestsPerHour=1000
     networks:
       - pokemon-network
     healthcheck:
@@ -19,6 +25,14 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
 
   # Pokemon Internal API Service
   internal-api:
@@ -31,7 +45,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5000
+      - ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Information
       - WrapperApi__BaseUrl=http://wrapper-api:5001
+      - WrapperApi__TimeoutSeconds=30
+      - WrapperApi__RetryAttempts=3
+      - RateLimit__RequestsPerMinute=200
+      - RateLimit__RequestsPerHour=2000
     depends_on:
       wrapper-api:
         condition: service_healthy
@@ -44,6 +63,14 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
 
 networks:
   pokemon-network:

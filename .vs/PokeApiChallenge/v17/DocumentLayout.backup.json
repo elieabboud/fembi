@@ -1,0 +1,160 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{27826422-4F08-4F3F-8B46-8EC477A3EA7F}|PokeApi.Internal\\PokeApi.Internal.csproj|c:\\users\\elie_\\onedrive\\desktop\\pokeapichallenge\\pokeapi.internal\\controllers\\pokemoncontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{27826422-4F08-4F3F-8B46-8EC477A3EA7F}|PokeApi.Internal\\PokeApi.Internal.csproj|solutionrelative:pokeapi.internal\\controllers\\pokemoncontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{27826422-4F08-4F3F-8B46-8EC477A3EA7F}|PokeApi.Internal\\PokeApi.Internal.csproj|c:\\users\\elie_\\onedrive\\desktop\\pokeapichallenge\\pokeapi.internal\\services\\wrapperapiservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{27826422-4F08-4F3F-8B46-8EC477A3EA7F}|PokeApi.Internal\\PokeApi.Internal.csproj|solutionrelative:pokeapi.internal\\services\\wrapperapiservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{27826422-4F08-4F3F-8B46-8EC477A3EA7F}|PokeApi.Internal\\PokeApi.Internal.csproj|c:\\users\\elie_\\onedrive\\desktop\\pokeapichallenge\\pokeapi.internal\\interfaces\\iwrapperapiservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{27826422-4F08-4F3F-8B46-8EC477A3EA7F}|PokeApi.Internal\\PokeApi.Internal.csproj|solutionrelative:pokeapi.internal\\interfaces\\iwrapperapiservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E0E12BD6-26DB-4021-A546-CB53B0FE18E7}|PokeApi.Wrapper\\PokeApi.Wrapper.csproj|c:\\users\\elie_\\onedrive\\desktop\\pokeapichallenge\\pokeapi.wrapper\\interfaces\\ipokeapiservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E0E12BD6-26DB-4021-A546-CB53B0FE18E7}|PokeApi.Wrapper\\PokeApi.Wrapper.csproj|solutionrelative:pokeapi.wrapper\\interfaces\\ipokeapiservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{3330DA80-271E-4C8C-AAF7-C0A352C655AB}|PokeApi.Shared\\PokeApi.Shared.csproj|c:\\users\\elie_\\onedrive\\desktop\\pokeapichallenge\\pokeapi.shared\\models\\pokemonmodels.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{3330DA80-271E-4C8C-AAF7-C0A352C655AB}|PokeApi.Shared\\PokeApi.Shared.csproj|solutionrelative:pokeapi.shared\\models\\pokemonmodels.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E0E12BD6-26DB-4021-A546-CB53B0FE18E7}|PokeApi.Wrapper\\PokeApi.Wrapper.csproj|c:\\users\\elie_\\onedrive\\desktop\\pokeapichallenge\\pokeapi.wrapper\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E0E12BD6-26DB-4021-A546-CB53B0FE18E7}|PokeApi.Wrapper\\PokeApi.Wrapper.csproj|solutionrelative:pokeapi.wrapper\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E0E12BD6-26DB-4021-A546-CB53B0FE18E7}|PokeApi.Wrapper\\PokeApi.Wrapper.csproj|c:\\users\\elie_\\onedrive\\desktop\\pokeapichallenge\\pokeapi.wrapper\\controllers\\pokemoncontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E0E12BD6-26DB-4021-A546-CB53B0FE18E7}|PokeApi.Wrapper\\PokeApi.Wrapper.csproj|solutionrelative:pokeapi.wrapper\\controllers\\pokemoncontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E0E12BD6-26DB-4021-A546-CB53B0FE18E7}|PokeApi.Wrapper\\PokeApi.Wrapper.csproj|c:\\users\\elie_\\onedrive\\desktop\\pokeapichallenge\\pokeapi.wrapper\\services\\pokeapiservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E0E12BD6-26DB-4021-A546-CB53B0FE18E7}|PokeApi.Wrapper\\PokeApi.Wrapper.csproj|solutionrelative:pokeapi.wrapper\\services\\pokeapiservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 7,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:1:0:{90243340-bd7a-11d0-93ef-00a0c90f2734}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "PokemonModels.cs",
+              "DocumentMoniker": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Shared\\Models\\PokemonModels.cs",
+              "RelativeDocumentMoniker": "PokeApi.Shared\\Models\\PokemonModels.cs",
+              "ToolTip": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Shared\\Models\\PokemonModels.cs",
+              "RelativeToolTip": "PokeApi.Shared\\Models\\PokemonModels.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-06-20T15:30:08.966Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Wrapper\\Program.cs",
+              "RelativeDocumentMoniker": "PokeApi.Wrapper\\Program.cs",
+              "ToolTip": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Wrapper\\Program.cs",
+              "RelativeToolTip": "PokeApi.Wrapper\\Program.cs",
+              "ViewState": "AgIAAEIAAAAAAAAAAAAAAFoAAAAKAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-06-20T14:21:10.838Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "PokeApiService.cs",
+              "DocumentMoniker": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Wrapper\\Services\\PokeApiService.cs",
+              "RelativeDocumentMoniker": "PokeApi.Wrapper\\Services\\PokeApiService.cs",
+              "ToolTip": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Wrapper\\Services\\PokeApiService.cs",
+              "RelativeToolTip": "PokeApi.Wrapper\\Services\\PokeApiService.cs",
+              "ViewState": "AgIAAAsAAAAAAAAAAAAQwA8AAAAlAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-06-20T14:21:04.48Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "WrapperApiService.cs",
+              "DocumentMoniker": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Internal\\Services\\WrapperApiService.cs",
+              "RelativeDocumentMoniker": "PokeApi.Internal\\Services\\WrapperApiService.cs",
+              "ToolTip": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Internal\\Services\\WrapperApiService.cs",
+              "RelativeToolTip": "PokeApi.Internal\\Services\\WrapperApiService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAABRAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-06-20T14:20:08.571Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "IWrapperApiService.cs",
+              "DocumentMoniker": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Internal\\Interfaces\\IWrapperApiService.cs",
+              "RelativeDocumentMoniker": "PokeApi.Internal\\Interfaces\\IWrapperApiService.cs",
+              "ToolTip": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Internal\\Interfaces\\IWrapperApiService.cs",
+              "RelativeToolTip": "PokeApi.Internal\\Interfaces\\IWrapperApiService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-06-20T14:20:07.096Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "PokemonController.cs",
+              "DocumentMoniker": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Wrapper\\Controllers\\PokemonController.cs",
+              "RelativeDocumentMoniker": "PokeApi.Wrapper\\Controllers\\PokemonController.cs",
+              "ToolTip": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Wrapper\\Controllers\\PokemonController.cs",
+              "RelativeToolTip": "PokeApi.Wrapper\\Controllers\\PokemonController.cs",
+              "ViewState": "AgIAAE4AAAAAAAAAAAAowEcAAAAyAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-06-20T14:18:07.714Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "PokemonController.cs",
+              "DocumentMoniker": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Internal\\Controllers\\PokemonController.cs",
+              "RelativeDocumentMoniker": "PokeApi.Internal\\Controllers\\PokemonController.cs",
+              "ToolTip": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Internal\\Controllers\\PokemonController.cs",
+              "RelativeToolTip": "PokeApi.Internal\\Controllers\\PokemonController.cs",
+              "ViewState": "AgIAAFoAAAAAAAAAAAAowBMAAAAyAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-06-20T14:15:46.534Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "IPokeApiService.cs",
+              "DocumentMoniker": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Wrapper\\Interfaces\\IPokeApiService.cs",
+              "RelativeDocumentMoniker": "PokeApi.Wrapper\\Interfaces\\IPokeApiService.cs",
+              "ToolTip": "C:\\Users\\elie_\\OneDrive\\Desktop\\PokeApiChallenge\\PokeApi.Wrapper\\Interfaces\\IPokeApiService.cs",
+              "RelativeToolTip": "PokeApi.Wrapper\\Interfaces\\IPokeApiService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-06-20T15:31:27.122Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
