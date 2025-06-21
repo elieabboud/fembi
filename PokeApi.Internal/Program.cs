@@ -50,7 +50,8 @@ builder.Services.AddSingleton<IRabbitMQService>(serviceProvider =>
     }
 });
 
-builder.Services.AddSingleton<IPokemonMessageService, PokemonMessageService>();
+builder.Services.AddSingleton<IApiMessageService, ApiMessageService>();
+builder.Services.AddTransient<ApiMessageService>();
 
 // Rate Limiting
 builder.Services.Configure<IpRateLimitOptions>(options =>

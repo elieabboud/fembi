@@ -83,15 +83,21 @@ namespace PokeApi.Shared.Services
 
             try
             {
-                // Declare main exchange
+                // Declare main exchanges
                 _channel.ExchangeDeclare(ExchangeNames.Pokemon, ExchangeType.Topic, durable: true);
+                _channel.ExchangeDeclare(ExchangeNames.Api, ExchangeType.Topic, durable: true);
 
-                // Declare DLX
+                // Declare DLX exchanges
                 _channel.ExchangeDeclare(ExchangeNames.PokemonDLX, ExchangeType.Topic, durable: true);
+                _channel.ExchangeDeclare(ExchangeNames.ApiDLX, ExchangeType.Topic, durable: true);
 
-                // Declare queues with DLQ setup
+                // Declare Pokemon queues with DLQ setup
                 DeclareQueueWithDLQ(QueueNames.PokemonRequest, RoutingKeys.PokemonRequest);
                 DeclareQueueWithDLQ(QueueNames.PokemonResponse, RoutingKeys.PokemonResponse);
+
+                // FIXED: Declare API queues with DLQ setup
+                DeclareQueueWithDLQ(QueueNames.ApiRequest, RoutingKeys.ApiRequest);
+                DeclareQueueWithDLQ(QueueNames.ApiResponse, RoutingKeys.ApiResponse);
 
                 _logger.LogInformation("RabbitMQ infrastructure declared successfully");
             }

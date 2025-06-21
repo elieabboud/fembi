@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace PokeApi.Shared.Configurations
 {
@@ -44,12 +39,22 @@ namespace PokeApi.Shared.Configurations
         public const string PokemonResponse = "pokemon.response";
         public const string PokemonRequestDLQ = "pokemon.request.dlq";
         public const string PokemonResponseDLQ = "pokemon.response.dlq";
+
+        // FIXED: Added missing ApiRequest queue
+        public const string ApiRequest = "api.request";
+        public const string ApiResponse = "api.response";
+        public const string ApiRequestDLQ = "api.request.dlq";
+        public const string ApiResponseDLQ = "api.response.dlq";
     }
 
     public static class ExchangeNames
     {
         public const string Pokemon = "pokemon.exchange";
         public const string PokemonDLX = "pokemon.dlx";
+
+        // FIXED: Added missing API exchange
+        public const string Api = "api.exchange";
+        public const string ApiDLX = "api.dlx";
     }
 
     public static class RoutingKeys
@@ -58,5 +63,11 @@ namespace PokeApi.Shared.Configurations
         public const string PokemonResponse = "pokemon.response";
         public const string PokemonRequestDLQ = "pokemon.request.dlq";
         public const string PokemonResponseDLQ = "pokemon.response.dlq";
+
+        // FIXED: Added missing API routing keys
+        public const string ApiRequest = "api.request";
+        public const string ApiResponse = "api.response";
+        public const string ApiRequestDLQ = "api.request.dlq";
+        public const string ApiResponseDLQ = "api.response.dlq";
     }
 }

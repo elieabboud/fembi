@@ -133,9 +133,9 @@ builder.Services.AddHttpClient("DummyJson", (serviceProvider, client) =>
 .AddPolicyHandler(GetRetryPolicy())
 .AddPolicyHandler(GetCircuitBreakerPolicy());
 
-// Register services
+// Register services - FIXED: Changed ExternalApiService to Singleton to match ApiMessageService
 builder.Services.AddSingleton<IApiHttpClientFactory, ApiHttpClientFactory>();
-builder.Services.AddScoped<IExternalApiService, ExternalApiService>();
+builder.Services.AddSingleton<IExternalApiService, ExternalApiService>();
 
 // Health Checks
 builder.Services.AddHealthChecks()

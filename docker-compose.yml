@@ -10,9 +10,10 @@ services:
       - "5672:5672"     # AMQP port
       - "15672:15672"   # Management UI port
     environment:
-      RABBITMQ_DEFAULT_USER: api_user
-      RABBITMQ_DEFAULT_PASS: api_pass
-      RABBITMQ_DEFAULT_VHOST: api_vhost
+      # FIXED: Use consistent credentials that match your appsettings
+      RABBITMQ_DEFAULT_USER: pokemon_user
+      RABBITMQ_DEFAULT_PASS: pokemon_pass
+      RABBITMQ_DEFAULT_VHOST: pokemon_vhost
       RABBITMQ_ERLANG_COOKIE: "multi-api-secret-cookie"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
@@ -48,9 +49,9 @@ services:
       - RateLimit__RequestsPerHour=1000
       - RabbitMQ__HostName=rabbitmq
       - RabbitMQ__Port=5672
-      - RabbitMQ__UserName=api_user
-      - RabbitMQ__Password=api_pass
-      - RabbitMQ__VirtualHost=api_vhost
+      - RabbitMQ__UserName=pokemon_user
+      - RabbitMQ__Password=pokemon_pass
+      - RabbitMQ__VirtualHost=pokemon_vhost
       - RabbitMQ__ConnectionTimeoutSeconds=30
       - RabbitMQ__RequestTimeoutSeconds=30
     depends_on:
@@ -86,9 +87,9 @@ services:
       - RateLimit__RequestsPerHour=2000
       - RabbitMQ__HostName=rabbitmq
       - RabbitMQ__Port=5672
-      - RabbitMQ__UserName=api_user
-      - RabbitMQ__Password=api_pass
-      - RabbitMQ__VirtualHost=api_vhost
+      - RabbitMQ__UserName=pokemon_user
+      - RabbitMQ__Password=pokemon_pass
+      - RabbitMQ__VirtualHost=pokemon_vhost
       - RabbitMQ__ConnectionTimeoutSeconds=30
       - RabbitMQ__RequestTimeoutSeconds=30
     depends_on:
