@@ -1,15 +1,22 @@
 ﻿using PokeApi.Shared.DTO;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static PokeApi.Shared.Models.PokemonModels;
 
 namespace PokeApi.Shared.Interfaces
 {
     public interface IExternalApiService
     {
-        Task<ApiResponseDTO<PokemonListResponse>> GetPokemonList(int limit, int offset);
+        Task<PaginatedResponseDTO<object>> GetDataAsync(string source, int limit, int offset);
+    }
+
+    public interface IApiHttpClientFactory
+    {
+        HttpClient CreateClient(string source);
+    }
+
+    public interface IApiMessageService
+    {
+        Task<PaginatedResponseDTO<object>?> RequestDataAsync(string source, int limit, int offset,
+            string correlationId, CancellationToken cancellationToken = default);
+        Task StartProcessingRequestsAsync(CancellationToken cancellationToken = default);
+        Task StopProcessingAsync();
     }
 }

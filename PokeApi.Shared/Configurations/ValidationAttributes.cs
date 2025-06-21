@@ -1,18 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel.DataAnnotations;
+using PokeApi.Shared.Models;
 
 namespace PokeApi.Shared.Configurations
 {
-    public class PokemonLimitAttribute : ValidationAttribute
+    public class ApiLimitAttribute : ValidationAttribute
     {
         private readonly int _minValue;
         private readonly int _maxValue;
 
-        public PokemonLimitAttribute(int minValue = 1, int maxValue = 1000)
+        public ApiLimitAttribute(int minValue = 1, int maxValue = 1000)
         {
             _minValue = minValue;
             _maxValue = maxValue;
@@ -33,7 +29,7 @@ namespace PokeApi.Shared.Configurations
         }
     }
 
-    public class PokemonOffsetAttribute : ValidationAttribute
+    public class ApiOffsetAttribute : ValidationAttribute
     {
         public override bool IsValid(object? value)
         {
@@ -47,6 +43,23 @@ namespace PokeApi.Shared.Configurations
         public override string FormatErrorMessage(string name)
         {
             return $"{name} must be a non-negative integer.";
+        }
+    }
+
+    public class ApiSourceAttribute : ValidationAttribute
+    {
+        public override bool IsValid(object? value)
+        {
+            if (value is string source)
+            {
+                return ApiSources.IsValid(source);
+            }
+            return false;
+        }
+
+        public override string FormatErrorMessage(string name)
+        {
+            return $"{name} must be one of: {string.Join(", ", ApiSources.ValidSources)}.";
         }
     }
 }

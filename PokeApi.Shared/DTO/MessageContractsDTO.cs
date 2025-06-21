@@ -1,19 +1,19 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel.DataAnnotations;
+using PokeApi.Shared.Configurations;
 
 namespace PokeApi.Shared.DTO
 {
-    public class PokemonRequestMessage
+    public class ApiRequestMessage
     {
         [Required]
         public string RequestId { get; set; } = string.Empty;
 
         [Required]
         public string CorrelationId { get; set; } = string.Empty;
+
+        [Required]
+        [ApiSource]
+        public string Source { get; set; } = string.Empty;
 
         [Range(1, 1000)]
         public int Limit { get; set; } = 20;
@@ -28,13 +28,16 @@ namespace PokeApi.Shared.DTO
         public Dictionary<string, object> Headers { get; set; } = new();
     }
 
-    public class PokemonResponseMessage
+    public class ApiResponseMessage
     {
         [Required]
         public string RequestId { get; set; } = string.Empty;
 
         [Required]
         public string CorrelationId { get; set; } = string.Empty;
+
+        [Required]
+        public string Source { get; set; } = string.Empty;
 
         public bool Success { get; set; }
 

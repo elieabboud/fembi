@@ -4,20 +4,20 @@ services:
   # RabbitMQ Message Broker
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
-    container_name: pokemon-rabbitmq
+    container_name: multi-api-rabbitmq
     hostname: rabbitmq
     ports:
       - "5672:5672"     # AMQP port
       - "15672:15672"   # Management UI port
     environment:
-      RABBITMQ_DEFAULT_USER: pokemon_user
-      RABBITMQ_DEFAULT_PASS: pokemon_pass
-      RABBITMQ_DEFAULT_VHOST: pokemon_vhost
-      RABBITMQ_ERLANG_COOKIE: "pokemon-secret-cookie"
+      RABBITMQ_DEFAULT_USER: api_user
+      RABBITMQ_DEFAULT_PASS: api_pass
+      RABBITMQ_DEFAULT_VHOST: api_vhost
+      RABBITMQ_ERLANG_COOKIE: "multi-api-secret-cookie"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
-      - pokemon-network
+      - api-network
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 30s
@@ -26,13 +26,12 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-
-  # Pokemon API Wrapper Service
+  # Multi-Source API Wrapper Service
   wrapper-api:
     build:
       context: .
       dockerfile: PokeApi.Wrapper/Dockerfile
-    container_name: pokemon-wrapper-api
+    container_name: multi-api-wrapper
     ports:
       - "5001:5001"
     environment:
@@ -49,16 +48,16 @@ services:
       - RateLimit__RequestsPerHour=1000
       - RabbitMQ__HostName=rabbitmq
       - RabbitMQ__Port=5672
-      - RabbitMQ__UserName=pokemon_user
-      - RabbitMQ__Password=pokemon_pass
-      - RabbitMQ__VirtualHost=pokemon_vhost
+      - RabbitMQ__UserName=api_user
+      - RabbitMQ__Password=api_pass
+      - RabbitMQ__VirtualHost=api_vhost
       - RabbitMQ__ConnectionTimeoutSeconds=30
       - RabbitMQ__RequestTimeoutSeconds=30
     depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
-      - pokemon-network
+      - api-network
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5001/health || exit 1"]
       interval: 30s
@@ -67,12 +66,12 @@ services:
       start_period: 60s
     restart: unless-stopped
 
-  # Pokemon Internal API Service
+  # Multi-Source Internal API Service
   internal-api:
     build:
       context: .
       dockerfile: PokeApi.Internal/Dockerfile
-    container_name: pokemon-internal-api
+    container_name: multi-api-internal
     ports:
       - "5000:5000"
     environment:
@@ -87,9 +86,9 @@ services:
       - RateLimit__RequestsPerHour=2000
       - RabbitMQ__HostName=rabbitmq
       - RabbitMQ__Port=5672
-      - RabbitMQ__UserName=pokemon_user
-      - RabbitMQ__Password=pokemon_pass
-      - RabbitMQ__VirtualHost=pokemon_vhost
+      - RabbitMQ__UserName=api_user
+      - RabbitMQ__Password=api_pass
+      - RabbitMQ__VirtualHost=api_vhost
       - RabbitMQ__ConnectionTimeoutSeconds=30
       - RabbitMQ__RequestTimeoutSeconds=30
     depends_on:
@@ -98,7 +97,7 @@ services:
       wrapper-api:
         condition: service_healthy
     networks:
-      - pokemon-network
+      - api-network
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
       interval: 30s
@@ -107,11 +106,10 @@ services:
       start_period: 60s
     restart: unless-stopped
 
-
 networks:
-  pokemon-network:
+  api-network:
     driver: bridge
-    name: pokemon-api-network
+    name: multi-api-network
 
 volumes:
   rabbitmq_data:

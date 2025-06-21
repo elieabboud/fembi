@@ -6,37 +6,38 @@ using System.Text.Json;
 
 namespace PokeApi.Internal.Services
 {
-    public class PokemonMessageService : IPokemonMessageService
+    public class ApiMessageService : IApiMessageService
     {
         private readonly IRabbitMQService _rabbitMQService;
-        private readonly ILogger<PokemonMessageService> _logger;
+        private readonly ILogger<ApiMessageService> _logger;
         private readonly RabbitMQOptions _options;
         private readonly string _replyQueueName;
 
-        public PokemonMessageService(
+        public ApiMessageService(
             IRabbitMQService rabbitMQService,
-            ILogger<PokemonMessageService> logger,
+            ILogger<ApiMessageService> logger,
             IOptions<RabbitMQOptions> options)
         {
             _rabbitMQService = rabbitMQService;
             _logger = logger;
             _options = options.Value;
             // Create a unique reply queue name for this instance
-            _replyQueueName = $"pokemon.reply.{Environment.MachineName}.{Guid.NewGuid():N}"[..24];
+            _replyQueueName = $"api.reply.{Environment.MachineName}.{Guid.NewGuid():N}"[..24];
         }
 
-        public async Task<PaginatedResponseDTO<object>?> RequestPokemonDataAsync(int limit, int offset,
+        public async Task<PaginatedResponseDTO<object>?> RequestDataAsync(string source, int limit, int offset,
             string correlationId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Requesting Pokemon data via message queue: Limit: {Limit}, Offset: {Offset}, Correlation: {CorrelationId}",
-                limit, offset, correlationId);
+            _logger.LogInformation("Requesting {Source} data via message queue: Limit: {Limit}, Offset: {Offset}, Correlation: {CorrelationId}",
+                source, limit, offset, correlationId);
 
             try
             {
-                var request = new PokemonRequestMessage
+                var request = new ApiRequestMessage
                 {
                     RequestId = Guid.NewGuid().ToString(),
                     CorrelationId = correlationId,
+                    Source = source,
                     Limit = limit,
                     Offset = offset,
                     ReplyTo = _replyQueueName,
@@ -51,12 +52,12 @@ namespace PokeApi.Internal.Services
                 // Use longer timeout and proper cancellation handling
                 var timeout = TimeSpan.FromSeconds(Math.Max(_options.RequestTimeoutSeconds, 30));
 
-                _logger.LogInformation("Publishing request with timeout: {Timeout}ms, ReplyQueue: {ReplyQueue}",
-                    timeout.TotalMilliseconds, _replyQueueName);
+                _logger.LogInformation("Publishing {Source} request with timeout: {Timeout}ms, ReplyQueue: {ReplyQueue}",
+                    source, timeout.TotalMilliseconds, _replyQueueName);
 
-                var response = await _rabbitMQService.PublishAndWaitForReplyAsync<PokemonRequestMessage, PokemonResponseMessage>(
-                    ExchangeNames.Pokemon,
-                    RoutingKeys.PokemonRequest,
+                var response = await _rabbitMQService.PublishAndWaitForReplyAsync<ApiRequestMessage, ApiResponseMessage>(
+                    ExchangeNames.Pokemon, // Using existing exchange
+                    RoutingKeys.ApiRequest,
                     request,
                     _replyQueueName,
                     timeout,
@@ -65,58 +66,48 @@ namespace PokeApi.Internal.Services
 
                 if (response != null)
                 {
-                    _logger.LogInformation("Received Pokemon response via message queue: Success: {Success}, HasData: {HasData}, Correlation: {CorrelationId}",
-                        response.Success, response.Data?.Data != null, correlationId);
+                    _logger.LogInformation("Received {Source} response via message queue: Success: {Success}, HasData: {HasData}, Correlation: {CorrelationId}",
+                        source, response.Success, response.Data?.Data != null, correlationId);
 
                     // Enhanced logging for debugging data structure
                     if (response.Data?.Data != null)
                     {
-                        _logger.LogDebug("Response data type: {DataType}", response.Data.Data.GetType().Name);
+                        _logger.LogDebug("Response data type for {Source}: {DataType}", source, response.Data.Data.GetType().Name);
 
-                        // Try to extract Pokemon count for debugging
+                        // Try to extract count for debugging
                         try
                         {
                             var dataAsJson = JsonSerializer.Serialize(response.Data.Data);
-                            _logger.LogDebug("Response data JSON length: {Length}", dataAsJson.Length);
-
-                            var jsonDoc = JsonDocument.Parse(dataAsJson);
-                            if (jsonDoc.RootElement.TryGetProperty("results", out var resultsElement))
-                            {
-                                _logger.LogDebug("Pokemon results array length: {Count}", resultsElement.GetArrayLength());
-                            }
-                            else if (jsonDoc.RootElement.TryGetProperty("Results", out var resultsElementCapital))
-                            {
-                                _logger.LogDebug("Pokemon Results array length: {Count}", resultsElementCapital.GetArrayLength());
-                            }
+                            _logger.LogDebug("Response data JSON length for {Source}: {Length}", source, dataAsJson.Length);
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogWarning(ex, "Failed to parse response data for debugging");
+                            _logger.LogWarning(ex, "Failed to parse {Source} response data for debugging", source);
                         }
                     }
                     else
                     {
-                        _logger.LogWarning("Response data is null in received message");
+                        _logger.LogWarning("Response data is null in received {Source} message", source);
                     }
 
                     return ConvertFromMessageResponse(response);
                 }
                 else
                 {
-                    _logger.LogWarning("No response received for Pokemon request, Correlation: {CorrelationId}, Timeout: {Timeout}ms",
-                        correlationId, timeout.TotalMilliseconds);
-                    return CreateErrorResponse("No response received from wrapper service", correlationId);
+                    _logger.LogWarning("No response received for {Source} request, Correlation: {CorrelationId}, Timeout: {Timeout}ms",
+                        source, correlationId, timeout.TotalMilliseconds);
+                    return CreateErrorResponse($"No response received from wrapper service for {source}", correlationId);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                _logger.LogWarning("Pokemon request was cancelled, Correlation: {CorrelationId}", correlationId);
-                return CreateErrorResponse("Request was cancelled", correlationId);
+                _logger.LogWarning("{Source} request was cancelled, Correlation: {CorrelationId}", source, correlationId);
+                return CreateErrorResponse($"{source} request was cancelled", correlationId);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error requesting Pokemon data via message queue, Correlation: {CorrelationId}", correlationId);
-                return CreateErrorResponse($"Internal error occurred: {ex.Message}", correlationId);
+                _logger.LogError(ex, "Error requesting {Source} data via message queue, Correlation: {CorrelationId}", source, correlationId);
+                return CreateErrorResponse($"Internal error occurred for {source}: {ex.Message}", correlationId);
             }
         }
 
@@ -132,12 +123,11 @@ namespace PokeApi.Internal.Services
             await Task.CompletedTask;
         }
 
-        // FIXED: Improved conversion with better data preservation and type handling
-        private PaginatedResponseDTO<object> ConvertFromMessageResponse(PokemonResponseMessage response)
+        private PaginatedResponseDTO<object> ConvertFromMessageResponse(ApiResponseMessage response)
         {
             try
             {
-                _logger.LogDebug("Converting PokemonResponseMessage to PaginatedResponseDTO<object>");
+                _logger.LogDebug("Converting ApiResponseMessage to PaginatedResponseDTO<object> for {Source}", response.Source);
 
                 var result = new PaginatedResponseDTO<object>
                 {
@@ -152,39 +142,25 @@ namespace PokeApi.Internal.Services
                 // Additional validation and logging
                 if (result.Data != null)
                 {
-                    _logger.LogDebug("Converted data type: {DataType}", result.Data.GetType().Name);
-
-                    // Try to log Pokemon count if possible
-                    try
-                    {
-                        if (result.Data is JsonElement jsonElement &&
-                            jsonElement.TryGetProperty("results", out var resultsElement))
-                        {
-                            _logger.LogDebug("Found {Count} Pokemon in results", resultsElement.GetArrayLength());
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogDebug(ex, "Could not extract Pokemon count from data");
-                    }
+                    _logger.LogDebug("Converted {Source} data type: {DataType}", response.Source, result.Data.GetType().Name);
                 }
                 else
                 {
-                    _logger.LogWarning("Converted data is null");
+                    _logger.LogWarning("Converted {Source} data is null", response.Source);
                 }
 
                 return result;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error converting PokemonResponseMessage to PaginatedResponseDTO");
+                _logger.LogError(ex, "Error converting ApiResponseMessage for {Source} to PaginatedResponseDTO", response.Source);
 
                 return new PaginatedResponseDTO<object>
                 {
                     Data = null,
                     Pagination = new PaginationMetadata(),
                     Success = false,
-                    ErrorMessage = $"Data conversion error: {ex.Message}",
+                    ErrorMessage = $"Data conversion error for {response.Source}: {ex.Message}",
                     Timestamp = DateTime.UtcNow,
                     RequestId = response.RequestId
                 };

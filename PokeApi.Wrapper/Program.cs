@@ -7,8 +7,6 @@ using PokeApi.Shared.Configurations;
 using PokeApi.Shared.Interfaces;
 using PokeApi.Shared.Middleware;
 using PokeApi.Shared.Services;
-using PokeApi.Wrapper.HealthChecks;
-using PokeApi.Wrapper.Interfaces;
 using PokeApi.Wrapper.Services;
 using Polly;
 using Polly.Extensions.Http;
@@ -33,13 +31,12 @@ builder.Services.AddMemoryCache();
 
 // RabbitMQ Services
 builder.Services.AddSingleton<IRabbitMQService, RabbitMQService>();
-builder.Services.AddSingleton<IPokemonMessageService, PokemonMessageService>();
+builder.Services.AddSingleton<IApiMessageService, ApiMessageService>();
 
-// Register PokemonMessageService as hosted service
-builder.Services.AddHostedService<PokemonMessageService>();
+// Register ApiMessageService as hosted service
+builder.Services.AddHostedService<ApiMessageService>();
 
 // Rate Limiting
-builder.Services.AddMemoryCache();
 builder.Services.Configure<IpRateLimitOptions>(options =>
 {
     options.EnableEndpointRateLimiting = true;
@@ -115,8 +112,8 @@ static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
             });
 }
 
-// Configure HttpClient for external API calls with Polly
-builder.Services.AddHttpClient<IPokeApiService, PokeApiService>((serviceProvider, client) =>
+// Configure Named HttpClients for each API
+builder.Services.AddHttpClient("PokeApi", (serviceProvider, client) =>
 {
     var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ExternalApiOptions>>().Value;
     client.BaseAddress = new Uri(options.PokeApi.BaseUrl);
@@ -126,12 +123,24 @@ builder.Services.AddHttpClient<IPokeApiService, PokeApiService>((serviceProvider
 .AddPolicyHandler(GetRetryPolicy())
 .AddPolicyHandler(GetCircuitBreakerPolicy());
 
+builder.Services.AddHttpClient("DummyJson", (serviceProvider, client) =>
+{
+    var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ExternalApiOptions>>().Value;
+    client.BaseAddress = new Uri(options.DummyJson.BaseUrl);
+    client.DefaultRequestHeaders.Add("User-Agent", "PokeApiWrapper/1.0");
+    client.Timeout = TimeSpan.FromSeconds(options.DummyJson.TimeoutSeconds);
+})
+.AddPolicyHandler(GetRetryPolicy())
+.AddPolicyHandler(GetCircuitBreakerPolicy());
+
+// Register services
+builder.Services.AddSingleton<IApiHttpClientFactory, ApiHttpClientFactory>();
+builder.Services.AddScoped<IExternalApiService, ExternalApiService>();
+
 // Health Checks
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy("Wrapper API is running"))
-    .AddCheck<RabbitMQHealthCheck>("rabbitmq")
-    .AddTypeActivatedCheck<ExternalApiHealthCheck>(
-        "external-pokeapi");
+    .AddCheck<RabbitMQHealthCheck>("rabbitmq");
 
 // Configure Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
@@ -139,9 +148,9 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "Pokemon API Wrapper with RabbitMQ",
+        Title = "Multi-Source API Wrapper with RabbitMQ",
         Version = "v1",
-        Description = "A professional wrapper API for the Pokemon API with RabbitMQ messaging, caching, resilience, and rate limiting",
+        Description = "A professional wrapper API for multiple external APIs (Pokemon & Products) with RabbitMQ messaging, caching, resilience, and rate limiting",
         Contact = new OpenApiContact
         {
             Name = "Development Team",
@@ -190,7 +199,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Pokemon API Wrapper with RabbitMQ V1");
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Multi-Source API Wrapper V1");
         c.RoutePrefix = string.Empty;
         c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
         c.DisplayRequestDuration();
@@ -222,17 +231,6 @@ app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks
         [HealthStatus.Degraded] = StatusCodes.Status200OK,
         [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
     }
-});
-
-// Simple health check endpoints
-app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains("ready")
-});
-
-app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-{
-    Predicate = _ => false
 });
 
 app.Run();
