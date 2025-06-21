@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>PokeApi.Wrapper</name>
+    </assembly>
+    <members>
+        <member name="M:PokeApi.Wrapper.Controllers.PokemonController.GetPokemonList(System.Int32,System.Int32)">
+            <summary>
+            Gets a paginated list of Pokemon from the external PokeAPI
+            </summary>
+            <param name="limit">Number of Pokemon to return (1-1000, default: 20)</param>
+            <param name="offset">Number of Pokemon to skip (default: 0)</param>
+            <returns>A paginated list of Pokemon with metadata</returns>
+            <response code="200">Returns the Pokemon list successfully</response>
+            <response code="400">Invalid parameters provided</response>
+            <response code="429">Rate limit exceeded</response>
+            <response code="500">Internal server error occurred</response>
+            <response code="503">External service unavailable</response>
+        </member>
+        <member name="M:PokeApi.Wrapper.Controllers.PokemonController.Health">
+            <summary>
+            Health check endpoint for the Pokemon wrapper service
+            </summary>
+            <returns>Service health status with detailed information</returns>
+        </member>
+        <member name="M:PokeApi.Wrapper.Controllers.PokemonController.GetApiInfo">
+            <summary>
+            Get API information and statistics
+            </summary>
+            <returns>API metadata and usage statistics</returns>
+        </member>
+    </members>
+</doc>

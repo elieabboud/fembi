@@ -2,6 +2,7 @@
 using PokeApi.Internal.Interfaces;
 using PokeApi.Shared.Configurations;
 using PokeApi.Shared.DTO;
+using PokeApi.Shared.Interfaces;
 using PokeApi.Shared.Middleware;
 using System.Text.Json;
 using static PokeApi.Shared.Models.PokemonModels;
@@ -13,21 +14,59 @@ public class WrapperApiService : IWrapperApiService
     private readonly HttpClient _httpClient;
     private readonly ILogger<WrapperApiService> _logger;
     private readonly WrapperApiOptions _options;
+    private readonly IPokemonMessageService _messageService;
+    private readonly bool _useMessaging;
 
     public WrapperApiService(
         HttpClient httpClient,
         ILogger<WrapperApiService> logger,
-        IOptions<WrapperApiOptions> options)
+        IOptions<WrapperApiOptions> options,
+        IPokemonMessageService messageService,
+        IConfiguration configuration)
     {
         _httpClient = httpClient;
         _logger = logger;
         _options = options.Value;
+        _messageService = messageService;
+
+        // Allow switching between HTTP and messaging via configuration
+        _useMessaging = configuration.GetValue<bool>("UseMessaging", true);
     }
 
-    public async Task<PaginatedResponseDTO<PokemonListResponse>> GetPokemonFromWrapperAsync(int limit, int offset)
+    public async Task<PaginatedResponseDTO<PokemonListResponse>> GetPokemonFromWrapper(int limit, int offset)
     {
         var requestId = Guid.NewGuid().ToString();
 
+        if (_useMessaging)
+        {
+            _logger.LogInformation("Using messaging for Pokemon request, requestId: {RequestId}", requestId);
+
+            var result = await GetPokemonViaMessaging(limit, offset, requestId);
+            return ConvertToTypedResponse(result);
+        }
+        else
+        {
+            _logger.LogInformation("Using HTTP for Pokemon request, requestId: {RequestId}", requestId);
+            return await GetPokemonViaHttpAsync(limit, offset, requestId);
+        }
+    }
+
+    public async Task<PaginatedResponseDTO<object>> GetPokemonViaMessaging(int limit, int offset, string correlationId)
+    {
+        try
+        {
+            var result = await _messageService.RequestPokemonDataAsync(limit, offset, correlationId);
+            return result ?? CreateErrorResponse("No response from messaging service", correlationId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting Pokemon via messaging, correlationId: {CorrelationId}", correlationId);
+            return CreateErrorResponse("Messaging error occurred", correlationId);
+        }
+    }
+
+    private async Task<PaginatedResponseDTO<PokemonListResponse>> GetPokemonViaHttpAsync(int limit, int offset, string requestId)
+    {
         try
         {
             _logger.LogInformation("Calling wrapper API with limit: {Limit}, offset: {Offset}, requestId: {RequestId}",
@@ -147,4 +186,30 @@ public class WrapperApiService : IWrapperApiService
             };
         }
     }
+
+    private static PaginatedResponseDTO<PokemonListResponse> ConvertToTypedResponse(PaginatedResponseDTO<object> source)
+    {
+        return new PaginatedResponseDTO<PokemonListResponse>
+        {
+            Data = source.Data as PokemonListResponse,
+            Pagination = source.Pagination,
+            Success = source.Success,
+            ErrorMessage = source.ErrorMessage,
+            Timestamp = source.Timestamp,
+            RequestId = source.RequestId
+        };
+    }
+
+    private static PaginatedResponseDTO<object> CreateErrorResponse(string errorMessage, string correlationId)
+    {
+        return new PaginatedResponseDTO<object>
+        {
+            Success = false,
+            ErrorMessage = errorMessage,
+            RequestId = correlationId,
+            Timestamp = DateTime.UtcNow,
+            Pagination = new PaginationMetadata()
+        };
+    }
+
 }

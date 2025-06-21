@@ -4,7 +4,9 @@ using HealthChecks.UI.Client;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
 using PokeApi.Shared.Configurations;
-using PokeApi.Shared.Middleware; // Use shared middleware
+using PokeApi.Shared.Interfaces;
+using PokeApi.Shared.Middleware;
+using PokeApi.Shared.Services;
 using PokeApi.Wrapper.HealthChecks;
 using PokeApi.Wrapper.Interfaces;
 using PokeApi.Wrapper.Services;
@@ -23,9 +25,18 @@ builder.Services.Configure<ExternalApiOptions>(
     builder.Configuration.GetSection(ExternalApiOptions.SectionName));
 builder.Services.Configure<RateLimitOptions>(
     builder.Configuration.GetSection(RateLimitOptions.SectionName));
+builder.Services.Configure<RabbitMQOptions>(
+    builder.Configuration.GetSection(RabbitMQOptions.SectionName));
 
 // Memory Cache
 builder.Services.AddMemoryCache();
+
+// RabbitMQ Services
+builder.Services.AddSingleton<IRabbitMQService, RabbitMQService>();
+builder.Services.AddSingleton<IPokemonMessageService, PokemonMessageService>();
+
+// Register PokemonMessageService as hosted service
+builder.Services.AddHostedService<PokemonMessageService>();
 
 // Rate Limiting
 builder.Services.AddMemoryCache();
@@ -118,9 +129,9 @@ builder.Services.AddHttpClient<IPokeApiService, PokeApiService>((serviceProvider
 // Health Checks
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy("Wrapper API is running"))
+    .AddCheck<RabbitMQHealthCheck>("rabbitmq")
     .AddTypeActivatedCheck<ExternalApiHealthCheck>(
-        "external-pokeapi",
-        args: new object[] { builder.Services.BuildServiceProvider().GetRequiredService<HttpClient>() });
+        "external-pokeapi");
 
 // Configure Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
@@ -128,9 +139,9 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "Pokemon API Wrapper",
+        Title = "Pokemon API Wrapper with RabbitMQ",
         Version = "v1",
-        Description = "A professional wrapper API for the Pokemon API with caching, resilience, and rate limiting",
+        Description = "A professional wrapper API for the Pokemon API with RabbitMQ messaging, caching, resilience, and rate limiting",
         Contact = new OpenApiContact
         {
             Name = "Development Team",
@@ -145,15 +156,6 @@ builder.Services.AddSwaggerGen(c =>
     {
         c.IncludeXmlComments(xmlPath);
     }
-
-    // Add security definition for API keys (optional)
-    c.AddSecurityDefinition("ApiKey", new OpenApiSecurityScheme
-    {
-        Description = "API Key needed to access the endpoints",
-        In = ParameterLocation.Header,
-        Name = "X-API-Key",
-        Type = SecuritySchemeType.ApiKey
-    });
 
     c.EnableAnnotations();
 });
@@ -188,7 +190,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Pokemon API Wrapper V1");
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Pokemon API Wrapper with RabbitMQ V1");
         c.RoutePrefix = string.Empty;
         c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
         c.DisplayRequestDuration();
@@ -222,7 +224,7 @@ app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks
     }
 });
 
-// Simple health check endpoint
+// Simple health check endpoints
 app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")

@@ -6,7 +6,9 @@ using Microsoft.OpenApi.Models;
 using PokeApi.Internal.Interfaces;
 using PokeApi.Internal.Services;
 using PokeApi.Shared.Configurations;
+using PokeApi.Shared.Interfaces;
 using PokeApi.Shared.Middleware;
+using PokeApi.Shared.Services;
 using Polly;
 using Polly.Extensions.Http;
 using System.Reflection;
@@ -22,9 +24,15 @@ builder.Services.Configure<WrapperApiOptions>(
     builder.Configuration.GetSection(WrapperApiOptions.SectionName));
 builder.Services.Configure<RateLimitOptions>(
     builder.Configuration.GetSection(RateLimitOptions.SectionName));
+builder.Services.Configure<RabbitMQOptions>(
+    builder.Configuration.GetSection(RabbitMQOptions.SectionName));
 
 // Memory Cache
 builder.Services.AddMemoryCache();
+
+// RabbitMQ Services
+builder.Services.AddSingleton<IRabbitMQService, RabbitMQService>();
+builder.Services.AddSingleton<IPokemonMessageService, PokemonMessageService>();
 
 // Rate Limiting
 builder.Services.Configure<IpRateLimitOptions>(options =>
@@ -71,7 +79,7 @@ builder.Services.AddApiVersioning(opt =>
     setup.SubstituteApiVersionInUrl = true;
 });
 
-// Polly Policies for Wrapper API calls
+// Polly Policies for Wrapper API calls (fallback HTTP)
 static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
 {
     return HttpPolicyExtensions
@@ -102,7 +110,7 @@ static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
             });
 }
 
-// Configure HttpClient for internal API calls to wrapper
+// Configure HttpClient for internal API calls to wrapper (fallback)
 builder.Services.AddHttpClient<IWrapperApiService, WrapperApiService>((serviceProvider, client) =>
 {
     var config = serviceProvider.GetRequiredService<IConfiguration>();
@@ -119,6 +127,7 @@ builder.Services.AddHttpClient<IWrapperApiService, WrapperApiService>((servicePr
 // Health Checks
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy("Internal API is running"))
+    .AddCheck<RabbitMQHealthCheck>("rabbitmq")
     .AddCheck("wrapper-api", () =>
     {
         // This will be replaced with actual wrapper API health check
@@ -131,9 +140,9 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "Pokemon Internal API",
+        Title = "Pokemon Internal API with RabbitMQ",
         Version = "v1",
-        Description = "Internal API that orchestrates calls to the Pokemon Wrapper API with enhanced error handling and monitoring",
+        Description = "Internal API that orchestrates calls to the Pokemon Wrapper API via RabbitMQ messaging with enhanced error handling and monitoring",
         Contact = new OpenApiContact
         {
             Name = "Development Team",
@@ -191,7 +200,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Pokemon Internal API V1");
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Pokemon Internal API with RabbitMQ V1");
         c.RoutePrefix = string.Empty;
         c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
         c.DisplayRequestDuration();

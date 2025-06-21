@@ -5,6 +5,7 @@ namespace PokeApi.Internal.Interfaces
 {
     public interface IWrapperApiService
     {
-        Task<PaginatedResponseDTO<PokemonListResponse>> GetPokemonFromWrapperAsync(int limit, int offset);
+        Task<PaginatedResponseDTO<PokemonListResponse>> GetPokemonFromWrapper(int limit, int offset);
+        Task<PaginatedResponseDTO<object>> GetPokemonViaMessaging(int limit, int offset, string correlationId);
     }
 }

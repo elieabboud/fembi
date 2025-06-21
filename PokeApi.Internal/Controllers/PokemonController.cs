@@ -88,7 +88,7 @@ namespace PokeApi.Internal.Controllers
                     return BadRequest(errorResponse);
                 }
 
-                var result = await _wrapperApiService.GetPokemonFromWrapperAsync(limit, offset);
+                var result = await _wrapperApiService.GetPokemonFromWrapper(limit, offset);
                 result.RequestId = correlationId;
 
                 if (result.Success)
@@ -141,7 +141,7 @@ namespace PokeApi.Internal.Controllers
             try
             {
                 // Test wrapper API connectivity
-                var testResult = await _wrapperApiService.GetPokemonFromWrapperAsync(1, 0);
+                var testResult = await _wrapperApiService.GetPokemonFromWrapper(1, 0);
 
                 var healthStatus = new
                 {
