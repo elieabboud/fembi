@@ -15,6 +15,7 @@ public class WrapperApiService : IWrapperApiService
     private readonly ILogger<WrapperApiService> _logger;
     private readonly WrapperApiOptions _options;
     private readonly IPokemonMessageService _messageService;
+    private readonly IRabbitMQService _rabbitMQService;
     private readonly bool _useMessaging;
 
     public WrapperApiService(
@@ -22,12 +23,14 @@ public class WrapperApiService : IWrapperApiService
         ILogger<WrapperApiService> logger,
         IOptions<WrapperApiOptions> options,
         IPokemonMessageService messageService,
+        IRabbitMQService rabbitMQService,
         IConfiguration configuration)
     {
         _httpClient = httpClient;
         _logger = logger;
         _options = options.Value;
         _messageService = messageService;
+        _rabbitMQService = rabbitMQService;
 
         // Allow switching between HTTP and messaging via configuration
         _useMessaging = configuration.GetValue<bool>("UseMessaging", true);
@@ -37,31 +40,56 @@ public class WrapperApiService : IWrapperApiService
     {
         var requestId = Guid.NewGuid().ToString();
 
-        if (_useMessaging)
+        // FIXED: Check RabbitMQ health before attempting messaging
+        var isRabbitMQHealthy = await _rabbitMQService.IsHealthyAsync();
+        var shouldUseMessaging = _useMessaging && isRabbitMQHealthy;
+
+        _logger.LogInformation("Processing request {RequestId}: UseMessaging={UseMessaging}, RabbitMQHealthy={RabbitMQHealthy}, WillUseMessaging={WillUseMessaging}",
+            requestId, _useMessaging, isRabbitMQHealthy, shouldUseMessaging);
+
+        if (shouldUseMessaging)
         {
             _logger.LogInformation("Using messaging for Pokemon request, requestId: {RequestId}", requestId);
 
-            var result = await GetPokemonViaMessaging(limit, offset, requestId);
-            return ConvertToTypedResponse(result);
+            try
+            {
+                var result = await GetPokemonViaMessaging(limit, offset, requestId);
+                return ConvertToTypedResponse(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Messaging failed, falling back to HTTP for requestId: {RequestId}", requestId);
+                // Fall through to HTTP fallback
+            }
         }
-        else
-        {
-            _logger.LogInformation("Using HTTP for Pokemon request, requestId: {RequestId}", requestId);
-            return await GetPokemonViaHttpAsync(limit, offset, requestId);
-        }
+
+        _logger.LogInformation("Using HTTP fallback for Pokemon request, requestId: {RequestId}", requestId);
+        return await GetPokemonViaHttpAsync(limit, offset, requestId);
     }
 
     public async Task<PaginatedResponseDTO<object>> GetPokemonViaMessaging(int limit, int offset, string correlationId)
     {
         try
         {
+            _logger.LogInformation("Attempting messaging request with correlation: {CorrelationId}", correlationId);
+
             var result = await _messageService.RequestPokemonDataAsync(limit, offset, correlationId);
-            return result ?? CreateErrorResponse("No response from messaging service", correlationId);
+
+            if (result != null)
+            {
+                _logger.LogInformation("Messaging request successful for correlation: {CorrelationId}", correlationId);
+                return result;
+            }
+            else
+            {
+                _logger.LogWarning("Messaging returned null for correlation: {CorrelationId}", correlationId);
+                return CreateErrorResponse("No response from messaging service", correlationId);
+            }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting Pokemon via messaging, correlationId: {CorrelationId}", correlationId);
-            return CreateErrorResponse("Messaging error occurred", correlationId);
+            return CreateErrorResponse($"Messaging error: {ex.Message}", correlationId);
         }
     }
 
@@ -69,7 +97,7 @@ public class WrapperApiService : IWrapperApiService
     {
         try
         {
-            _logger.LogInformation("Calling wrapper API with limit: {Limit}, offset: {Offset}, requestId: {RequestId}",
+            _logger.LogInformation("Making HTTP call to wrapper API with limit: {Limit}, offset: {Offset}, requestId: {RequestId}",
                 limit, offset, requestId);
 
             var requestUri = $"api/v1/pokemon?limit={limit}&offset={offset}";
@@ -78,11 +106,20 @@ public class WrapperApiService : IWrapperApiService
             _httpClient.DefaultRequestHeaders.Remove(CorrelationConstants.CorrelationIdHeader);
             _httpClient.DefaultRequestHeaders.Add(CorrelationConstants.CorrelationIdHeader, requestId);
 
+            _logger.LogDebug("HTTP request URI: {BaseAddress}{RequestUri}", _httpClient.BaseAddress, requestUri);
+
             var response = await _httpClient.GetAsync(requestUri);
+
+            _logger.LogInformation("HTTP response received: {StatusCode} for requestId: {RequestId}",
+                response.StatusCode, requestId);
 
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
+
+                _logger.LogDebug("HTTP response content length: {Length} for requestId: {RequestId}",
+                    content?.Length ?? 0, requestId);
+
                 var apiResponse = JsonSerializer.Deserialize<PaginatedResponseDTO<PokemonListResponse>>(content, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
@@ -90,7 +127,7 @@ public class WrapperApiService : IWrapperApiService
 
                 if (apiResponse?.Success == true)
                 {
-                    _logger.LogInformation("Successfully received data from wrapper API, requestId: {RequestId}", requestId);
+                    _logger.LogInformation("Successfully received data from wrapper API via HTTP, requestId: {RequestId}", requestId);
 
                     // Update request ID to maintain correlation
                     apiResponse.RequestId = requestId;
@@ -106,7 +143,7 @@ public class WrapperApiService : IWrapperApiService
                 }
                 else
                 {
-                    _logger.LogWarning("Wrapper API returned unsuccessful response: {Error}, requestId: {RequestId}",
+                    _logger.LogWarning("Wrapper API returned unsuccessful response via HTTP: {Error}, requestId: {RequestId}",
                         apiResponse?.ErrorMessage, requestId);
 
                     return new PaginatedResponseDTO<PokemonListResponse>
@@ -120,7 +157,7 @@ public class WrapperApiService : IWrapperApiService
             }
             else
             {
-                _logger.LogError("Wrapper API call failed with status code: {StatusCode}, reason: {ReasonPhrase}, requestId: {RequestId}",
+                _logger.LogError("Wrapper API HTTP call failed with status code: {StatusCode}, reason: {ReasonPhrase}, requestId: {RequestId}",
                     response.StatusCode, response.ReasonPhrase, requestId);
 
                 var errorMessage = response.StatusCode switch
@@ -211,5 +248,4 @@ public class WrapperApiService : IWrapperApiService
             Pagination = new PaginationMetadata()
         };
     }
-
 }

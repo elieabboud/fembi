@@ -9,6 +9,7 @@ using PokeApi.Shared.Configurations;
 using PokeApi.Shared.Interfaces;
 using PokeApi.Shared.Middleware;
 using PokeApi.Shared.Services;
+using PokeApi.Shared.DTO;
 using Polly;
 using Polly.Extensions.Http;
 using System.Reflection;
@@ -30,8 +31,25 @@ builder.Services.Configure<RabbitMQOptions>(
 // Memory Cache
 builder.Services.AddMemoryCache();
 
-// RabbitMQ Services
-builder.Services.AddSingleton<IRabbitMQService, RabbitMQService>();
+// FIXED: Add RabbitMQ services with proper error handling
+builder.Services.AddSingleton<IRabbitMQService>(serviceProvider =>
+{
+    var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<RabbitMQOptions>>();
+    var logger = serviceProvider.GetRequiredService<ILogger<RabbitMQService>>();
+
+    try
+    {
+        var service = new RabbitMQService(options, logger);
+        logger.LogInformation("RabbitMQ service initialized successfully");
+        return service;
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to initialize RabbitMQ service, creating stub implementation");
+        return new StubRabbitMQService(logger);
+    }
+});
+
 builder.Services.AddSingleton<IPokemonMessageService, PokemonMessageService>();
 
 // Rate Limiting
@@ -120,6 +138,8 @@ builder.Services.AddHttpClient<IWrapperApiService, WrapperApiService>((servicePr
     client.BaseAddress = new Uri(wrapperApiUrl);
     client.DefaultRequestHeaders.Add("User-Agent", "PokeApiInternal/1.0");
     client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+
+    Console.WriteLine($"Configured HTTP client with base URL: {wrapperApiUrl}");
 })
 .AddPolicyHandler(GetRetryPolicy())
 .AddPolicyHandler(GetCircuitBreakerPolicy());
@@ -127,12 +147,12 @@ builder.Services.AddHttpClient<IWrapperApiService, WrapperApiService>((servicePr
 // Health Checks
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy("Internal API is running"))
-    .AddCheck<RabbitMQHealthCheck>("rabbitmq")
-    .AddCheck("wrapper-api", () =>
+    .AddCheck("wrapper-api-http", () =>
     {
-        // This will be replaced with actual wrapper API health check
-        return HealthCheckResult.Healthy("Wrapper API connection configured");
-    });
+        // Simple health check that doesn't depend on RabbitMQ
+        return HealthCheckResult.Healthy("Wrapper API HTTP connection configured");
+    })
+    .AddCheck<RabbitMQHealthCheck>("rabbitmq");
 
 // Configure Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
@@ -142,7 +162,7 @@ builder.Services.AddSwaggerGen(c =>
     {
         Title = "Pokemon Internal API with RabbitMQ",
         Version = "v1",
-        Description = "Internal API that orchestrates calls to the Pokemon Wrapper API via RabbitMQ messaging with enhanced error handling and monitoring",
+        Description = "Internal API that orchestrates calls to the Pokemon Wrapper API via RabbitMQ messaging with HTTP fallback and enhanced error handling",
         Contact = new OpenApiContact
         {
             Name = "Development Team",
@@ -157,15 +177,6 @@ builder.Services.AddSwaggerGen(c =>
     {
         c.IncludeXmlComments(xmlPath);
     }
-
-    // Add security definition for API keys (optional)
-    c.AddSecurityDefinition("ApiKey", new OpenApiSecurityScheme
-    {
-        Description = "API Key needed to access the endpoints",
-        In = ParameterLocation.Header,
-        Name = "X-API-Key",
-        Type = SecuritySchemeType.ApiKey
-    });
 
     c.EnableAnnotations();
 });
@@ -245,4 +256,65 @@ app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthC
     Predicate = _ => false
 });
 
+Console.WriteLine("Internal API starting...");
+Console.WriteLine($"UseMessaging setting: {app.Configuration.GetValue<bool>("UseMessaging", true)}");
+Console.WriteLine($"WrapperApi BaseUrl: {app.Configuration.GetValue<string>("WrapperApi:BaseUrl")}");
+
 app.Run();
+
+// FIXED: Stub RabbitMQ service for graceful degradation
+public class StubRabbitMQService : IRabbitMQService
+{
+    private readonly ILogger _logger;
+
+    public StubRabbitMQService(ILogger logger)
+    {
+        _logger = logger;
+    }
+
+    public void DeclareInfrastructure() { }
+    public void Dispose() { }
+    public Task<bool> IsHealthyAsync() => Task.FromResult(false);
+    public Task<bool> PublishAsync<T>(string exchange, string routingKey, T message, string? correlationId = null, Dictionary<string, object>? headers = null, CancellationToken cancellationToken = default)
+        => Task.FromResult(false);
+    public Task<TResponse?> PublishAndWaitForReplyAsync<TRequest, TResponse>(string exchange, string routingKey, TRequest request, string replyQueue, TimeSpan timeout, string? correlationId = null, CancellationToken cancellationToken = default)
+        => Task.FromResult<TResponse?>(default);
+    public Task StartConsumingAsync<T>(string queueName, Func<MessageEnvelope<T>, Task<bool>> messageHandler, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+    public Task StopConsumingAsync(string queueName) => Task.CompletedTask;
+}
+
+// RabbitMQ Health Check implementation
+public class RabbitMQHealthCheck : IHealthCheck
+{
+    private readonly IRabbitMQService _rabbitMQService;
+    private readonly ILogger<RabbitMQHealthCheck> _logger;
+
+    public RabbitMQHealthCheck(IRabbitMQService rabbitMQService, ILogger<RabbitMQHealthCheck> logger)
+    {
+        _rabbitMQService = rabbitMQService;
+        _logger = logger;
+    }
+
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var isHealthy = await _rabbitMQService.IsHealthyAsync();
+
+            if (isHealthy)
+            {
+                return HealthCheckResult.Healthy("RabbitMQ is connected and operational");
+            }
+            else
+            {
+                return HealthCheckResult.Degraded("RabbitMQ connection is not available");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "RabbitMQ health check failed");
+            return HealthCheckResult.Degraded($"RabbitMQ health check failed: {ex.Message}");
+        }
+    }
+}

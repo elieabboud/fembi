@@ -31,7 +31,9 @@ namespace PokeApi.Shared.Services
             _jsonOptions = new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                WriteIndented = false
+                WriteIndented = false,
+                PropertyNameCaseInsensitive = true,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
             };
             _pendingReplies = new ConcurrentDictionary<string, TaskCompletionSource<string>>();
             _consumers = new ConcurrentDictionary<string, EventingBasicConsumer>();
@@ -151,10 +153,19 @@ namespace PokeApi.Shared.Services
                 properties.Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
                 properties.Headers = new Dictionary<string, object>(envelope.Headers);
 
-                _channel.BasicPublish(exchange, routingKey, properties, body);
-
-                _logger.LogDebug("Message published to exchange: {Exchange}, routing key: {RoutingKey}, correlation: {CorrelationId}",
-                    exchange, routingKey, envelope.CorrelationId);
+                // FIXED: Handle empty exchange for direct queue publishing
+                if (string.IsNullOrEmpty(exchange))
+                {
+                    _channel.BasicPublish("", routingKey, properties, body);
+                    _logger.LogDebug("Message published directly to queue: {Queue}, correlation: {CorrelationId}",
+                        routingKey, envelope.CorrelationId);
+                }
+                else
+                {
+                    _channel.BasicPublish(exchange, routingKey, properties, body);
+                    _logger.LogDebug("Message published to exchange: {Exchange}, routing key: {RoutingKey}, correlation: {CorrelationId}",
+                        exchange, routingKey, envelope.CorrelationId);
+                }
 
                 return true;
             }
@@ -177,8 +188,11 @@ namespace PokeApi.Shared.Services
 
             try
             {
-                // Set up reply consumer if not already done
+                // FIXED: Set up reply consumer BEFORE publishing the request
                 await EnsureReplyConsumer(replyQueue);
+
+                // Add a small delay to ensure consumer is fully set up
+                await Task.Delay(100, cancellationToken);
 
                 // Publish request
                 var published = await PublishAsync(exchange, routingKey, request, correlationId,
@@ -187,8 +201,12 @@ namespace PokeApi.Shared.Services
                 if (!published)
                 {
                     _pendingReplies.TryRemove(correlationId, out _);
+                    _logger.LogError("Failed to publish request for correlation: {CorrelationId}", correlationId);
                     return default;
                 }
+
+                _logger.LogInformation("Request published, waiting for reply. Correlation: {CorrelationId}, Timeout: {Timeout}ms",
+                    correlationId, timeout.TotalMilliseconds);
 
                 // Wait for reply
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -198,11 +216,14 @@ namespace PokeApi.Shared.Services
                 {
                     var replyJson = await tcs.Task.WaitAsync(timeoutCts.Token);
                     var envelope = JsonSerializer.Deserialize<MessageEnvelope<TResponse>>(replyJson, _jsonOptions);
+
+                    _logger.LogInformation("Received reply for correlation: {CorrelationId}", correlationId);
                     return envelope.Payload;
                 }
                 catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
                 {
-                    _logger.LogWarning("Request timeout waiting for reply, correlation: {CorrelationId}", correlationId);
+                    _logger.LogWarning("Request timeout waiting for reply, correlation: {CorrelationId}, timeout: {Timeout}ms",
+                        correlationId, timeout.TotalMilliseconds);
                     return default;
                 }
             }
@@ -216,31 +237,54 @@ namespace PokeApi.Shared.Services
         {
             if (_consumers.ContainsKey(replyQueue) || _channel == null) return;
 
-            _channel.QueueDeclare(replyQueue, durable: false, exclusive: true, autoDelete: true);
-
-            var consumer = new EventingBasicConsumer(_channel);
-            consumer.Received += (_, ea) =>
+            lock (_lock)
             {
+                if (_consumers.ContainsKey(replyQueue)) return;
+
                 try
                 {
-                    var correlationId = ea.BasicProperties.CorrelationId;
-                    if (!string.IsNullOrEmpty(correlationId) && _pendingReplies.TryRemove(correlationId, out var tcs))
-                    {
-                        var body = Encoding.UTF8.GetString(ea.Body.ToArray());
-                        tcs.SetResult(body);
-                    }
+                    // FIXED: Declare reply queue as durable but with auto-delete after use
+                    _channel.QueueDeclare(replyQueue, durable: false, exclusive: false, autoDelete: true);
 
-                    _channel.BasicAck(ea.DeliveryTag, false);
+                    var consumer = new EventingBasicConsumer(_channel);
+                    consumer.Received += (_, ea) =>
+                    {
+                        try
+                        {
+                            var correlationId = ea.BasicProperties.CorrelationId;
+                            _logger.LogDebug("Received reply message for correlation: {CorrelationId}", correlationId);
+
+                            if (!string.IsNullOrEmpty(correlationId) && _pendingReplies.TryRemove(correlationId, out var tcs))
+                            {
+                                var body = Encoding.UTF8.GetString(ea.Body.ToArray());
+                                tcs.SetResult(body);
+                                _logger.LogDebug("Reply processed successfully for correlation: {CorrelationId}", correlationId);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("Received reply with unknown correlation ID: {CorrelationId}", correlationId);
+                            }
+
+                            _channel.BasicAck(ea.DeliveryTag, false);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error processing reply message");
+                            _channel?.BasicNack(ea.DeliveryTag, false, false);
+                        }
+                    };
+
+                    _consumers[replyQueue] = consumer;
+                    _channel.BasicConsume(replyQueue, false, consumer);
+
+                    _logger.LogInformation("Reply consumer set up for queue: {ReplyQueue}", replyQueue);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error processing reply message");
-                    _channel?.BasicNack(ea.DeliveryTag, false, false);
+                    _logger.LogError(ex, "Failed to set up reply consumer for queue: {ReplyQueue}", replyQueue);
+                    throw;
                 }
-            };
-
-            _consumers[replyQueue] = consumer;
-            _channel.BasicConsume(replyQueue, false, consumer);
+            }
         }
 
         public async Task StartConsumingAsync<T>(string queueName, Func<MessageEnvelope<T>, Task<bool>> messageHandler,
@@ -258,11 +302,15 @@ namespace PokeApi.Shared.Services
 
                     if (envelope != null)
                     {
+                        _logger.LogDebug("Processing message from queue: {QueueName}, correlation: {CorrelationId}",
+                            queueName, envelope.CorrelationId);
+
                         var success = await messageHandler(envelope);
 
                         if (success)
                         {
                             _channel.BasicAck(ea.DeliveryTag, false);
+                            _logger.LogDebug("Message processed successfully from queue: {QueueName}", queueName);
                         }
                         else
                         {
@@ -286,16 +334,21 @@ namespace PokeApi.Shared.Services
                                 };
 
                                 _channel.BasicNack(ea.DeliveryTag, false, true);
+                                _logger.LogWarning("Message requeued for retry {RetryCount}/{MaxRetries} from queue: {QueueName}",
+                                    retryCount, _options.RetryAttempts, queueName);
                             }
                             else
                             {
                                 _channel.BasicNack(ea.DeliveryTag, false, false); // Send to DLQ
+                                _logger.LogError("Message sent to DLQ after {MaxRetries} retries from queue: {QueueName}",
+                                    _options.RetryAttempts, queueName);
                             }
                         }
                     }
                     else
                     {
                         _channel.BasicNack(ea.DeliveryTag, false, false);
+                        _logger.LogError("Failed to deserialize message from queue: {QueueName}", queueName);
                     }
                 }
                 catch (Exception ex)
