@@ -226,12 +226,65 @@ public class WrapperApiService : IWrapperApiService
 
     private static PaginatedResponseDTO<PokemonListResponse> ConvertToTypedResponse(PaginatedResponseDTO<object> source)
     {
+        if (source?.Data == null)
+        {
+            return new PaginatedResponseDTO<PokemonListResponse>
+            {
+                Data = null,
+                Pagination = source?.Pagination ?? new PaginationMetadata(),
+                Success = source?.Success ?? false,
+                ErrorMessage = source?.ErrorMessage ?? "No data received",
+                Timestamp = source?.Timestamp ?? DateTime.UtcNow,
+                RequestId = source?.RequestId
+            };
+        }
+
+        PokemonListResponse? pokemonData = null;
+
+        if (source.Data is PokemonListResponse directPokemon)
+        {
+            // Direct cast if it's already the right type
+            pokemonData = directPokemon;
+        }
+        else if (source.Data is JsonElement jsonElement)
+        {
+            try
+            {
+                var jsonString = jsonElement.GetRawText();
+                pokemonData = JsonSerializer.Deserialize<PokemonListResponse>(jsonString, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to deserialize JsonElement to PokemonListResponse: {ex.Message}");
+            }
+        }
+        else
+        {
+            try
+            {
+                var jsonString = JsonSerializer.Serialize(source.Data);
+                pokemonData = JsonSerializer.Deserialize<PokemonListResponse>(jsonString, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to convert object to PokemonListResponse: {ex.Message}");
+            }
+        }
+
         return new PaginatedResponseDTO<PokemonListResponse>
         {
-            Data = source.Data as PokemonListResponse,
-            Pagination = source.Pagination,
-            Success = source.Success,
-            ErrorMessage = source.ErrorMessage,
+            Data = pokemonData,
+            Pagination = source.Pagination ?? new PaginationMetadata(),
+            Success = source.Success && pokemonData != null,
+            ErrorMessage = pokemonData == null ? "Failed to convert response data" : source.ErrorMessage,
             Timestamp = source.Timestamp,
             RequestId = source.RequestId
         };

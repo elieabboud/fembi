@@ -28,13 +28,19 @@ namespace PokeApi.Shared.Services
         {
             _options = options.Value;
             _logger = logger;
+
             _jsonOptions = new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                 WriteIndented = false,
                 PropertyNameCaseInsensitive = true,
-                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never,
+                IgnoreReadOnlyProperties = false,
+                IncludeFields = false,
+                NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString,
+                ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
             };
+
             _pendingReplies = new ConcurrentDictionary<string, TaskCompletionSource<string>>();
             _consumers = new ConcurrentDictionary<string, EventingBasicConsumer>();
 
