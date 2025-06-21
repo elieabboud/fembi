@@ -86,16 +86,19 @@ namespace PokeApi.Shared.Services
                 // Declare main exchanges
                 _channel.ExchangeDeclare(ExchangeNames.Pokemon, ExchangeType.Topic, durable: true);
                 _channel.ExchangeDeclare(ExchangeNames.Api, ExchangeType.Topic, durable: true);
+                _channel.ExchangeDeclare(ExchangeNames.Audit, ExchangeType.Topic, durable: true);
 
                 // Declare DLX exchanges
                 _channel.ExchangeDeclare(ExchangeNames.PokemonDLX, ExchangeType.Topic, durable: true);
                 _channel.ExchangeDeclare(ExchangeNames.ApiDLX, ExchangeType.Topic, durable: true);
+                _channel.ExchangeDeclare(ExchangeNames.AuditDLX, ExchangeType.Topic, durable: true);
 
                 // FIXED: Use safe queue declaration that handles existing queues
                 SafeDeclareQueueWithDLQ(QueueNames.PokemonRequest, RoutingKeys.PokemonRequest, ExchangeNames.Pokemon, ExchangeNames.PokemonDLX);
                 SafeDeclareQueueWithDLQ(QueueNames.PokemonResponse, RoutingKeys.PokemonResponse, ExchangeNames.Pokemon, ExchangeNames.PokemonDLX);
                 SafeDeclareQueueWithDLQ(QueueNames.ApiRequest, RoutingKeys.ApiRequest, ExchangeNames.Api, ExchangeNames.ApiDLX);
                 SafeDeclareQueueWithDLQ(QueueNames.ApiResponse, RoutingKeys.ApiResponse, ExchangeNames.Api, ExchangeNames.ApiDLX);
+                SafeDeclareQueueWithDLQ(QueueNames.AuditEvent, RoutingKeys.AuditEvent, ExchangeNames.Audit, ExchangeNames.AuditDLX);
 
                 _logger.LogInformation("RabbitMQ infrastructure declared successfully");
             }
@@ -121,11 +124,11 @@ namespace PokeApi.Shared.Services
 
                 // Try to declare main queue with DLX configuration
                 var args = new Dictionary<string, object>
-        {
-            {"x-dead-letter-exchange", dlxExchange},
-            {"x-dead-letter-routing-key", dlqRoutingKey},
-            {"x-message-ttl", 300000} // 5 minutes
-        };
+                {
+                    {"x-dead-letter-exchange", dlxExchange},
+                    {"x-dead-letter-routing-key", dlqRoutingKey},
+                    {"x-message-ttl", 300000} // 5 minutes
+                };
 
                 _channel.QueueDeclare(queueName, durable: true, exclusive: false, autoDelete: false, args);
                 _channel.QueueBind(queueName, exchange, routingKey);
