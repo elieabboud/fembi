@@ -22,14 +22,6 @@ services:
       retries: 3
       start_period: 60s
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
 
   # Pokemon API Wrapper Service
   wrapper-api:
@@ -54,25 +46,16 @@ services:
       - RabbitMQ__Password=pokemon_pass
       - RabbitMQ__VirtualHost=pokemon_vhost
     depends_on:
-      rabbitmq:
-        condition: service_healthy
+      - rabbitmq  # Simplified dependency - no condition check
     networks:
       - pokemon-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:5001/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
 
   # Pokemon Internal API Service
   internal-api:
@@ -86,6 +69,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5000
       - ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Information
+      - UseMessaging=true
       - WrapperApi__BaseUrl=http://wrapper-api:5001
       - WrapperApi__TimeoutSeconds=30
       - WrapperApi__RetryAttempts=3
@@ -97,27 +81,17 @@ services:
       - RabbitMQ__Password=pokemon_pass
       - RabbitMQ__VirtualHost=pokemon_vhost
     depends_on:
-      rabbitmq:
-        condition: service_healthy
-      wrapper-api:
-        condition: service_healthy
+      - rabbitmq
+      - wrapper-api
     networks:
       - pokemon-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
 
 networks:
   pokemon-network:
