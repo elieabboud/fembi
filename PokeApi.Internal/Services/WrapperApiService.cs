@@ -40,7 +40,7 @@ public class WrapperApiService : IWrapperApiService
     {
         var requestId = Guid.NewGuid().ToString();
 
-        // FIXED: Check RabbitMQ health before attempting messaging
+        // Check RabbitMQ health before attempting messaging
         var isRabbitMQHealthy = await _rabbitMQService.IsHealthyAsync();
         var shouldUseMessaging = _useMessaging && isRabbitMQHealthy;
 
@@ -224,17 +224,82 @@ public class WrapperApiService : IWrapperApiService
         }
     }
 
-    private static PaginatedResponseDTO<PokemonListResponse> ConvertToTypedResponse(PaginatedResponseDTO<object> source)
+    // FIXED: Improved conversion with proper type handling and JSON deserialization
+    private PaginatedResponseDTO<PokemonListResponse> ConvertToTypedResponse(PaginatedResponseDTO<object> source)
     {
-        return new PaginatedResponseDTO<PokemonListResponse>
+        try
         {
-            Data = source.Data as PokemonListResponse,
-            Pagination = source.Pagination,
-            Success = source.Success,
-            ErrorMessage = source.ErrorMessage,
-            Timestamp = source.Timestamp,
-            RequestId = source.RequestId
-        };
+            _logger.LogDebug("Converting generic response to typed response. Source has data: {HasData}, DataType: {DataType}",
+                source.Data != null, source.Data?.GetType().Name);
+
+            PokemonListResponse? pokemonData = null;
+
+            if (source.Data != null)
+            {
+                // Handle different possible data types from messaging
+                if (source.Data is PokemonListResponse directData)
+                {
+                    // Data is already the correct type
+                    pokemonData = directData;
+                    _logger.LogDebug("Data is already PokemonListResponse type");
+                }
+                else if (source.Data is JsonElement jsonElement)
+                {
+                    // Data came as JsonElement, deserialize it
+                    var jsonString = jsonElement.GetRawText();
+                    pokemonData = JsonSerializer.Deserialize<PokemonListResponse>(jsonString, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+                    _logger.LogDebug("Deserialized JsonElement to PokemonListResponse. Pokemon count: {Count}",
+                        pokemonData?.Results?.Count ?? 0);
+                }
+                else
+                {
+                    // Try to serialize and deserialize as a fallback
+                    var jsonString = JsonSerializer.Serialize(source.Data);
+                    pokemonData = JsonSerializer.Deserialize<PokemonListResponse>(jsonString, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+                    _logger.LogDebug("Serialized/Deserialized object to PokemonListResponse. Pokemon count: {Count}",
+                        pokemonData?.Results?.Count ?? 0);
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Source data is null in ConvertToTypedResponse");
+            }
+
+            var result = new PaginatedResponseDTO<PokemonListResponse>
+            {
+                Data = pokemonData,
+                Pagination = source.Pagination,
+                Success = source.Success,
+                ErrorMessage = source.ErrorMessage,
+                Timestamp = source.Timestamp,
+                RequestId = source.RequestId
+            };
+
+            _logger.LogDebug("Conversion completed. Result has data: {HasData}, Pokemon count: {Count}",
+                result.Data != null, result.Data?.Results?.Count ?? 0);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during type conversion in ConvertToTypedResponse");
+
+            return new PaginatedResponseDTO<PokemonListResponse>
+            {
+                Data = null,
+                Pagination = source.Pagination,
+                Success = false,
+                ErrorMessage = $"Data conversion error: {ex.Message}",
+                Timestamp = source.Timestamp,
+                RequestId = source.RequestId
+            };
+        }
     }
 
     private static PaginatedResponseDTO<object> CreateErrorResponse(string errorMessage, string correlationId)

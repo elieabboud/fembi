@@ -21,7 +21,7 @@ namespace PokeApi.Internal.Services
             _rabbitMQService = rabbitMQService;
             _logger = logger;
             _options = options.Value;
-            // FIXED: Create a unique reply queue name for this instance
+            // Create a unique reply queue name for this instance
             _replyQueueName = $"pokemon.reply.{Environment.MachineName}.{Guid.NewGuid():N}"[..24];
         }
 
@@ -48,7 +48,7 @@ namespace PokeApi.Internal.Services
                     }
                 };
 
-                // FIXED: Use longer timeout and proper cancellation handling
+                // Use longer timeout and proper cancellation handling
                 var timeout = TimeSpan.FromSeconds(Math.Max(_options.RequestTimeoutSeconds, 30));
 
                 _logger.LogInformation("Publishing request with timeout: {Timeout}ms, ReplyQueue: {ReplyQueue}",
@@ -68,7 +68,7 @@ namespace PokeApi.Internal.Services
                     _logger.LogInformation("Received Pokemon response via message queue: Success: {Success}, HasData: {HasData}, Correlation: {CorrelationId}",
                         response.Success, response.Data?.Data != null, correlationId);
 
-                    // FIXED: Log response data details for debugging
+                    // Enhanced logging for debugging data structure
                     if (response.Data?.Data != null)
                     {
                         _logger.LogDebug("Response data type: {DataType}", response.Data.Data.GetType().Name);
@@ -76,11 +76,17 @@ namespace PokeApi.Internal.Services
                         // Try to extract Pokemon count for debugging
                         try
                         {
-                            var jsonString = JsonSerializer.Serialize(response.Data.Data);
-                            var jsonDoc = JsonDocument.Parse(jsonString);
+                            var dataAsJson = JsonSerializer.Serialize(response.Data.Data);
+                            _logger.LogDebug("Response data JSON length: {Length}", dataAsJson.Length);
+
+                            var jsonDoc = JsonDocument.Parse(dataAsJson);
                             if (jsonDoc.RootElement.TryGetProperty("results", out var resultsElement))
                             {
                                 _logger.LogDebug("Pokemon results array length: {Count}", resultsElement.GetArrayLength());
+                            }
+                            else if (jsonDoc.RootElement.TryGetProperty("Results", out var resultsElementCapital))
+                            {
+                                _logger.LogDebug("Pokemon Results array length: {Count}", resultsElementCapital.GetArrayLength());
                             }
                         }
                         catch (Exception ex)
@@ -126,20 +132,63 @@ namespace PokeApi.Internal.Services
             await Task.CompletedTask;
         }
 
-        // FIXED: Improved conversion with better data preservation
-        private static PaginatedResponseDTO<object> ConvertFromMessageResponse(PokemonResponseMessage response)
+        // FIXED: Improved conversion with better data preservation and type handling
+        private PaginatedResponseDTO<object> ConvertFromMessageResponse(PokemonResponseMessage response)
         {
-            var result = new PaginatedResponseDTO<object>
+            try
             {
-                Data = response.Data?.Data, // Extract the actual data from the nested structure
-                Pagination = response.Data?.Pagination ?? new PaginationMetadata(),
-                Success = response.Success,
-                ErrorMessage = response.ErrorMessage,
-                Timestamp = response.ResponseTimestamp,
-                RequestId = response.RequestId
-            };
+                _logger.LogDebug("Converting PokemonResponseMessage to PaginatedResponseDTO<object>");
 
-            return result;
+                var result = new PaginatedResponseDTO<object>
+                {
+                    Data = response.Data?.Data, // Extract the actual data from the nested structure
+                    Pagination = response.Data?.Pagination ?? new PaginationMetadata(),
+                    Success = response.Success,
+                    ErrorMessage = response.ErrorMessage,
+                    Timestamp = response.ResponseTimestamp,
+                    RequestId = response.RequestId
+                };
+
+                // Additional validation and logging
+                if (result.Data != null)
+                {
+                    _logger.LogDebug("Converted data type: {DataType}", result.Data.GetType().Name);
+
+                    // Try to log Pokemon count if possible
+                    try
+                    {
+                        if (result.Data is JsonElement jsonElement &&
+                            jsonElement.TryGetProperty("results", out var resultsElement))
+                        {
+                            _logger.LogDebug("Found {Count} Pokemon in results", resultsElement.GetArrayLength());
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Could not extract Pokemon count from data");
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("Converted data is null");
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error converting PokemonResponseMessage to PaginatedResponseDTO");
+
+                return new PaginatedResponseDTO<object>
+                {
+                    Data = null,
+                    Pagination = new PaginationMetadata(),
+                    Success = false,
+                    ErrorMessage = $"Data conversion error: {ex.Message}",
+                    Timestamp = DateTime.UtcNow,
+                    RequestId = response.RequestId
+                };
+            }
         }
 
         private static PaginatedResponseDTO<object> CreateErrorResponse(string errorMessage, string correlationId)

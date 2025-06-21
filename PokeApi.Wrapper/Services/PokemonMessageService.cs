@@ -74,7 +74,7 @@ namespace PokeApi.Wrapper.Services
 
                 var processingTime = DateTime.UtcNow - startTime;
 
-                // FIXED: Create response message with proper data conversion
+                // FIXED: Create response message with proper data preservation
                 var responseMessage = new PokemonResponseMessage
                 {
                     RequestId = request.RequestId,
@@ -85,19 +85,21 @@ namespace PokeApi.Wrapper.Services
                     ProcessingTime = processingTime
                 };
 
-                // Log the response data for debugging
+                // Enhanced logging for debugging
                 if (responseMessage.Data != null)
                 {
-                    _logger.LogInformation("Response data created: HasData={HasData}, DataType={DataType}",
+                    _logger.LogInformation("Response data created successfully: HasData={HasData}, DataType={DataType}, PokemonCount={PokemonCount}",
                         responseMessage.Data.Data != null,
-                        responseMessage.Data.Data?.GetType().Name);
+                        responseMessage.Data.Data?.GetType().Name,
+                        responseMessage.Data.Data is PokemonListResponse pokemonList ? pokemonList.Results?.Count ?? 0 : "N/A");
                 }
                 else
                 {
-                    _logger.LogWarning("Response data is null for request: {RequestId}", request.RequestId);
+                    _logger.LogWarning("Response data is null for request: {RequestId}, Original success: {OriginalSuccess}",
+                        request.RequestId, result.Success);
                 }
 
-                // Get reply-to queue from headers - THIS IS THE KEY FIX
+                // Get reply-to queue from request
                 var replyTo = request.ReplyTo;
                 if (string.IsNullOrEmpty(replyTo) && request.Headers.TryGetValue("reply-to", out var replyToValue))
                 {
@@ -112,7 +114,7 @@ namespace PokeApi.Wrapper.Services
 
                 _logger.LogInformation("Sending response to queue: {ReplyTo} for request: {RequestId}", replyTo, request.RequestId);
 
-                // Publish response directly to the reply queue instead of using exchange/routing key
+                // Publish response directly to the reply queue
                 var published = await _rabbitMQService.PublishAsync(
                     "", // Empty exchange for direct queue publishing
                     replyTo, // Direct queue name as routing key
@@ -161,29 +163,55 @@ namespace PokeApi.Wrapper.Services
             }
         }
 
-        // FIXED: Improved data conversion with detailed logging
+        // FIXED: Improved data conversion that preserves the Pokemon data structure
         private PaginatedResponseDTO<object> ConvertToGenericResponse(PaginatedResponseDTO<PokemonListResponse> source)
         {
-            _logger.LogDebug("Converting PokemonListResponse to generic response. Source data: {HasData}, Pokemon count: {Count}",
-                source.Data != null, source.Data?.Results?.Count ?? 0);
-
-            var converted = new PaginatedResponseDTO<object>
+            try
             {
-                Data = source.Data, // Keep the PokemonListResponse as-is
-                Pagination = source.Pagination,
-                Success = source.Success,
-                ErrorMessage = source.ErrorMessage,
-                Timestamp = source.Timestamp,
-                RequestId = source.RequestId
-            };
+                _logger.LogDebug("Converting PokemonListResponse to generic response. Source data: {HasData}, Pokemon count: {Count}",
+                    source.Data != null, source.Data?.Results?.Count ?? 0);
 
-            _logger.LogDebug("Converted response: HasData={HasData}, DataType={DataType}",
-                converted.Data != null, converted.Data?.GetType().Name);
+                // Ensure the Pokemon data is preserved correctly
+                var converted = new PaginatedResponseDTO<object>
+                {
+                    Data = source.Data, // Keep the PokemonListResponse as-is, don't convert to object
+                    Pagination = source.Pagination,
+                    Success = source.Success,
+                    ErrorMessage = source.ErrorMessage,
+                    Timestamp = source.Timestamp,
+                    RequestId = source.RequestId
+                };
 
-            return converted;
+                // Verify the conversion
+                if (converted.Data is PokemonListResponse pokemonData)
+                {
+                    _logger.LogDebug("Conversion successful: Pokemon count={Count}, HasNext={HasNext}",
+                        pokemonData.Results?.Count ?? 0, pokemonData.Next != null);
+                }
+                else
+                {
+                    _logger.LogWarning("Conversion resulted in unexpected data type: {DataType}",
+                        converted.Data?.GetType().Name ?? "null");
+                }
+
+                return converted;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error converting PokemonListResponse to generic response");
+
+                return new PaginatedResponseDTO<object>
+                {
+                    Data = null,
+                    Pagination = source.Pagination ?? new PaginationMetadata(),
+                    Success = false,
+                    ErrorMessage = $"Data conversion error: {ex.Message}",
+                    Timestamp = DateTime.UtcNow,
+                    RequestId = source.RequestId
+                };
+            }
         }
 
-        // IHostedService implementation
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             await StartProcessingRequestsAsync(cancellationToken);
