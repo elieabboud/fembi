@@ -1,12 +1,11 @@
-﻿using PokeApi.Shared.Configurations;
-using PokeApi.Shared.DTO;
-using PokeApi.Shared.Models;
+﻿using PokeApi.Shared.DTO;
+using static PokeApi.Shared.Models.PokemonModels;
 
 namespace PokeApi.Internal.Interfaces
 {
     public interface IWrapperApiService
     {
-        Task<PaginatedResponseDTO<UnifiedResponse>> GetDataFromWrapper(ExternalApiSource source, int limit, int offset);
-        Task<PaginatedResponseDTO<object>> GetDataViaMessaging(ExternalApiSource source, int limit, int offset, string correlationId);
+        Task<PaginatedResponseDTO<PokemonListResponse>> GetPokemonFromWrapper(int limit, int offset);
+        Task<PaginatedResponseDTO<object>> GetPokemonViaMessaging(int limit, int offset, string correlationId);
     }
 }

@@ -4,302 +4,248 @@ using PokeApi.Shared.Configurations;
 using PokeApi.Shared.DTO;
 using PokeApi.Shared.Interfaces;
 using PokeApi.Shared.Middleware;
-using PokeApi.Shared.Models;
 using System.Text.Json;
+using static PokeApi.Shared.Models.PokemonModels;
 
-namespace PokeApi.Internal.Services
+namespace PokeApi.Internal.Services;
+
+public class WrapperApiService : IWrapperApiService
 {
-    public class WrapperApiService : IWrapperApiService
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<WrapperApiService> _logger;
+    private readonly WrapperApiOptions _options;
+    private readonly IPokemonMessageService _messageService;
+    private readonly IRabbitMQService _rabbitMQService;
+    private readonly bool _useMessaging;
+
+    public WrapperApiService(
+        HttpClient httpClient,
+        ILogger<WrapperApiService> logger,
+        IOptions<WrapperApiOptions> options,
+        IPokemonMessageService messageService,
+        IRabbitMQService rabbitMQService,
+        IConfiguration configuration)
     {
-        private readonly HttpClient _httpClient;
-        private readonly ILogger<WrapperApiService> _logger;
-        private readonly WrapperApiOptions _options;
-        private readonly IPokemonMessageService _messageService;
-        private readonly IRabbitMQService _rabbitMQService;
-        private readonly bool _useMessaging;
+        _httpClient = httpClient;
+        _logger = logger;
+        _options = options.Value;
+        _messageService = messageService;
+        _rabbitMQService = rabbitMQService;
 
-        public WrapperApiService(
-            HttpClient httpClient,
-            ILogger<WrapperApiService> logger,
-            IOptions<WrapperApiOptions> options,
-            IPokemonMessageService messageService,
-            IRabbitMQService rabbitMQService,
-            IConfiguration configuration)
+        // Allow switching between HTTP and messaging via configuration
+        _useMessaging = configuration.GetValue<bool>("UseMessaging", true);
+    }
+
+    public async Task<PaginatedResponseDTO<PokemonListResponse>> GetPokemonFromWrapper(int limit, int offset)
+    {
+        var requestId = Guid.NewGuid().ToString();
+
+        // FIXED: Check RabbitMQ health before attempting messaging
+        var isRabbitMQHealthy = await _rabbitMQService.IsHealthyAsync();
+        var shouldUseMessaging = _useMessaging && isRabbitMQHealthy;
+
+        _logger.LogInformation("Processing request {RequestId}: UseMessaging={UseMessaging}, RabbitMQHealthy={RabbitMQHealthy}, WillUseMessaging={WillUseMessaging}",
+            requestId, _useMessaging, isRabbitMQHealthy, shouldUseMessaging);
+
+        if (shouldUseMessaging)
         {
-            _httpClient = httpClient;
-            _logger = logger;
-            _options = options.Value;
-            _messageService = messageService;
-            _rabbitMQService = rabbitMQService;
+            _logger.LogInformation("Using messaging for Pokemon request, requestId: {RequestId}", requestId);
 
-            // Allow switching between HTTP and messaging via configuration
-            _useMessaging = configuration.GetValue<bool>("UseMessaging", true);
-        }
-
-        public async Task<PaginatedResponseDTO<UnifiedResponse>> GetDataFromWrapper(ExternalApiSource source, int limit, int offset)
-        {
-            var requestId = Guid.NewGuid().ToString();
-
-            // Check RabbitMQ health before attempting messaging
-            var isRabbitMQHealthy = await _rabbitMQService.IsHealthyAsync();
-            var shouldUseMessaging = _useMessaging && isRabbitMQHealthy;
-
-            _logger.LogInformation("Processing request {RequestId}: Source={Source}, UseMessaging={UseMessaging}, RabbitMQHealthy={RabbitMQHealthy}, WillUseMessaging={WillUseMessaging}",
-                requestId, source, _useMessaging, isRabbitMQHealthy, shouldUseMessaging);
-
-            if (shouldUseMessaging)
-            {
-                _logger.LogInformation("Using messaging for {Source} request, requestId: {RequestId}", source, requestId);
-
-                try
-                {
-                    var result = await GetDataViaMessaging(source, limit, offset, requestId);
-                    return ConvertToTypedResponse(result);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Messaging failed for {Source}, falling back to HTTP for requestId: {RequestId}", source, requestId);
-                    // Fall through to HTTP fallback
-                }
-            }
-
-            _logger.LogInformation("Using HTTP fallback for {Source} request, requestId: {RequestId}", source, requestId);
-            return await GetDataViaHttpAsync(source, limit, offset, requestId);
-        }
-
-        public async Task<PaginatedResponseDTO<object>> GetDataViaMessaging(ExternalApiSource source, int limit, int offset, string correlationId)
-        {
             try
             {
-                _logger.LogInformation("Attempting messaging request for {Source} with correlation: {CorrelationId}", source, correlationId);
-
-                var result = await _messageService.RequestPokemonDataAsync(limit, offset, correlationId);
-
-                if (result != null)
-                {
-                    _logger.LogInformation("Messaging request successful for {Source}, correlation: {CorrelationId}", source, correlationId);
-                    return result;
-                }
-                else
-                {
-                    _logger.LogWarning("Messaging returned null for {Source}, correlation: {CorrelationId}", source, correlationId);
-                    return CreateErrorResponse("No response from messaging service", correlationId);
-                }
+                var result = await GetPokemonViaMessaging(limit, offset, requestId);
+                return ConvertToTypedResponse(result);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting data via messaging for {Source}, correlationId: {CorrelationId}", source, correlationId);
-                return CreateErrorResponse($"Messaging error: {ex.Message}", correlationId);
+                _logger.LogError(ex, "Messaging failed, falling back to HTTP for requestId: {RequestId}", requestId);
+                // Fall through to HTTP fallback
             }
         }
 
-        private async Task<PaginatedResponseDTO<UnifiedResponse>> GetDataViaHttpAsync(ExternalApiSource source, int limit, int offset, string requestId)
+        _logger.LogInformation("Using HTTP fallback for Pokemon request, requestId: {RequestId}", requestId);
+        return await GetPokemonViaHttpAsync(limit, offset, requestId);
+    }
+
+    public async Task<PaginatedResponseDTO<object>> GetPokemonViaMessaging(int limit, int offset, string correlationId)
+    {
+        try
         {
-            try
+            _logger.LogInformation("Attempting messaging request with correlation: {CorrelationId}", correlationId);
+
+            var result = await _messageService.RequestPokemonDataAsync(limit, offset, correlationId);
+
+            if (result != null)
             {
-                _logger.LogInformation("Making HTTP call to wrapper API for {Source} with limit: {Limit}, offset: {Offset}, requestId: {RequestId}",
-                    source, limit, offset, requestId);
+                _logger.LogInformation("Messaging request successful for correlation: {CorrelationId}", correlationId);
+                return result;
+            }
+            else
+            {
+                _logger.LogWarning("Messaging returned null for correlation: {CorrelationId}", correlationId);
+                return CreateErrorResponse("No response from messaging service", correlationId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting Pokemon via messaging, correlationId: {CorrelationId}", correlationId);
+            return CreateErrorResponse($"Messaging error: {ex.Message}", correlationId);
+        }
+    }
 
-                var requestUri = $"api/v1/data?source={source.ToString().ToLower()}&limit={limit}&offset={offset}";
+    private async Task<PaginatedResponseDTO<PokemonListResponse>> GetPokemonViaHttpAsync(int limit, int offset, string requestId)
+    {
+        try
+        {
+            _logger.LogInformation("Making HTTP call to wrapper API with limit: {Limit}, offset: {Offset}, requestId: {RequestId}",
+                limit, offset, requestId);
 
-                // Add correlation ID header
-                _httpClient.DefaultRequestHeaders.Remove(CorrelationConstants.CorrelationIdHeader);
-                _httpClient.DefaultRequestHeaders.Add(CorrelationConstants.CorrelationIdHeader, requestId);
+            var requestUri = $"api/v1/pokemon?limit={limit}&offset={offset}";
 
-                _logger.LogDebug("HTTP request URI: {BaseAddress}{RequestUri}", _httpClient.BaseAddress, requestUri);
+            // Add correlation ID header
+            _httpClient.DefaultRequestHeaders.Remove(CorrelationConstants.CorrelationIdHeader);
+            _httpClient.DefaultRequestHeaders.Add(CorrelationConstants.CorrelationIdHeader, requestId);
 
-                var response = await _httpClient.GetAsync(requestUri);
+            _logger.LogDebug("HTTP request URI: {BaseAddress}{RequestUri}", _httpClient.BaseAddress, requestUri);
 
-                _logger.LogInformation("HTTP response received: {StatusCode} for {Source} requestId: {RequestId}",
-                    response.StatusCode, source, requestId);
+            var response = await _httpClient.GetAsync(requestUri);
 
-                if (response.IsSuccessStatusCode)
+            _logger.LogInformation("HTTP response received: {StatusCode} for requestId: {RequestId}",
+                response.StatusCode, requestId);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+
+                _logger.LogDebug("HTTP response content length: {Length} for requestId: {RequestId}",
+                    content?.Length ?? 0, requestId);
+
+                var apiResponse = JsonSerializer.Deserialize<PaginatedResponseDTO<PokemonListResponse>>(content, new JsonSerializerOptions
                 {
-                    var content = await response.Content.ReadAsStringAsync();
+                    PropertyNameCaseInsensitive = true
+                });
 
-                    _logger.LogDebug("HTTP response content length: {Length} for {Source} requestId: {RequestId}",
-                        content?.Length ?? 0, source, requestId);
+                if (apiResponse?.Success == true)
+                {
+                    _logger.LogInformation("Successfully received data from wrapper API via HTTP, requestId: {RequestId}", requestId);
 
-                    var apiResponse = JsonSerializer.Deserialize<PaginatedResponseDTO<UnifiedResponse>>(content, new JsonSerializerOptions
+                    // Update request ID to maintain correlation
+                    apiResponse.RequestId = requestId;
+
+                    // Log cache status if available
+                    if (response.Headers.TryGetValues("X-Cache-Status", out var cacheStatus))
                     {
-                        PropertyNameCaseInsensitive = true
-                    });
-
-                    if (apiResponse?.Success == true)
-                    {
-                        _logger.LogInformation("Successfully received data from wrapper API via HTTP for {Source}, requestId: {RequestId}", source, requestId);
-
-                        // Update request ID to maintain correlation
-                        apiResponse.RequestId = requestId;
-
-                        // Log cache status if available
-                        if (response.Headers.TryGetValues("X-Cache-Status", out var cacheStatus))
-                        {
-                            _logger.LogInformation("Wrapper API cache status: {CacheStatus} for {Source}, requestId: {RequestId}",
-                                cacheStatus.FirstOrDefault(), source, requestId);
-                        }
-
-                        return apiResponse;
+                        _logger.LogInformation("Wrapper API cache status: {CacheStatus}, requestId: {RequestId}",
+                            cacheStatus.FirstOrDefault(), requestId);
                     }
-                    else
-                    {
-                        _logger.LogWarning("Wrapper API returned unsuccessful response via HTTP for {Source}: {Error}, requestId: {RequestId}",
-                            source, apiResponse?.ErrorMessage, requestId);
 
-                        return new PaginatedResponseDTO<UnifiedResponse>
-                        {
-                            Success = false,
-                            ErrorMessage = apiResponse?.ErrorMessage ?? "Unknown error from wrapper API",
-                            RequestId = requestId,
-                            Timestamp = DateTime.UtcNow
-                        };
-                    }
+                    return apiResponse;
                 }
                 else
                 {
-                    _logger.LogError("Wrapper API HTTP call failed for {Source} with status code: {StatusCode}, reason: {ReasonPhrase}, requestId: {RequestId}",
-                        source, response.StatusCode, response.ReasonPhrase, requestId);
+                    _logger.LogWarning("Wrapper API returned unsuccessful response via HTTP: {Error}, requestId: {RequestId}",
+                        apiResponse?.ErrorMessage, requestId);
 
-                    var errorMessage = response.StatusCode switch
-                    {
-                        System.Net.HttpStatusCode.TooManyRequests => "Rate limit exceeded on wrapper API",
-                        System.Net.HttpStatusCode.ServiceUnavailable => "Wrapper API is temporarily unavailable",
-                        System.Net.HttpStatusCode.BadGateway => "Wrapper API gateway error",
-                        System.Net.HttpStatusCode.GatewayTimeout => "Wrapper API timeout",
-                        _ => $"Wrapper API call failed with status code: {response.StatusCode}"
-                    };
-
-                    return new PaginatedResponseDTO<UnifiedResponse>
+                    return new PaginatedResponseDTO<PokemonListResponse>
                     {
                         Success = false,
-                        ErrorMessage = errorMessage,
+                        ErrorMessage = apiResponse?.ErrorMessage ?? "Unknown error from wrapper API",
                         RequestId = requestId,
                         Timestamp = DateTime.UtcNow
                     };
                 }
             }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError(ex, "HTTP request exception occurred while calling wrapper API for {Source}, requestId: {RequestId}", source, requestId);
-                return new PaginatedResponseDTO<UnifiedResponse>
-                {
-                    Success = false,
-                    ErrorMessage = "Network error occurred while calling wrapper API",
-                    RequestId = requestId,
-                    Timestamp = DateTime.UtcNow
-                };
-            }
-            catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
-            {
-                _logger.LogError(ex, "Request timeout occurred while calling wrapper API for {Source}, requestId: {RequestId}", source, requestId);
-                return new PaginatedResponseDTO<UnifiedResponse>
-                {
-                    Success = false,
-                    ErrorMessage = "Request timeout occurred",
-                    RequestId = requestId,
-                    Timestamp = DateTime.UtcNow
-                };
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogError(ex, "JSON deserialization error occurred while processing wrapper API response for {Source}, requestId: {RequestId}", source, requestId);
-                return new PaginatedResponseDTO<UnifiedResponse>
-                {
-                    Success = false,
-                    ErrorMessage = "Data format error occurred",
-                    RequestId = requestId,
-                    Timestamp = DateTime.UtcNow
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error occurred while calling wrapper API for {Source}, requestId: {RequestId}", source, requestId);
-                return new PaginatedResponseDTO<UnifiedResponse>
-                {
-                    Success = false,
-                    ErrorMessage = "An unexpected error occurred",
-                    RequestId = requestId,
-                    Timestamp = DateTime.UtcNow
-                };
-            }
-        }
-
-        private static PaginatedResponseDTO<UnifiedResponse> ConvertToTypedResponse(PaginatedResponseDTO<object> source)
-        {
-            if (source?.Data == null)
-            {
-                return new PaginatedResponseDTO<UnifiedResponse>
-                {
-                    Data = null,
-                    Pagination = source?.Pagination ?? new PaginationMetadata(),
-                    Success = source?.Success ?? false,
-                    ErrorMessage = source?.ErrorMessage ?? "No data received",
-                    Timestamp = source?.Timestamp ?? DateTime.UtcNow,
-                    RequestId = source?.RequestId
-                };
-            }
-
-            UnifiedResponse? unifiedData = null;
-
-            if (source.Data is UnifiedResponse directUnified)
-            {
-                // Direct cast if it's already the right type
-                unifiedData = directUnified;
-            }
-            else if (source.Data is JsonElement jsonElement)
-            {
-                try
-                {
-                    var jsonString = jsonElement.GetRawText();
-                    unifiedData = JsonSerializer.Deserialize<UnifiedResponse>(jsonString, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true,
-                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to deserialize JsonElement to UnifiedResponse: {ex.Message}");
-                }
-            }
             else
             {
-                try
+                _logger.LogError("Wrapper API HTTP call failed with status code: {StatusCode}, reason: {ReasonPhrase}, requestId: {RequestId}",
+                    response.StatusCode, response.ReasonPhrase, requestId);
+
+                var errorMessage = response.StatusCode switch
                 {
-                    var jsonString = JsonSerializer.Serialize(source.Data);
-                    unifiedData = JsonSerializer.Deserialize<UnifiedResponse>(jsonString, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true,
-                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                    });
-                }
-                catch (Exception ex)
+                    System.Net.HttpStatusCode.TooManyRequests => "Rate limit exceeded on wrapper API",
+                    System.Net.HttpStatusCode.ServiceUnavailable => "Wrapper API is temporarily unavailable",
+                    System.Net.HttpStatusCode.BadGateway => "Wrapper API gateway error",
+                    System.Net.HttpStatusCode.GatewayTimeout => "Wrapper API timeout",
+                    _ => $"Wrapper API call failed with status code: {response.StatusCode}"
+                };
+
+                return new PaginatedResponseDTO<PokemonListResponse>
                 {
-                    Console.WriteLine($"Failed to convert object to UnifiedResponse: {ex.Message}");
-                }
+                    Success = false,
+                    ErrorMessage = errorMessage,
+                    RequestId = requestId,
+                    Timestamp = DateTime.UtcNow
+                };
             }
-
-            return new PaginatedResponseDTO<UnifiedResponse>
-            {
-                Data = unifiedData,
-                Pagination = source.Pagination ?? new PaginationMetadata(),
-                Success = source.Success && unifiedData != null,
-                ErrorMessage = unifiedData == null ? "Failed to convert response data" : source.ErrorMessage,
-                Timestamp = source.Timestamp,
-                RequestId = source.RequestId
-            };
         }
-
-        private static PaginatedResponseDTO<object> CreateErrorResponse(string errorMessage, string correlationId)
+        catch (HttpRequestException ex)
         {
-            return new PaginatedResponseDTO<object>
+            _logger.LogError(ex, "HTTP request exception occurred while calling wrapper API, requestId: {RequestId}", requestId);
+            return new PaginatedResponseDTO<PokemonListResponse>
             {
                 Success = false,
-                ErrorMessage = errorMessage,
-                RequestId = correlationId,
-                Timestamp = DateTime.UtcNow,
-                Pagination = new PaginationMetadata()
+                ErrorMessage = "Network error occurred while calling wrapper API",
+                RequestId = requestId,
+                Timestamp = DateTime.UtcNow
             };
         }
+        catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
+        {
+            _logger.LogError(ex, "Request timeout occurred while calling wrapper API, requestId: {RequestId}", requestId);
+            return new PaginatedResponseDTO<PokemonListResponse>
+            {
+                Success = false,
+                ErrorMessage = "Request timeout occurred",
+                RequestId = requestId,
+                Timestamp = DateTime.UtcNow
+            };
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "JSON deserialization error occurred while processing wrapper API response, requestId: {RequestId}", requestId);
+            return new PaginatedResponseDTO<PokemonListResponse>
+            {
+                Success = false,
+                ErrorMessage = "Data format error occurred",
+                RequestId = requestId,
+                Timestamp = DateTime.UtcNow
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error occurred while calling wrapper API, requestId: {RequestId}", requestId);
+            return new PaginatedResponseDTO<PokemonListResponse>
+            {
+                Success = false,
+                ErrorMessage = "An unexpected error occurred",
+                RequestId = requestId,
+                Timestamp = DateTime.UtcNow
+            };
+        }
+    }
+
+    private static PaginatedResponseDTO<PokemonListResponse> ConvertToTypedResponse(PaginatedResponseDTO<object> source)
+    {
+        return new PaginatedResponseDTO<PokemonListResponse>
+        {
+            Data = source.Data as PokemonListResponse,
+            Pagination = source.Pagination,
+            Success = source.Success,
+            ErrorMessage = source.ErrorMessage,
+            Timestamp = source.Timestamp,
+            RequestId = source.RequestId
+        };
+    }
+
+    private static PaginatedResponseDTO<object> CreateErrorResponse(string errorMessage, string correlationId)
+    {
+        return new PaginatedResponseDTO<object>
+        {
+            Success = false,
+            ErrorMessage = errorMessage,
+            RequestId = correlationId,
+            Timestamp = DateTime.UtcNow,
+            Pagination = new PaginationMetadata()
+        };
     }
 }

@@ -4,7 +4,6 @@ using HealthChecks.UI.Client;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
 using PokeApi.Shared.Configurations;
-using PokeApi.Shared.DTO;
 using PokeApi.Shared.Interfaces;
 using PokeApi.Shared.Middleware;
 using PokeApi.Shared.Services;
@@ -32,25 +31,8 @@ builder.Services.Configure<RabbitMQOptions>(
 // Memory Cache
 builder.Services.AddMemoryCache();
 
-// RabbitMQ Services with graceful error handling
-builder.Services.AddSingleton<IRabbitMQService>(serviceProvider =>
-{
-    var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<RabbitMQOptions>>();
-    var logger = serviceProvider.GetRequiredService<ILogger<RabbitMQService>>();
-
-    try
-    {
-        var service = new RabbitMQService(options, logger);
-        logger.LogInformation("RabbitMQ service initialized successfully");
-        return service;
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Failed to initialize RabbitMQ service, creating stub implementation");
-        return new StubRabbitMQService(logger);
-    }
-});
-
+// RabbitMQ Services
+builder.Services.AddSingleton<IRabbitMQService, RabbitMQService>();
 builder.Services.AddSingleton<IPokemonMessageService, PokemonMessageService>();
 
 // Register PokemonMessageService as hosted service
@@ -253,34 +235,4 @@ app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthC
     Predicate = _ => false
 });
 
-Console.WriteLine("Wrapper API starting...");
-
 app.Run();
-
-// Stub RabbitMQ service for graceful degradation
-public class StubRabbitMQService : IRabbitMQService
-{
-    private readonly ILogger _logger;
-
-    public StubRabbitMQService(ILogger logger)
-    {
-        _logger = logger;
-    }
-
-    public void DeclareInfrastructure() { }
-
-    public void Dispose() { }
-
-    public Task<bool> IsHealthyAsync() => Task.FromResult(false);
-
-    public Task<bool> PublishAsync<T>(string exchange, string routingKey, T message, string? correlationId = null, Dictionary<string, object>? headers = null, CancellationToken cancellationToken = default)
-        => Task.FromResult(false);
-
-    public Task<TResponse?> PublishAndWaitForReplyAsync<TRequest, TResponse>(string exchange, string routingKey, TRequest request, string replyQueue, TimeSpan timeout, string? correlationId = null, CancellationToken cancellationToken = default)
-        => Task.FromResult<TResponse?>(default);
-
-    public Task StartConsumingAsync<T>(string queueName, Func<MessageEnvelope<T>, Task<bool>> messageHandler, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public Task StopConsumingAsync(string queueName) => Task.CompletedTask;
-}

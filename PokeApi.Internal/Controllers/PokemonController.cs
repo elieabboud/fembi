@@ -5,35 +5,34 @@ using PokeApi.Shared.Configurations;
 using PokeApi.Shared.DTO;
 using PokeApi.Shared.Extensions;
 using PokeApi.Shared.Middleware;
-using PokeApi.Shared.Models;
 using Swashbuckle.AspNetCore.Annotations;
-using System.ComponentModel.DataAnnotations;
+using static PokeApi.Shared.Models.PokemonModels;
 
 namespace PokeApi.Internal.Controllers
 {
+
     [ApiController]
     [ApiVersion("1.0")]
     [Route("api/v{version:apiVersion}/[controller]")]
     [Produces("application/json")]
-    public class DataController : ControllerBase
+    public class PokemonController : ControllerBase
     {
         private readonly IWrapperApiService _wrapperApiService;
-        private readonly ILogger<DataController> _logger;
+        private readonly ILogger<PokemonController> _logger;
 
-        public DataController(IWrapperApiService wrapperApiService, ILogger<DataController> logger)
+        public PokemonController(IWrapperApiService wrapperApiService, ILogger<PokemonController> logger)
         {
             _wrapperApiService = wrapperApiService;
             _logger = logger;
         }
 
         /// <summary>
-        /// Gets a paginated list of data through the wrapper API
+        /// Gets a paginated list of Pokemon through the wrapper API
         /// </summary>
-        /// <param name="source">Data source: pokemon or product</param>
-        /// <param name="limit">Number of items to return (1-1000, default: 20)</param>
-        /// <param name="offset">Number of items to skip (default: 0)</param>
-        /// <returns>A paginated list of data from the wrapper API</returns>
-        /// <response code="200">Returns the data list successfully</response>
+        /// <param name="limit">Number of Pokemon to return (1-1000, default: 20)</param>
+        /// <param name="offset">Number of Pokemon to skip (default: 0)</param>
+        /// <returns>A paginated list of Pokemon from the wrapper API</returns>
+        /// <response code="200">Returns the Pokemon list successfully</response>
         /// <response code="400">Invalid parameters provided</response>
         /// <response code="429">Rate limit exceeded</response>
         /// <response code="500">Internal server error occurred</response>
@@ -41,52 +40,32 @@ namespace PokeApi.Internal.Controllers
         /// <response code="503">Service unavailable</response>
         [HttpGet]
         [SwaggerOperation(
-            Summary = "Get Data List via Wrapper API",
-            Description = "Retrieves a paginated list of data from external sources (Pokemon or Products) by calling the internal wrapper API with configurable source, limit and offset parameters. Includes correlation tracking and detailed error handling."
+            Summary = "Get Pokemon List via Wrapper API",
+            Description = "Retrieves a paginated list of Pokemon by calling the internal wrapper API with configurable limit and offset parameters. Includes correlation tracking and detailed error handling."
         )]
-        [SwaggerResponse(200, "Data list retrieved successfully", typeof(PaginatedResponseDTO<UnifiedResponse>))]
-        [SwaggerResponse(400, "Invalid request parameters", typeof(PaginatedResponseDTO<UnifiedResponse>))]
+        [SwaggerResponse(200, "Pokemon list retrieved successfully", typeof(PaginatedResponseDTO<PokemonListResponse>))]
+        [SwaggerResponse(400, "Invalid request parameters", typeof(PaginatedResponseDTO<PokemonListResponse>))]
         [SwaggerResponse(429, "Rate limit exceeded")]
-        [SwaggerResponse(500, "Internal server error", typeof(PaginatedResponseDTO<UnifiedResponse>))]
-        [SwaggerResponse(502, "Wrapper API error", typeof(PaginatedResponseDTO<UnifiedResponse>))]
-        [SwaggerResponse(503, "Service unavailable", typeof(PaginatedResponseDTO<UnifiedResponse>))]
-        public async Task<ActionResult<PaginatedResponseDTO<UnifiedResponse>>> GetDataList(
+        [SwaggerResponse(500, "Internal server error", typeof(PaginatedResponseDTO<PokemonListResponse>))]
+        [SwaggerResponse(502, "Wrapper API error", typeof(PaginatedResponseDTO<PokemonListResponse>))]
+        [SwaggerResponse(503, "Service unavailable", typeof(PaginatedResponseDTO<PokemonListResponse>))]
+        public async Task<ActionResult<PaginatedResponseDTO<PokemonListResponse>>> GetPokemonList(
             [FromQuery]
-            [Required]
-            [SwaggerParameter("Data source: pokemon or product", Required = true)]
-            string source,
+        [PokemonLimit(1, 1000)]
+        [SwaggerParameter("Number of Pokemon to return (1-1000)", Required = false)]
+        int limit = 20,
 
             [FromQuery]
-            [PokemonLimit(1, 1000)]
-            [SwaggerParameter("Number of items to return (1-1000)", Required = false)]
-            int limit = 20,
-
-            [FromQuery]
-            [PokemonOffset]
-            [SwaggerParameter("Number of items to skip", Required = false)]
-            int offset = 0)
+        [PokemonOffset]
+        [SwaggerParameter("Number of Pokemon to skip", Required = false)]
+        int offset = 0)
         {
             var correlationId = HttpContext.Items[CorrelationConstants.CorrelationIdItem]?.ToString() ?? Guid.NewGuid().ToString();
 
             try
             {
-                _logger.LogInformation("Internal API: Data list requested with source: {Source}, limit: {Limit}, offset: {Offset}, correlationId: {CorrelationId}",
-                    source, limit, offset, correlationId);
-
-                // Validate and parse source parameter
-                if (!Enum.TryParse<ExternalApiSource>(source, true, out var apiSource))
-                {
-                    var errorResponse = new PaginatedResponseDTO<UnifiedResponse>
-                    {
-                        Success = false,
-                        ErrorMessage = $"Invalid source parameter. Supported values: {string.Join(", ", Enum.GetNames<ExternalApiSource>())}",
-                        RequestId = correlationId,
-                        Timestamp = DateTime.UtcNow
-                    };
-
-                    _logger.LogWarning("Internal API: Invalid source parameter: {Source}, correlationId: {CorrelationId}", source, correlationId);
-                    return BadRequest(errorResponse);
-                }
+                _logger.LogInformation("Internal API: Pokemon list requested with limit: {Limit}, offset: {Offset}, correlationId: {CorrelationId}",
+                    limit, offset, correlationId);
 
                 // Validate model state
                 if (!ModelState.IsValid)
@@ -95,7 +74,7 @@ namespace PokeApi.Internal.Controllers
                         .SelectMany(v => v.Errors)
                         .Select(e => e.ErrorMessage);
 
-                    var errorResponse = new PaginatedResponseDTO<UnifiedResponse>
+                    var errorResponse = new PaginatedResponseDTO<PokemonListResponse>
                     {
                         Success = false,
                         ErrorMessage = string.Join("; ", errors),
@@ -109,24 +88,22 @@ namespace PokeApi.Internal.Controllers
                     return BadRequest(errorResponse);
                 }
 
-                var result = await _wrapperApiService.GetDataFromWrapper(apiSource, limit, offset);
+                var result = await _wrapperApiService.GetPokemonFromWrapper(limit, offset);
                 result.RequestId = correlationId;
 
                 if (result.Success)
                 {
-                    _logger.LogInformation("Internal API: Data list successfully retrieved from wrapper for {Source}, correlationId: {CorrelationId}",
-                        apiSource, correlationId);
+                    _logger.LogInformation("Internal API: Pokemon list successfully retrieved from wrapper, correlationId: {CorrelationId}", correlationId);
 
                     // Add safe headers (correlation ID already set by middleware)
                     Response.TryAddHeader("X-Internal-API", "PokeApi.Internal");
-                    Response.TryAddHeader("X-Data-Source", apiSource.ToString());
 
                     return Ok(result);
                 }
                 else
                 {
-                    _logger.LogWarning("Internal API: Wrapper API request failed for {Source}: {Error}, correlationId: {CorrelationId}",
-                        apiSource, result.ErrorMessage, correlationId);
+                    _logger.LogWarning("Internal API: Wrapper API request failed: {Error}, correlationId: {CorrelationId}",
+                        result.ErrorMessage, correlationId);
 
                     // Determine appropriate status code based on error type
                     var statusCode = DetermineStatusCode(result.ErrorMessage);
@@ -135,9 +112,9 @@ namespace PokeApi.Internal.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Internal API: Unexpected error in GetDataList endpoint, correlationId: {CorrelationId}", correlationId);
+                _logger.LogError(ex, "Internal API: Unexpected error in GetPokemonList endpoint, correlationId: {CorrelationId}", correlationId);
 
-                var errorResponse = new PaginatedResponseDTO<UnifiedResponse>
+                var errorResponse = new PaginatedResponseDTO<PokemonListResponse>
                 {
                     Success = false,
                     ErrorMessage = "An internal server error occurred",
@@ -150,11 +127,11 @@ namespace PokeApi.Internal.Controllers
         }
 
         /// <summary>
-        /// Health check endpoint for the internal data service
+        /// Health check endpoint for the internal Pokemon service
         /// </summary>
         /// <returns>Service health status with wrapper API connectivity</returns>
         [HttpGet("health")]
-        [SwaggerOperation(Summary = "Health Check", Description = "Returns the health status of the internal data service and wrapper API connectivity")]
+        [SwaggerOperation(Summary = "Health Check", Description = "Returns the health status of the internal Pokemon service and wrapper API connectivity")]
         [SwaggerResponse(200, "Service is healthy")]
         [SwaggerResponse(503, "Service is unhealthy")]
         public async Task<IActionResult> Health()
@@ -163,22 +140,17 @@ namespace PokeApi.Internal.Controllers
 
             try
             {
-                // Test wrapper API connectivity with both sources
-                var pokemonTest = await _wrapperApiService.GetDataFromWrapper(ExternalApiSource.Pokemon, 1, 0);
-                var productTest = await _wrapperApiService.GetDataFromWrapper(ExternalApiSource.Product, 1, 0);
+                // Test wrapper API connectivity
+                var testResult = await _wrapperApiService.GetPokemonFromWrapper(1, 0);
 
                 var healthStatus = new
                 {
-                    Status = (pokemonTest.Success && productTest.Success) ? "Healthy" : "Degraded",
+                    Status = testResult.Success ? "Healthy" : "Degraded",
                     Timestamp = DateTime.UtcNow,
-                    Service = "Data Internal API",
+                    Service = "Pokemon Internal API",
                     Version = "1.0",
                     Environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Unknown",
-                    WrapperApiStatus = new
-                    {
-                        Pokemon = pokemonTest.Success ? "Available" : "Unavailable",
-                        Products = productTest.Success ? "Available" : "Unavailable"
-                    },
+                    WrapperApiStatus = testResult.Success ? "Available" : "Unavailable",
                     WrapperApiUrl = _wrapperApiService.GetType().Name,
                     RequestId = correlationId
                 };
@@ -186,7 +158,7 @@ namespace PokeApi.Internal.Controllers
                 _logger.LogInformation("Internal API: Health check performed, status: {Status}, correlationId: {CorrelationId}",
                     healthStatus.Status, correlationId);
 
-                return (pokemonTest.Success && productTest.Success) ? Ok(healthStatus) : StatusCode(503, healthStatus);
+                return testResult.Success ? Ok(healthStatus) : StatusCode(503, healthStatus);
             }
             catch (Exception ex)
             {
@@ -196,7 +168,7 @@ namespace PokeApi.Internal.Controllers
                 {
                     Status = "Unhealthy",
                     Timestamp = DateTime.UtcNow,
-                    Service = "Data Internal API",
+                    Service = "Pokemon Internal API",
                     Version = "1.0",
                     Error = "Health check failed",
                     RequestId = correlationId
@@ -219,26 +191,24 @@ namespace PokeApi.Internal.Controllers
 
             var apiInfo = new
             {
-                ApiName = "Multi-Source Data Internal API",
+                ApiName = "Pokemon Internal API",
                 Version = "1.0",
                 Environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Unknown",
                 Timestamp = DateTime.UtcNow,
-                SupportedSources = Enum.GetNames<ExternalApiSource>().Select(s => s.ToLower()).ToArray(),
                 Features = new[]
                 {
-                    "Multi-Source Data Access",
-                    "Wrapper API Integration",
-                    "Correlation Tracking",
-                    "Error Handling",
-                    "Health Monitoring",
-                    "API Versioning",
-                    "Rate Limiting"
-                },
+                "Wrapper API Integration",
+                "Correlation Tracking",
+                "Error Handling",
+                "Health Monitoring",
+                "API Versioning",
+                "Rate Limiting"
+            },
                 Endpoints = new
                 {
-                    Data = "/api/v1/data?source={pokemon|product}",
-                    Health = "/api/v1/data/health",
-                    Info = "/api/v1/data/info"
+                    Pokemon = "/api/v1/pokemon",
+                    Health = "/api/v1/pokemon/health",
+                    Info = "/api/v1/pokemon/info"
                 },
                 Documentation = "/swagger",
                 RequestId = correlationId

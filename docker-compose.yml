@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   # RabbitMQ Message Broker
   rabbitmq:
@@ -11,17 +13,19 @@ services:
       RABBITMQ_DEFAULT_USER: pokemon_user
       RABBITMQ_DEFAULT_PASS: pokemon_pass
       RABBITMQ_DEFAULT_VHOST: pokemon_vhost
+      RABBITMQ_ERLANG_COOKIE: "pokemon-secret-cookie"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - pokemon-network
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
+
 
   # Pokemon API Wrapper Service
   wrapper-api:
@@ -38,6 +42,9 @@ services:
       - ExternalApis__PokeApi__BaseUrl=https://pokeapi.co/api/v2/
       - ExternalApis__PokeApi__TimeoutSeconds=30
       - ExternalApis__PokeApi__CacheExpirationMinutes=10
+      - ExternalApis__DummyJson__BaseUrl=https://dummyjson.com/
+      - ExternalApis__DummyJson__TimeoutSeconds=30
+      - ExternalApis__DummyJson__CacheExpirationMinutes=10
       - RateLimit__RequestsPerMinute=100
       - RateLimit__RequestsPerHour=1000
       - RabbitMQ__HostName=rabbitmq
@@ -45,8 +52,11 @@ services:
       - RabbitMQ__UserName=pokemon_user
       - RabbitMQ__Password=pokemon_pass
       - RabbitMQ__VirtualHost=pokemon_vhost
+      - RabbitMQ__ConnectionTimeoutSeconds=30
+      - RabbitMQ__RequestTimeoutSeconds=30
     depends_on:
-      - rabbitmq  # Simplified dependency - no condition check
+      rabbitmq:
+        condition: service_healthy
     networks:
       - pokemon-network
     healthcheck:
@@ -54,7 +64,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
     restart: unless-stopped
 
   # Pokemon Internal API Service
@@ -80,9 +90,13 @@ services:
       - RabbitMQ__UserName=pokemon_user
       - RabbitMQ__Password=pokemon_pass
       - RabbitMQ__VirtualHost=pokemon_vhost
+      - RabbitMQ__ConnectionTimeoutSeconds=30
+      - RabbitMQ__RequestTimeoutSeconds=30
     depends_on:
-      - rabbitmq
-      - wrapper-api
+      rabbitmq:
+        condition: service_healthy
+      wrapper-api:
+        condition: service_healthy
     networks:
       - pokemon-network
     healthcheck:
@@ -90,8 +104,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
     restart: unless-stopped
+
 
 networks:
   pokemon-network:
