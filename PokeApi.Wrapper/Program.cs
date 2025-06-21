@@ -29,12 +29,24 @@ builder.Services.Configure<RabbitMQOptions>(
 // Memory Cache
 builder.Services.AddMemoryCache();
 
-// RabbitMQ Services
-builder.Services.AddSingleton<IRabbitMQService, RabbitMQService>();
-builder.Services.AddSingleton<IApiMessageService, ApiMessageService>();
+// RabbitMQ Services - FIXED: With proper error handling
+builder.Services.AddSingleton<IRabbitMQService>(serviceProvider =>
+{
+    var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<RabbitMQOptions>>();
+    var logger = serviceProvider.GetRequiredService<ILogger<RabbitMQService>>();
 
-// Register ApiMessageService as hosted service
-builder.Services.AddHostedService<ApiMessageService>();
+    try
+    {
+        var service = new RabbitMQService(options, logger);
+        logger.LogInformation("RabbitMQ service initialized successfully");
+        return service;
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to initialize RabbitMQ service");
+        throw; // Let it fail fast in wrapper service
+    }
+});
 
 // Rate Limiting
 builder.Services.Configure<IpRateLimitOptions>(options =>
@@ -133,14 +145,18 @@ builder.Services.AddHttpClient("DummyJson", (serviceProvider, client) =>
 .AddPolicyHandler(GetRetryPolicy())
 .AddPolicyHandler(GetCircuitBreakerPolicy());
 
-// Register services - FIXED: Changed ExternalApiService to Singleton to match ApiMessageService
+// FIXED: Register services with compatible lifetimes
 builder.Services.AddSingleton<IApiHttpClientFactory, ApiHttpClientFactory>();
-builder.Services.AddSingleton<IExternalApiService, ExternalApiService>();
+builder.Services.AddSingleton<IExternalApiService, ExternalApiService>(); // Changed to Singleton
+builder.Services.AddSingleton<IApiMessageService, ApiMessageService>();
 
-// Health Checks
+// Register ApiMessageService as hosted service
+builder.Services.AddHostedService<ApiMessageService>();
+
+// FIXED: Health Checks with correct namespace
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy("Wrapper API is running"))
-    .AddCheck<RabbitMQHealthCheck>("rabbitmq");
+    .AddCheck<PokeApi.Shared.Configurations.RabbitMQHealthCheck>("rabbitmq");
 
 // Configure Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
@@ -232,5 +248,9 @@ app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks
         [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
     }
 });
+
+Console.WriteLine("Wrapper API starting...");
+Console.WriteLine($"Environment: {app.Environment.EnvironmentName}");
+Console.WriteLine($"RabbitMQ Host: {app.Configuration.GetValue<string>("RabbitMQ:HostName")}");
 
 app.Run();

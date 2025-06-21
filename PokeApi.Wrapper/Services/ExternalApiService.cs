@@ -35,7 +35,7 @@ namespace PokeApi.Wrapper.Services
 
         public async Task<PaginatedResponseDTO<object>> GetDataAsync(string source, int limit, int offset)
         {
-            var cacheKey = $"{source}:{limit}:{offset}";
+            var cacheKey = $"external_api:{source}:{limit}:{offset}";
 
             try
             {

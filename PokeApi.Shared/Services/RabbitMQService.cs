@@ -91,13 +91,11 @@ namespace PokeApi.Shared.Services
                 _channel.ExchangeDeclare(ExchangeNames.PokemonDLX, ExchangeType.Topic, durable: true);
                 _channel.ExchangeDeclare(ExchangeNames.ApiDLX, ExchangeType.Topic, durable: true);
 
-                // Declare Pokemon queues with DLQ setup
-                DeclareQueueWithDLQ(QueueNames.PokemonRequest, RoutingKeys.PokemonRequest);
-                DeclareQueueWithDLQ(QueueNames.PokemonResponse, RoutingKeys.PokemonResponse);
-
-                // FIXED: Declare API queues with DLQ setup
-                DeclareQueueWithDLQ(QueueNames.ApiRequest, RoutingKeys.ApiRequest);
-                DeclareQueueWithDLQ(QueueNames.ApiResponse, RoutingKeys.ApiResponse);
+                // FIXED: Use safe queue declaration that handles existing queues
+                SafeDeclareQueueWithDLQ(QueueNames.PokemonRequest, RoutingKeys.PokemonRequest, ExchangeNames.Pokemon, ExchangeNames.PokemonDLX);
+                SafeDeclareQueueWithDLQ(QueueNames.PokemonResponse, RoutingKeys.PokemonResponse, ExchangeNames.Pokemon, ExchangeNames.PokemonDLX);
+                SafeDeclareQueueWithDLQ(QueueNames.ApiRequest, RoutingKeys.ApiRequest, ExchangeNames.Api, ExchangeNames.ApiDLX);
+                SafeDeclareQueueWithDLQ(QueueNames.ApiResponse, RoutingKeys.ApiResponse, ExchangeNames.Api, ExchangeNames.ApiDLX);
 
                 _logger.LogInformation("RabbitMQ infrastructure declared successfully");
             }
@@ -108,27 +106,59 @@ namespace PokeApi.Shared.Services
             }
         }
 
-        private void DeclareQueueWithDLQ(string queueName, string routingKey)
+        private void SafeDeclareQueueWithDLQ(string queueName, string routingKey, string exchange, string dlxExchange)
         {
             if (_channel == null) return;
 
             var dlqName = $"{queueName}.dlq";
             var dlqRoutingKey = $"{routingKey}.dlq";
 
-            // Declare DLQ
-            _channel.QueueDeclare(dlqName, durable: true, exclusive: false, autoDelete: false);
-            _channel.QueueBind(dlqName, ExchangeNames.PokemonDLX, dlqRoutingKey);
-
-            // Declare main queue with DLX configuration
-            var args = new Dictionary<string, object>
+            try
             {
-                {"x-dead-letter-exchange", ExchangeNames.PokemonDLX},
-                {"x-dead-letter-routing-key", dlqRoutingKey},
-                {"x-message-ttl", 300000} // 5 minutes
-            };
+                // Try to declare DLQ
+                _channel.QueueDeclare(dlqName, durable: true, exclusive: false, autoDelete: false);
+                _channel.QueueBind(dlqName, dlxExchange, dlqRoutingKey);
 
-            _channel.QueueDeclare(queueName, durable: true, exclusive: false, autoDelete: false, args);
-            _channel.QueueBind(queueName, ExchangeNames.Pokemon, routingKey);
+                // Try to declare main queue with DLX configuration
+                var args = new Dictionary<string, object>
+        {
+            {"x-dead-letter-exchange", dlxExchange},
+            {"x-dead-letter-routing-key", dlqRoutingKey},
+            {"x-message-ttl", 300000} // 5 minutes
+        };
+
+                _channel.QueueDeclare(queueName, durable: true, exclusive: false, autoDelete: false, args);
+                _channel.QueueBind(queueName, exchange, routingKey);
+
+                _logger.LogDebug("Successfully declared queue: {QueueName} with DLX: {DlxExchange}", queueName, dlxExchange);
+            }
+            catch (RabbitMQ.Client.Exceptions.OperationInterruptedException ex) when (ex.ShutdownReason?.ReplyText?.Contains("PRECONDITION_FAILED") == true)
+            {
+                _logger.LogWarning("Queue {QueueName} already exists with different configuration. Attempting to use existing queue.", queueName);
+
+                // Recreate the channel since it was closed by the error
+                _channel?.Dispose();
+                _channel = _connection?.CreateModel();
+
+                if (_channel != null)
+                {
+                    // Try to bind existing queue to correct exchange (this might fail too, but we'll continue)
+                    try
+                    {
+                        _channel.QueueBind(queueName, exchange, routingKey);
+                        _logger.LogDebug("Successfully bound existing queue: {QueueName} to exchange: {Exchange}", queueName, exchange);
+                    }
+                    catch (Exception bindEx)
+                    {
+                        _logger.LogWarning(bindEx, "Failed to bind existing queue {QueueName} to exchange {Exchange}, but continuing...", queueName, exchange);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to declare queue: {QueueName}", queueName);
+                throw;
+            }
         }
 
         public async Task<bool> PublishAsync<T>(string exchange, string routingKey, T message,

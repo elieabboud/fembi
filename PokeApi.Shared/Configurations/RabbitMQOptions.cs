@@ -2,7 +2,7 @@
 
 namespace PokeApi.Shared.Configurations
 {
-    public class RabbitMQOptions
+    public class RabbitMQOptions : IValidatableObject
     {
         public const string SectionName = "RabbitMQ";
 
@@ -31,6 +31,16 @@ namespace PokeApi.Shared.Configurations
 
         [Range(100, 10000)]
         public int RetryDelayMs { get; set; } = 1000;
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (ConnectionTimeoutSeconds > RequestTimeoutSeconds)
+            {
+                yield return new ValidationResult(
+                    "ConnectionTimeoutSeconds should not be greater than RequestTimeoutSeconds",
+                    new[] { nameof(ConnectionTimeoutSeconds), nameof(RequestTimeoutSeconds) });
+            }
+        }
     }
 
     public static class QueueNames

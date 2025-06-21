@@ -56,7 +56,7 @@ namespace PokeApi.Internal.Services
                     source, timeout.TotalMilliseconds, _replyQueueName);
 
                 var response = await _rabbitMQService.PublishAndWaitForReplyAsync<ApiRequestMessage, ApiResponseMessage>(
-                    ExchangeNames.Pokemon, // Using existing exchange
+                    ExchangeNames.Api,
                     RoutingKeys.ApiRequest,
                     request,
                     _replyQueueName,

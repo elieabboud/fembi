@@ -22,10 +22,9 @@ namespace PokeApi.Wrapper.Services
             _cancellationTokenSource = new CancellationTokenSource();
         }
 
-        public async Task<PaginatedResponseDTO<object>?> RequestDataAsync(string source, int limit, int offset,
+        public  Task<PaginatedResponseDTO<object>?> RequestDataAsync(string source, int limit, int offset,
             string correlationId, CancellationToken cancellationToken = default)
         {
-            // This method is not used in the wrapper service since it's the consumer, not producer
             throw new NotSupportedException("Wrapper service processes requests, it doesn't make them");
         }
 

@@ -238,13 +238,19 @@ namespace PokeApi.Internal.Controllers
             if (string.IsNullOrEmpty(errorMessage))
                 return 500;
 
-            return errorMessage.ToLowerInvariant() switch
+            var message = errorMessage.ToLowerInvariant();
+
+            return message switch
             {
-                var msg when msg.Contains("rate limit") => 429,
+                var msg when msg.Contains("rate limit") || msg.Contains("too many requests") => 429,
                 var msg when msg.Contains("timeout") || msg.Contains("network") => 502,
                 var msg when msg.Contains("unavailable") || msg.Contains("unreachable") => 503,
-                var msg when msg.Contains("wrapper") => 502,
-                _ => 400
+                var msg when msg.Contains("wrapper") || msg.Contains("external") => 502,
+                var msg when msg.Contains("unauthorized") => 401,
+                var msg when msg.Contains("forbidden") => 403,
+                var msg when msg.Contains("not found") => 404,
+                var msg when msg.Contains("validation") || msg.Contains("invalid") => 400,
+                _ => 500
             };
         }
     }
