@@ -18,6 +18,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container
 builder.Services.AddControllers();
 
+// FIXED: Add Memory Cache first (required for rate limiting)
+builder.Services.AddMemoryCache();
+
 // Configuration
 builder.Services.Configure<RabbitMQOptions>(
     builder.Configuration.GetSection(RabbitMQOptions.SectionName));
@@ -42,30 +45,53 @@ builder.Services.AddDbContext<AuditDbContext>(options =>
     }
 });
 
-// RabbitMQ Services
+// RabbitMQ Services with enhanced error handling
 builder.Services.AddSingleton<IRabbitMQService>(serviceProvider =>
 {
     var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<RabbitMQOptions>>();
     var logger = serviceProvider.GetRequiredService<ILogger<RabbitMQService>>();
 
-    try
+    var maxRetries = 5;
+    var retryDelay = TimeSpan.FromSeconds(5);
+
+    for (int attempt = 1; attempt <= maxRetries; attempt++)
     {
-        var service = new RabbitMQService(options, logger);
-        logger.LogInformation("RabbitMQ service initialized successfully for Audit service");
-        return service;
+        try
+        {
+            var service = new RabbitMQService(options, logger);
+            logger.LogInformation("RabbitMQ service initialized successfully for Audit service on attempt {Attempt}", attempt);
+            return service;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to initialize RabbitMQ service for Audit service on attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+
+            if (attempt == maxRetries)
+            {
+                logger.LogCritical("Failed to initialize RabbitMQ service after {MaxRetries} attempts. Service will start with degraded functionality.", maxRetries);
+                throw;
+            }
+
+            Thread.Sleep(retryDelay);
+            retryDelay = TimeSpan.FromSeconds(retryDelay.TotalSeconds * 2); // Exponential backoff
+        }
     }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Failed to initialize RabbitMQ service for Audit service");
-        throw;
-    }
+
+    throw new InvalidOperationException("This line should never be reached");
 });
 
-// Audit Services
-builder.Services.AddScoped<IAuditService, AuditService>();
+// FIXED: Audit Services - change IAuditService to Singleton to match the hosted service
+builder.Services.AddSingleton<IAuditService>(serviceProvider =>
+{
+    // Create a scope factory to get scoped services when needed
+    var scopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
+    return new AuditServiceSingleton(scopeFactory, serviceProvider.GetRequiredService<ILogger<AuditService>>());
+});
+
+// Register the hosted service
 builder.Services.AddHostedService<AuditMessageService>();
 
-// Rate Limiting
+// Rate Limiting - Memory cache is already added above
 builder.Services.Configure<IpRateLimitOptions>(options =>
 {
     options.EnableEndpointRateLimiting = true;
@@ -167,22 +193,71 @@ if (!string.IsNullOrEmpty(builder.Configuration.GetConnectionString("Application
 
 var app = builder.Build();
 
-// Database Migration and Initialization
+// Database Migration and Initialization with retry logic
+using (var scope = app.Services.CreateScope())
+{
+    var maxRetries = 10;
+    var retryDelay = TimeSpan.FromSeconds(5);
+
+    for (int attempt = 1; attempt <= maxRetries; attempt++)
+    {
+        try
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+
+            app.Logger.LogInformation("Attempting database initialization, attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+
+            // Test database connection
+            await context.Database.CanConnectAsync();
+
+            // Ensure database is created and up to date
+            await context.Database.EnsureCreatedAsync();
+
+            // Apply any pending migrations if they exist
+            var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+            if (pendingMigrations.Any())
+            {
+                app.Logger.LogInformation("Applying {Count} pending migrations", pendingMigrations.Count());
+                await context.Database.MigrateAsync();
+            }
+
+            app.Logger.LogInformation("Database initialization completed successfully");
+            break;
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogError(ex, "Database initialization failed on attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+
+            if (attempt == maxRetries)
+            {
+                app.Logger.LogCritical("Database initialization failed after {MaxRetries} attempts. Service will start with degraded functionality.", maxRetries);
+                // Don't throw - allow service to start and retry later
+                break;
+            }
+
+            await Task.Delay(retryDelay);
+            retryDelay = TimeSpan.FromSeconds(retryDelay.TotalSeconds * 1.5); // Exponential backoff
+        }
+    }
+}
+
+// Initialize RabbitMQ infrastructure after database
 using (var scope = app.Services.CreateScope())
 {
     try
     {
-        var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+        var rabbitMQService = scope.ServiceProvider.GetRequiredService<IRabbitMQService>();
 
-        // Ensure database is created and up to date
-        await context.Database.EnsureCreatedAsync();
+        // Wait a bit for RabbitMQ to be fully ready
+        await Task.Delay(2000);
 
-        app.Logger.LogInformation("Database initialization completed successfully");
+        rabbitMQService.DeclareInfrastructure();
+        app.Logger.LogInformation("RabbitMQ infrastructure initialized successfully");
     }
     catch (Exception ex)
     {
-        app.Logger.LogError(ex, "An error occurred while initializing the database");
-        throw;
+        app.Logger.LogError(ex, "Failed to initialize RabbitMQ infrastructure. Message processing may be degraded.");
+        // Don't throw - allow service to start and retry later
     }
 }
 
@@ -243,3 +318,84 @@ Console.WriteLine($"Database: {app.Configuration.GetConnectionString("DefaultCon
 Console.WriteLine($"RabbitMQ Host: {app.Configuration.GetValue<string>("RabbitMQ:HostName")}");
 
 app.Run();
+
+// FIXED: Singleton wrapper for AuditService to work with hosted service
+public class AuditServiceSingleton : IAuditService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<AuditService> _logger;
+
+    public AuditServiceSingleton(IServiceScopeFactory scopeFactory, ILogger<AuditService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
+    public async Task<long> LogApiRequest(string requestId, string correlationId, string source,
+        int limit, int offset, bool success, object? responseData = null,
+        string? errorMessage = null, int? processingTimeMs = null,
+        string? externalApiUrl = null, bool cacheHit = false)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+        var auditService = new AuditService(context, _logger);
+
+        return await auditService.LogApiRequest(requestId, correlationId, source, limit, offset,
+            success, responseData, errorMessage, processingTimeMs, externalApiUrl, cacheHit);
+    }
+
+    public async Task<PokeApi.Audit.Models.AuditLog?> GetAuditLog(long id)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+        var auditService = new AuditService(context, _logger);
+
+        return await auditService.GetAuditLog(id);
+    }
+
+    public async Task<PokeApi.Audit.Models.AuditLog?> GetAuditLogByRequestId(string requestId)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+        var auditService = new AuditService(context, _logger);
+
+        return await auditService.GetAuditLogByRequestId(requestId);
+    }
+
+    public async Task<IEnumerable<PokeApi.Audit.Models.AuditLog>> GetAuditLogs(int page = 1, int pageSize = 50,
+        string? source = null, bool? success = null)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+        var auditService = new AuditService(context, _logger);
+
+        return await auditService.GetAuditLogs(page, pageSize, source, success);
+    }
+
+    public async Task<IEnumerable<PokeApi.Audit.Models.AuditLog>> GetAuditLogsByCorrelationId(string correlationId)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+        var auditService = new AuditService(context, _logger);
+
+        return await auditService.GetAuditLogsByCorrelationId(correlationId);
+    }
+
+    public async Task<IEnumerable<PokeApi.Audit.Models.AuditStatistics>> GetAuditStatistics()
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+        var auditService = new AuditService(context, _logger);
+
+        return await auditService.GetAuditStatistics();
+    }
+
+    public async Task<PokeApi.Audit.Models.AuditStatistics?> GetAuditStatisticsBySource(string source)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+        var auditService = new AuditService(context, _logger);
+
+        return await auditService.GetAuditStatisticsBySource(source);
+    }
+}

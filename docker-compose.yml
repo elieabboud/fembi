@@ -19,9 +19,9 @@ services:
       - api-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U audit_user -d pokemon_audit"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 5s
+      timeout: 3s
+      retries: 20
       start_period: 10s
     restart: unless-stopped
 
@@ -44,48 +44,13 @@ services:
       - api-network
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
     restart: unless-stopped
 
-  # Auditing Service (NEW)
-  audit-service:
-    build:
-      context: .
-      dockerfile: PokeApi.Audit/Dockerfile
-    container_name: multi-api-audit
-    ports:
-      - "5002:5002"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:5002
-      - ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Information
-      - ConnectionStrings__DefaultConnection=Host=postgres;Database=pokemon_audit;Username=audit_user;Password=audit_pass;Port=5432
-      - RabbitMQ__HostName=rabbitmq
-      - RabbitMQ__Port=5672
-      - RabbitMQ__UserName=pokemon_user
-      - RabbitMQ__Password=pokemon_pass
-      - RabbitMQ__VirtualHost=pokemon_vhost
-      - RabbitMQ__ConnectionTimeoutSeconds=30
-      - RabbitMQ__RequestTimeoutSeconds=30
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - api-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5002/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    restart: unless-stopped
-
-  # Multi-Source API Wrapper Service
+  # Multi-Source API Wrapper Service (starts first)
   wrapper-api:
     build:
       context: .
@@ -119,13 +84,50 @@ services:
       - api-network
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5001/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 15s
+      timeout: 5s
+      retries: 10
       start_period: 60s
     restart: unless-stopped
 
-  # Multi-Source Internal API Service
+  # Auditing Service (starts after wrapper API)
+  audit-service:
+    build:
+      context: .
+      dockerfile: PokeApi.Audit/Dockerfile
+    container_name: multi-api-audit
+    ports:
+      - "5002:5002"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5002
+      - ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Information
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=pokemon_audit;Username=audit_user;Password=audit_pass;Port=5432
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__UserName=pokemon_user
+      - RabbitMQ__Password=pokemon_pass
+      - RabbitMQ__VirtualHost=pokemon_vhost
+      - RabbitMQ__ConnectionTimeoutSeconds=30
+      - RabbitMQ__RequestTimeoutSeconds=30
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      wrapper-api:
+        condition: service_healthy
+    networks:
+      - api-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5002/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    restart: unless-stopped
+
+  # Multi-Source Internal API Service (starts last)
   internal-api:
     build:
       context: .
@@ -155,14 +157,16 @@ services:
         condition: service_healthy
       wrapper-api:
         condition: service_healthy
+      audit-service:
+        condition: service_healthy
     networks:
       - api-network
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
     restart: unless-stopped
 
 networks:

@@ -23,6 +23,7 @@ namespace PokeApi.Shared.Services
         private IModel? _channel;
         private readonly object _lock = new();
         private bool _disposed;
+        private bool _infrastructureDeclared = false;
 
         public RabbitMQService(IOptions<RabbitMQOptions> options, ILogger<RabbitMQService> logger)
         {
@@ -68,7 +69,6 @@ namespace PokeApi.Shared.Services
                 }
 
                 _logger.LogInformation("RabbitMQ connection established successfully");
-                DeclareInfrastructure();
             }
             catch (Exception ex)
             {
@@ -79,33 +79,39 @@ namespace PokeApi.Shared.Services
 
         public void DeclareInfrastructure()
         {
-            if (_channel == null) return;
+            if (_channel == null || _infrastructureDeclared) return;
 
-            try
+            lock (_lock)
             {
-                // Declare main exchanges
-                _channel.ExchangeDeclare(ExchangeNames.Pokemon, ExchangeType.Topic, durable: true);
-                _channel.ExchangeDeclare(ExchangeNames.Api, ExchangeType.Topic, durable: true);
-                _channel.ExchangeDeclare(ExchangeNames.Audit, ExchangeType.Topic, durable: true);
+                if (_infrastructureDeclared) return;
 
-                // Declare DLX exchanges
-                _channel.ExchangeDeclare(ExchangeNames.PokemonDLX, ExchangeType.Topic, durable: true);
-                _channel.ExchangeDeclare(ExchangeNames.ApiDLX, ExchangeType.Topic, durable: true);
-                _channel.ExchangeDeclare(ExchangeNames.AuditDLX, ExchangeType.Topic, durable: true);
+                try
+                {
+                    // Declare main exchanges
+                    _channel.ExchangeDeclare(ExchangeNames.Pokemon, ExchangeType.Topic, durable: true);
+                    _channel.ExchangeDeclare(ExchangeNames.Api, ExchangeType.Topic, durable: true);
+                    _channel.ExchangeDeclare(ExchangeNames.Audit, ExchangeType.Topic, durable: true);
 
-                // FIXED: Use safe queue declaration that handles existing queues
-                SafeDeclareQueueWithDLQ(QueueNames.PokemonRequest, RoutingKeys.PokemonRequest, ExchangeNames.Pokemon, ExchangeNames.PokemonDLX);
-                SafeDeclareQueueWithDLQ(QueueNames.PokemonResponse, RoutingKeys.PokemonResponse, ExchangeNames.Pokemon, ExchangeNames.PokemonDLX);
-                SafeDeclareQueueWithDLQ(QueueNames.ApiRequest, RoutingKeys.ApiRequest, ExchangeNames.Api, ExchangeNames.ApiDLX);
-                SafeDeclareQueueWithDLQ(QueueNames.ApiResponse, RoutingKeys.ApiResponse, ExchangeNames.Api, ExchangeNames.ApiDLX);
-                SafeDeclareQueueWithDLQ(QueueNames.AuditEvent, RoutingKeys.AuditEvent, ExchangeNames.Audit, ExchangeNames.AuditDLX);
+                    // Declare DLX exchanges
+                    _channel.ExchangeDeclare(ExchangeNames.PokemonDLX, ExchangeType.Topic, durable: true);
+                    _channel.ExchangeDeclare(ExchangeNames.ApiDLX, ExchangeType.Topic, durable: true);
+                    _channel.ExchangeDeclare(ExchangeNames.AuditDLX, ExchangeType.Topic, durable: true);
 
-                _logger.LogInformation("RabbitMQ infrastructure declared successfully");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to declare RabbitMQ infrastructure");
-                throw;
+                    // Declare queues with DLQ
+                    SafeDeclareQueueWithDLQ(QueueNames.PokemonRequest, RoutingKeys.PokemonRequest, ExchangeNames.Pokemon, ExchangeNames.PokemonDLX);
+                    SafeDeclareQueueWithDLQ(QueueNames.PokemonResponse, RoutingKeys.PokemonResponse, ExchangeNames.Pokemon, ExchangeNames.PokemonDLX);
+                    SafeDeclareQueueWithDLQ(QueueNames.ApiRequest, RoutingKeys.ApiRequest, ExchangeNames.Api, ExchangeNames.ApiDLX);
+                    SafeDeclareQueueWithDLQ(QueueNames.ApiResponse, RoutingKeys.ApiResponse, ExchangeNames.Api, ExchangeNames.ApiDLX);
+                    SafeDeclareQueueWithDLQ(QueueNames.AuditEvent, RoutingKeys.AuditEvent, ExchangeNames.Audit, ExchangeNames.AuditDLX);
+
+                    _infrastructureDeclared = true;
+                    _logger.LogInformation("RabbitMQ infrastructure declared successfully");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to declare RabbitMQ infrastructure");
+                    // Don't throw - allow service to continue with degraded functionality
+                }
             }
         }
 
@@ -118,11 +124,11 @@ namespace PokeApi.Shared.Services
 
             try
             {
-                // Try to declare DLQ
+                // Declare DLQ first
                 _channel.QueueDeclare(dlqName, durable: true, exclusive: false, autoDelete: false);
                 _channel.QueueBind(dlqName, dlxExchange, dlqRoutingKey);
 
-                // Try to declare main queue with DLX configuration
+                // Declare main queue with DLX configuration
                 var args = new Dictionary<string, object>
                 {
                     {"x-dead-letter-exchange", dlxExchange},
@@ -135,32 +141,21 @@ namespace PokeApi.Shared.Services
 
                 _logger.LogDebug("Successfully declared queue: {QueueName} with DLX: {DlxExchange}", queueName, dlxExchange);
             }
-            catch (RabbitMQ.Client.Exceptions.OperationInterruptedException ex) when (ex.ShutdownReason?.ReplyText?.Contains("PRECONDITION_FAILED") == true)
-            {
-                _logger.LogWarning("Queue {QueueName} already exists with different configuration. Attempting to use existing queue.", queueName);
-
-                // Recreate the channel since it was closed by the error
-                _channel?.Dispose();
-                _channel = _connection?.CreateModel();
-
-                if (_channel != null)
-                {
-                    // Try to bind existing queue to correct exchange (this might fail too, but we'll continue)
-                    try
-                    {
-                        _channel.QueueBind(queueName, exchange, routingKey);
-                        _logger.LogDebug("Successfully bound existing queue: {QueueName} to exchange: {Exchange}", queueName, exchange);
-                    }
-                    catch (Exception bindEx)
-                    {
-                        _logger.LogWarning(bindEx, "Failed to bind existing queue {QueueName} to exchange {Exchange}, but continuing...", queueName, exchange);
-                    }
-                }
-            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to declare queue: {QueueName}", queueName);
-                throw;
+                _logger.LogWarning(ex, "Failed to declare queue: {QueueName}, continuing with degraded functionality", queueName);
+
+                // Try to at least declare the basic queue without DLX
+                try
+                {
+                    _channel?.QueueDeclare(queueName, durable: true, exclusive: false, autoDelete: false);
+                    _channel?.QueueBind(queueName, exchange, routingKey);
+                    _logger.LogDebug("Declared basic queue without DLX: {QueueName}", queueName);
+                }
+                catch (Exception basicEx)
+                {
+                    _logger.LogError(basicEx, "Failed to declare even basic queue: {QueueName}", queueName);
+                }
             }
         }
 
@@ -173,6 +168,9 @@ namespace PokeApi.Shared.Services
                 _logger.LogError("RabbitMQ channel is not available");
                 return false;
             }
+
+            // Ensure infrastructure is declared
+            DeclareInfrastructure();
 
             try
             {
@@ -192,7 +190,6 @@ namespace PokeApi.Shared.Services
                 properties.Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
                 properties.Headers = new Dictionary<string, object>(envelope.Headers);
 
-                // FIXED: Handle empty exchange for direct queue publishing
                 if (string.IsNullOrEmpty(exchange))
                 {
                     _channel.BasicPublish("", routingKey, properties, body);
@@ -227,7 +224,7 @@ namespace PokeApi.Shared.Services
 
             try
             {
-                // FIXED: Set up reply consumer BEFORE publishing the request
+                // Set up reply consumer BEFORE publishing the request
                 await EnsureReplyConsumer(replyQueue);
 
                 // Add a small delay to ensure consumer is fully set up
@@ -282,7 +279,7 @@ namespace PokeApi.Shared.Services
 
                 try
                 {
-                    // FIXED: Declare reply queue as durable but with auto-delete after use
+                    // Declare reply queue as temporary
                     _channel.QueueDeclare(replyQueue, durable: false, exclusive: false, autoDelete: true);
 
                     var consumer = new EventingBasicConsumer(_channel);
@@ -331,6 +328,9 @@ namespace PokeApi.Shared.Services
         {
             if (_channel == null || _consumers.ContainsKey(queueName)) return;
 
+            // Ensure infrastructure is declared
+            DeclareInfrastructure();
+
             var consumer = new EventingBasicConsumer(_channel);
             consumer.Received += async (_, ea) =>
             {
@@ -365,13 +365,6 @@ namespace PokeApi.Shared.Services
 
                             if (retryCount <= _options.RetryAttempts)
                             {
-                                // Add retry count to headers and requeue
-                                var newProps = _channel.CreateBasicProperties();
-                                newProps.Headers = new Dictionary<string, object>(ea.BasicProperties.Headers ?? new Dictionary<string, object>())
-                                {
-                                    ["x-retry-count"] = retryCount
-                                };
-
                                 _channel.BasicNack(ea.DeliveryTag, false, true);
                                 _logger.LogWarning("Message requeued for retry {RetryCount}/{MaxRetries} from queue: {QueueName}",
                                     retryCount, _options.RetryAttempts, queueName);
@@ -426,12 +419,14 @@ namespace PokeApi.Shared.Services
         private void OnConnectionShutdown(object? sender, ShutdownEventArgs e)
         {
             _logger.LogWarning("RabbitMQ connection shutdown: {Reason}", e.ReplyText);
+            _infrastructureDeclared = false; // Reset flag to redeclare on recovery
         }
 
         private void OnRecoverySucceeded(object? sender, EventArgs e)
         {
             _logger.LogInformation("RabbitMQ connection recovery succeeded");
-            DeclareInfrastructure();
+            _infrastructureDeclared = false; // Reset flag
+            DeclareInfrastructure(); // Redeclare infrastructure
         }
 
         public void Dispose()

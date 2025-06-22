@@ -1,5 +1,6 @@
 ﻿using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
+using PokeApi.Audit.Data;
 using PokeApi.Audit.Interfaces;
 using PokeApi.Audit.Models;
 using PokeApi.Audit.Services;
@@ -15,13 +16,21 @@ namespace PokeApi.Audit.Controllers
     [Produces("application/json")]
     public class AuditController : ControllerBase
     {
-        private readonly IAuditService _auditService;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<AuditController> _logger;
 
-        public AuditController(IAuditService auditService, ILogger<AuditController> logger)
+        public AuditController(IServiceScopeFactory scopeFactory, ILogger<AuditController> logger)
         {
-            _auditService = auditService;
+            _scopeFactory = scopeFactory;
             _logger = logger;
+        }
+
+        private AuditService CreateAuditService()
+        {
+            var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+            var auditServiceLogger = scope.ServiceProvider.GetRequiredService<ILogger<AuditService>>();
+            return new AuditService(context, auditServiceLogger);
         }
 
         /// <summary>
@@ -58,7 +67,12 @@ namespace PokeApi.Audit.Controllers
                 _logger.LogInformation("Getting audit logs: page={Page}, pageSize={PageSize}, source={Source}, success={Success}, correlationId={CorrelationId}",
                     page, pageSize, source, success, correlationId);
 
-                var auditLogs = await _auditService.GetAuditLogs(page, pageSize, source, success);
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+                var auditServiceLogger = scope.ServiceProvider.GetRequiredService<ILogger<AuditService>>();
+                var auditService = new AuditService(context, auditServiceLogger);
+
+                var auditLogs = await auditService.GetAuditLogs(page, pageSize, source, success);
 
                 Response.TryAddHeader("X-Page", page.ToString());
                 Response.TryAddHeader("X-Page-Size", pageSize.ToString());
@@ -94,7 +108,12 @@ namespace PokeApi.Audit.Controllers
             {
                 _logger.LogInformation("Getting audit log by ID: {Id}, correlationId={CorrelationId}", id, correlationId);
 
-                var auditLog = await _auditService.GetAuditLog(id);
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+                var auditServiceLogger = scope.ServiceProvider.GetRequiredService<ILogger<AuditService>>();
+                var auditService = new AuditService(context, auditServiceLogger);
+
+                var auditLog = await auditService.GetAuditLog(id);
 
                 if (auditLog == null)
                 {
@@ -131,7 +150,12 @@ namespace PokeApi.Audit.Controllers
             {
                 _logger.LogInformation("Getting audit log by RequestId: {RequestId}, correlationId={CorrelationId}", requestId, correlationId);
 
-                var auditLog = await _auditService.GetAuditLogByRequestId(requestId);
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+                var auditServiceLogger = scope.ServiceProvider.GetRequiredService<ILogger<AuditService>>();
+                var auditService = new AuditService(context, auditServiceLogger);
+
+                var auditLog = await auditService.GetAuditLogByRequestId(requestId);
 
                 if (auditLog == null)
                 {
@@ -168,7 +192,12 @@ namespace PokeApi.Audit.Controllers
                 _logger.LogInformation("Getting audit logs by CorrelationId: {CorrelationId}, currentCorrelationId={CurrentCorrelationId}",
                     correlationId, currentCorrelationId);
 
-                var auditLogs = await _auditService.GetAuditLogsByCorrelationId(correlationId);
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+                var auditServiceLogger = scope.ServiceProvider.GetRequiredService<ILogger<AuditService>>();
+                var auditService = new AuditService(context, auditServiceLogger);
+
+                var auditLogs = await auditService.GetAuditLogsByCorrelationId(correlationId);
 
                 return Ok(auditLogs);
             }
@@ -199,7 +228,12 @@ namespace PokeApi.Audit.Controllers
             {
                 _logger.LogInformation("Getting audit statistics, correlationId={CorrelationId}", correlationId);
 
-                var statistics = await _auditService.GetAuditStatistics();
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+                var auditServiceLogger = scope.ServiceProvider.GetRequiredService<ILogger<AuditService>>();
+                var auditService = new AuditService(context, auditServiceLogger);
+
+                var statistics = await auditService.GetAuditStatistics();
 
                 Response.TryAddHeader("X-Statistics-Generated", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"));
 
@@ -233,7 +267,12 @@ namespace PokeApi.Audit.Controllers
             {
                 _logger.LogInformation("Getting audit statistics for source: {Source}, correlationId={CorrelationId}", source, correlationId);
 
-                var statistics = await _auditService.GetAuditStatisticsBySource(source);
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+                var auditServiceLogger = scope.ServiceProvider.GetRequiredService<ILogger<AuditService>>();
+                var auditService = new AuditService(context, auditServiceLogger);
+
+                var statistics = await auditService.GetAuditStatisticsBySource(source);
 
                 if (statistics == null)
                 {
