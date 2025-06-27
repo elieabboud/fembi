@@ -151,14 +151,50 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   };
 
 const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
-    return followers.map(follower => {
-      if (follower.includes('#')) {
-        const [type, email] = follower.split('#');
-        return { type, email };
+  return followers.map(follower => {
+    if (follower.includes('#')) {
+      const [type, email] = follower.split('#');
+      
+      // 🎯 Apply smart grouping logic - MORE AGGRESSIVE GROUPING
+      let groupedType = type;
+      const lowerType = type.toLowerCase();
+      
+      if (lowerType.includes('sell')) {
+        // Group ALL seller-related types under "SELLERS"
+        groupedType = 'SELLERS';
+      } else if (lowerType.includes('buy')) {
+        // Group all buyer-related types under "BUYERS"
+        groupedType = 'BUYERS';
+      } else if (lowerType.includes('loan')) {
+        // Group loan-related types
+        if (lowerType.includes('officer')) {
+          groupedType = 'LOAN_OFFICERS';
+        } else if (lowerType.includes('closer')) {
+          groupedType = 'LOAN_CLOSERS';
+        } else {
+          groupedType = 'LOAN_TEAM';
+        }
+      } else if (lowerType.includes('process')) {
+        groupedType = 'PROCESSORS';
+      } else if (lowerType.includes('manager') || lowerType.includes('supervisor')) {
+        groupedType = 'MANAGEMENT';
+      } else if (lowerType.includes('underwriter')) {
+        groupedType = 'UNDERWRITERS';
+      } else if (lowerType.includes('assistant')) {
+        groupedType = 'ASSISTANTS';
+      } else if (lowerType.includes('attorney') || lowerType.includes('legal')) {
+        groupedType = 'ATTORNEYS';
+      } else if (lowerType.includes('agent')) {
+        groupedType = 'AGENTS';
+      } else if (lowerType.includes('coborrower') || lowerType.includes('co-borrower')) {
+        groupedType = 'CO_BORROWERS';
       }
-      return { type: 'Other', email: follower };
-    });
-  };
+      
+      return { type: groupedType, email };
+    }
+    return { type: 'Other', email: follower };
+  });
+};
 
   // Check if any loading is in progress
   const isAnyLoading = Object.values(loadingStates).some(Boolean);
@@ -728,86 +764,133 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
   };
 
  useEffect(() => {
-    const initializeEditMode = async () => {
-      if (editMode && initialData) {
-        updateLoadingState('initializing', true);
-                
-        const formattedData = mapCalendarBookingToFormData(initialData as any);
+  const initializeEditMode = async () => {
+    if (editMode && initialData) {
+      updateLoadingState('initializing', true);
+              
+      const formattedData = mapCalendarBookingToFormData(initialData as any);
 
-        try {
-          const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
-          setLoanDetails(loanDetails);
-          setShowLoanDetails(true);
-          setIsLoanDetailsValidated(true);
+      try {
+        const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId);
+        setLoanDetails(loanDetails);
+        setShowLoanDetails(true);
+        setIsLoanDetailsValidated(true);
+        
+        // 🔥 SET NOTES from initialData (calendar booking) in edit mode
+        setNotes(initialData.loanData?.notes || loanDetails.notes || '');
+        debugger
+        // 🔥 UPDATED: Handle loan details followers in edit mode - ONLY SHOW SELECTED ONES
+        if (loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0) {
+          const followersWithTypes = parseFollowersWithTypes(loanDetails.followers);
+          setLoanDetailsFollowers(followersWithTypes);
           
-          // 🔥 SET NOTES from initialData (calendar booking) in edit mode
-          setNotes(initialData.loanData?.notes || loanDetails.notes || '');
-          
-          // Handle loan details followers in edit mode
-          if (loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0) {
-            const followersWithTypes = parseFollowersWithTypes(loanDetails.followers);
-            setLoanDetailsFollowers(followersWithTypes);
+          // 🎯 KEY CHANGE: For EDIT mode, only show followers that were actually selected for this appointment
+          if (initialData.followers) {
+            const existingFollowerEmails = initialData.followers.split(',').map(email => email.trim()).filter(email => email.length > 0);
             
-            if (formattedData.Followers) {
-              const existingFollowerEmails = formattedData.Followers.split(',');
-              const selectedFromLoan = followersWithTypes.filter(lf => 
-                existingFollowerEmails.includes(lf.email)
-              );
-              setSelectedLoanFollowers(selectedFromLoan);
-            } else {
-              setSelectedLoanFollowers(followersWithTypes);
-            }
+            console.log('🔍 Edit Mode - Existing follower emails:', existingFollowerEmails);
+            console.log('🔍 Edit Mode - Available loan followers:', followersWithTypes);
+            
+            // Separate loan followers from system/custom followers
+            const selectedFromLoan = followersWithTypes.filter(lf => 
+              existingFollowerEmails.includes(lf.email)
+            );
+            
+            // Get system/custom followers (those not in loan details)
+            const systemAndCustomFollowers = existingFollowerEmails.filter(email => 
+              !followersWithTypes.find(lf => lf.email === email)
+            );
+            
+            console.log('🔍 Edit Mode - Selected loan followers:', selectedFromLoan);
+            console.log('🔍 Edit Mode - System/custom followers:', systemAndCustomFollowers);
+            
+            // Set only the selected followers
+            setSelectedLoanFollowers(selectedFromLoan);
+            setFetchedFollowers(systemAndCustomFollowers);
+            setAddedFollowers([]); // In edit mode, treat all as either system or loan followers
+            
+          } else {
+            // If no followers data for this appointment, don't show any
+            console.log('🔍 Edit Mode - No followers found for this appointment');
+            setSelectedLoanFollowers([]);
+            setFetchedFollowers([]);
+            setAddedFollowers([]);
           }
+        } else {
+          // No loan followers available in loan details
+          console.log('🔍 Edit Mode - No loan followers available in loan details');
+          setLoanDetailsFollowers([]);
+          setSelectedLoanFollowers([]);
           
-          setBookingData((prev) => ({
-            ...formattedData,
-            BorrowerInformation: {
-              FirstName: loanDetails.borrowerFirstName,
-              LastName: loanDetails.borrowerLastName,
-              Email: loanDetails.borrowerEmail,
-              PhoneNumber: loanDetails.borrowerPhone,
-              Address: {
-                Street: loanDetails.borrowerAddress,
-                City: loanDetails.borrowerCity,
-                State: loanDetails.borrowerState,
-                ZipCode: loanDetails.borrowerZipCode,
-              },
-              EncompassDetails: {
-                EncompassLoanId: loanDetails?.loanId,
-                LoanCloser: loanDetails?.loanCloser,
-                loanCloserEmail: loanDetails?.loanCloserEmail,
-                LoanOfficer: loanDetails?.loanOfficer,
-                loanOfficerEmail: loanDetails?.loanOfficerEmail,
-                dpa: loanDetails?.dpa
-              },
-            },
-          }));
-
-          if (formattedData.DateTimeInfo?.SelectedDate) {
-            const dateStr = formattedData.DateTimeInfo.SelectedDate;            
-            if (dateStr.includes('-')) {
-              const [year, month, day] = dateStr.split('-').map(Number);
-              const correctDate = new Date(year, month - 1, day);
-              setSelectedDate(correctDate);
-            } else {
-              setSelectedDate(new Date());
-            }
-          }
-
+          // For edit mode, only show the system followers that were actually selected for this appointment
           if (formattedData.Followers) {
-            const followerArray = formattedData.Followers.split(',');
-            setFetchedFollowers(followerArray);
+            const existingFollowerEmails = formattedData.Followers.split(',').map(email => email.trim()).filter(email => email.length > 0);
+            console.log('🔍 Edit Mode - Only system followers:', existingFollowerEmails);
+            setFetchedFollowers(existingFollowerEmails);
+            setAddedFollowers([]);
+          } else {
+            setFetchedFollowers([]);
+            setAddedFollowers([]);
           }
-        } catch (error) {
-          console.error('Error initializing edit mode:', error);
-        } finally {
-          updateLoadingState('initializing', false);
         }
-      }
-    };
+        
+        // Set the booking data with loan details
+        setBookingData((prev) => ({
+          ...formattedData,
+          BorrowerInformation: {
+            FirstName: loanDetails.borrowerFirstName,
+            LastName: loanDetails.borrowerLastName,
+            Email: loanDetails.borrowerEmail,
+            PhoneNumber: loanDetails.borrowerPhone,
+            Address: {
+              Street: loanDetails.borrowerAddress,
+              City: loanDetails.borrowerCity,
+              State: loanDetails.borrowerState,
+              ZipCode: loanDetails.borrowerZipCode,
+            },
+          },
+          EncompassDetails: {
+            EncompassLoanId: loanDetails?.loanId,
+            LoanCloser: loanDetails?.loanCloser,
+            loanCloserEmail: loanDetails?.loanCloserEmail,
+            LoanOfficer: loanDetails?.loanOfficer,
+            loanOfficerEmail: loanDetails?.loanOfficerEmail,
+            dpa: loanDetails?.dpa
+          },
+        }));
 
-    initializeEditMode();
-  }, [editMode, initialData]);
+        // Set the selected date from formatted data
+        if (formattedData.DateTimeInfo?.SelectedDate) {
+          const dateStr = formattedData.DateTimeInfo.SelectedDate;            
+          if (dateStr.includes('-')) {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const correctDate = new Date(year, month - 1, day);
+            setSelectedDate(correctDate);
+          } else {
+            setSelectedDate(new Date());
+          }
+        }
+
+        // 🔥 REMOVED: Don't set fetchedFollowers from formattedData.Followers here
+        // This is now handled above in the loan followers logic
+
+      } catch (error) {
+        console.error('Error initializing edit mode:', error);
+        // On error, still try to set basic followers if available
+        if (formattedData.Followers) {
+          const followerArray = formattedData.Followers.split(',').map(email => email.trim()).filter(email => email.length > 0);
+          setFetchedFollowers(followerArray);
+          setSelectedLoanFollowers([]);
+          setAddedFollowers([]);
+        }
+      } finally {
+        updateLoadingState('initializing', false);
+      }
+    }
+  };
+
+  initializeEditMode();
+}, [editMode, initialData]);
 
  useEffect(() => {
     fetchAvailableServicesData();
@@ -1298,13 +1381,13 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
           
           <EnhancedFollowers
             editMode={editMode || readOnlyMode}
-            regularFollowers={fetchedFollowers}              // Read-only system followers
-            loanDetailsFollowers={loanDetailsFollowers}      // Available loan followers with types
-            selectedLoanFollowers={selectedLoanFollowers}    // Selected loan followers with types
-            addedFollowers={addedFollowers}                  // Manually added followers
-            onToggleLoanFollower={handleToggleLoanFollower}  // Toggle loan follower
-            onAddFollower={handleAddFollower}                // Add manual follower
-            onRemoveAddedFollower={(followerToRemove) => {   // Remove manual follower
+            regularFollowers={fetchedFollowers}              
+            loanDetailsFollowers={loanDetailsFollowers}      
+            selectedLoanFollowers={selectedLoanFollowers}    
+            addedFollowers={addedFollowers}                  
+            onToggleLoanFollower={handleToggleLoanFollower}  
+            onAddFollower={handleAddFollower}                
+            onRemoveAddedFollower={(followerToRemove) => {   
               if (!readOnlyMode) {
                 setAddedFollowers(prev => prev.filter(f => f !== followerToRemove));
               }
