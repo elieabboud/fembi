@@ -10,6 +10,7 @@ import { UpdateBookingRequest } from '../types/updateBookingRequest';
 import { TimezoneService } from './timezoneUtils';
 import { format } from 'date-fns';
 import { AvailabilitySettings } from './availabilityService';
+import Followers from '../components/forms/Followers';
 
 export const bookingService = {
 
@@ -182,12 +183,16 @@ export const bookingService = {
 
   
   const requestBody = {
+    ...updateData,
+    LoanDetails:{
+      Notes: updateData?.notes
+    },
     DateTimeInfo: {
       SelectedDate: backendUpdateData.selectedDate,
       SelectedTime: backendUpdateData.selectedTime,
       FromDate: backendUpdateData.fromDate,
       ToDate: backendUpdateData.toDate,
-    }
+    },
   };
 
   // if (backendUpdateData.notes !== undefined) {
@@ -430,7 +435,6 @@ export const bookingService = {
     };
 
     await this.sendEmail(emailRequest);
-    console.log('✅ Cancellation email sent successfully');
     
   } catch (error) {
     console.error('❌ Error sending cancellation email:', error);

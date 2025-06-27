@@ -155,41 +155,11 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     if (follower.includes('#')) {
       const [type, email] = follower.split('#');
       
-      // 🎯 Apply smart grouping logic - MORE AGGRESSIVE GROUPING
       let groupedType = type;
       const lowerType = type.toLowerCase();
-      
-      if (lowerType.includes('sell')) {
-        // Group ALL seller-related types under "SELLERS"
-        groupedType = 'SELLERS';
-      } else if (lowerType.includes('buy')) {
-        // Group all buyer-related types under "BUYERS"
-        groupedType = 'BUYERS';
-      } else if (lowerType.includes('loan')) {
-        // Group loan-related types
-        if (lowerType.includes('officer')) {
-          groupedType = 'LOAN_OFFICERS';
-        } else if (lowerType.includes('closer')) {
-          groupedType = 'LOAN_CLOSERS';
-        } else {
-          groupedType = 'LOAN_TEAM';
-        }
-      } else if (lowerType.includes('process')) {
-        groupedType = 'PROCESSORS';
-      } else if (lowerType.includes('manager') || lowerType.includes('supervisor')) {
-        groupedType = 'MANAGEMENT';
-      } else if (lowerType.includes('underwriter')) {
-        groupedType = 'UNDERWRITERS';
-      } else if (lowerType.includes('assistant')) {
-        groupedType = 'ASSISTANTS';
-      } else if (lowerType.includes('attorney') || lowerType.includes('legal')) {
-        groupedType = 'ATTORNEYS';
-      } else if (lowerType.includes('agent')) {
-        groupedType = 'AGENTS';
-      } else if (lowerType.includes('coborrower') || lowerType.includes('co-borrower')) {
-        groupedType = 'CO_BORROWERS';
-      }
-      
+      if (/^seller\d*$/.test(lowerType)) {
+            groupedType = 'SELLER';
+      } 
       return { type: groupedType, email };
     }
     return { type: 'Other', email: follower };
@@ -475,13 +445,12 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
           fromDate: bookingData.DateTimeInfo.FromDate,
           toDate: bookingData.DateTimeInfo.ToDate,
           staffMemberIds: bookingData.StaffMemberIds,
-          // 🔥 ADD NOTES FOR EDIT MODE
+          Followers: bookingData.Followers,
           notes: notes
         };
         
         response = await bookingService.updateBooking(updateData);
       } else {
-        // 🔥 ADD NOTES TO CREATE REQUEST
         const createData = {
           ...bookingData,
           LoanDetails: {
@@ -532,7 +501,6 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
       setLoanDetails(loanDetails);
       setNotes(loanDetails.notes || '');
       
-      // 🔥 UPDATED: Handle loan details followers with types
       if (loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0) {
         const followersWithTypes = parseFollowersWithTypes(loanDetails.followers);
         setLoanDetailsFollowers(followersWithTypes);
@@ -776,56 +744,37 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
         setShowLoanDetails(true);
         setIsLoanDetailsValidated(true);
         
-        // 🔥 SET NOTES from initialData (calendar booking) in edit mode
         setNotes(initialData.loanData?.notes || loanDetails.notes || '');
-        debugger
-        // 🔥 UPDATED: Handle loan details followers in edit mode - ONLY SHOW SELECTED ONES
         if (loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0) {
           const followersWithTypes = parseFollowersWithTypes(loanDetails.followers);
           setLoanDetailsFollowers(followersWithTypes);
           
-          // 🎯 KEY CHANGE: For EDIT mode, only show followers that were actually selected for this appointment
           if (initialData.followers) {
             const existingFollowerEmails = initialData.followers.split(',').map(email => email.trim()).filter(email => email.length > 0);
             
-            console.log('🔍 Edit Mode - Existing follower emails:', existingFollowerEmails);
-            console.log('🔍 Edit Mode - Available loan followers:', followersWithTypes);
-            
-            // Separate loan followers from system/custom followers
             const selectedFromLoan = followersWithTypes.filter(lf => 
               existingFollowerEmails.includes(lf.email)
             );
             
-            // Get system/custom followers (those not in loan details)
             const systemAndCustomFollowers = existingFollowerEmails.filter(email => 
               !followersWithTypes.find(lf => lf.email === email)
             );
-            
-            console.log('🔍 Edit Mode - Selected loan followers:', selectedFromLoan);
-            console.log('🔍 Edit Mode - System/custom followers:', systemAndCustomFollowers);
-            
-            // Set only the selected followers
+
             setSelectedLoanFollowers(selectedFromLoan);
             setFetchedFollowers(systemAndCustomFollowers);
-            setAddedFollowers([]); // In edit mode, treat all as either system or loan followers
+            setAddedFollowers([]);
             
           } else {
-            // If no followers data for this appointment, don't show any
-            console.log('🔍 Edit Mode - No followers found for this appointment');
             setSelectedLoanFollowers([]);
             setFetchedFollowers([]);
             setAddedFollowers([]);
           }
         } else {
-          // No loan followers available in loan details
-          console.log('🔍 Edit Mode - No loan followers available in loan details');
           setLoanDetailsFollowers([]);
           setSelectedLoanFollowers([]);
           
-          // For edit mode, only show the system followers that were actually selected for this appointment
           if (formattedData.Followers) {
             const existingFollowerEmails = formattedData.Followers.split(',').map(email => email.trim()).filter(email => email.length > 0);
-            console.log('🔍 Edit Mode - Only system followers:', existingFollowerEmails);
             setFetchedFollowers(existingFollowerEmails);
             setAddedFollowers([]);
           } else {

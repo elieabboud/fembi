@@ -171,18 +171,15 @@ const AppTable: React.FC<AppTableProps> = ({
   setLoadingDelete(true);
   
   try {
-    console.log('Sending cancellation email for appointment:', selectedRow.bookingId);
     
     try {
       await bookingService.sendCancellationEmail(selectedRow.bookingId, selectedRow);
-      console.log('✅ Cancellation email sent successfully');
     } catch (emailError) {
       console.error('❌ Failed to send cancellation email:', emailError);
     }
     
     // Delete the booking
     await bookingService.deleteBooking(selectedRow.bookingId);
-    console.log('✅ Booking deleted successfully');
 
     
   } catch (error) {
