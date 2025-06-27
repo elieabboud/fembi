@@ -1,6 +1,0 @@
-@PokeApi.Audit_HostAddress = http://localhost:5152
-
-GET {{PokeApi.Audit_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
