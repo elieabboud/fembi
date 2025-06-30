@@ -14,6 +14,7 @@ import {
   CircularProgress,
   Backdrop,
   LinearProgress,
+  Alert,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { StaticDatePicker } from '@mui/x-date-pickers';
@@ -34,6 +35,7 @@ import { EmailRequestDTO, FileRequestDTO } from '../../types/email';
 import { AvailabilityService, AvailabilitySettings, DateRange } from '../../services/availabilityService';
 import EnhancedFollowers from './EnhancedFollowers';
 import { ICSGeneratorService } from '../../services/icsGeneratorService';
+import AdminOverride from './AdminOverride';
 
 type BookingFormProps = {
   onClose: () => void;
@@ -78,6 +80,10 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   const [dateRange, setDateRange] = useState<DateRange | null>(null);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
   
+  // NEW: Admin Override states
+  const [isOverrideMode, setIsOverrideMode] = useState(false);
+  const [overrideSlot, setOverrideSlot] = useState<TimeSlot | null>(null);
+  
   const [services, setServices] = useState<BookingService[]>([]);
   const [fetchedFollowers, setFetchedFollowers] = useState<string[]>([]);
   const [addedFollowers, setAddedFollowers] = useState<string[]>([]);
@@ -93,7 +99,6 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   const [loanDetailsFollowers, setLoanDetailsFollowers] = useState<FollowerWithType[]>([]);
   const [selectedLoanFollowers, setSelectedLoanFollowers] = useState<FollowerWithType[]>([]);
   const [notes, setNotes] = useState<string>('');
-  
   
   // NEW: State to track if loan details have been loaded and validated
   const [isLoanDetailsValidated, setIsLoanDetailsValidated] = useState<boolean>(false);
@@ -150,6 +155,29 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     setLoadingStates(prev => ({ ...prev, [key]: value }));
   };
 
+  // NEW: Admin Override Handlers
+  const handleOverrideSlot = useCallback((slot: TimeSlot) => {
+    console.log('🔧 Admin override slot created:', slot);
+    setOverrideSlot(slot);
+    setSelectedSlot(slot);
+    setIsOverrideMode(true);
+    
+    // Clear regular time slots since we're using override
+    setTimeSlots([]);
+  }, []);
+
+  const handleCancelOverride = useCallback(() => {
+    console.log('❌ Admin override cancelled');
+    setIsOverrideMode(false);
+    setOverrideSlot(null);
+    setSelectedSlot(null);
+    
+    // Refetch regular time slots if we have a date and service
+    if (selectedDate && bookingData.ServiceId && !readOnlyMode) {
+      fetchAvailableTimeSlots();
+    }
+  }, [selectedDate, bookingData.ServiceId, readOnlyMode]);
+
 const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
   return followers.map(follower => {
     if (follower.includes('#')) {
@@ -184,7 +212,7 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
 
   // NEW: Fetch availability settings when service is selected
   const fetchAvailabilitySettings = useCallback(async (serviceId?: string) => {
-    if (editMode || readOnlyMode) return; // Only apply to create mode
+    if (editMode || readOnlyMode || isOverrideMode) return; // Skip for edit mode and override mode
     
     setIsLoadingAvailability(true);
     try {
@@ -207,7 +235,7 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     } finally {
       setIsLoadingAvailability(false);
     }
-  }, [editMode, readOnlyMode]);
+  }, [editMode, readOnlyMode, isOverrideMode]);
 
   const handleLoanIdChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string>
@@ -244,8 +272,8 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
         ServicePrice: selectedService.defaultPrice,
       }));
 
-      // NEW: Fetch availability settings when service is selected
-      if (!editMode && !readOnlyMode) {
+      // NEW: Fetch availability settings when service is selected (but not in override mode)
+      if (!editMode && !readOnlyMode && !isOverrideMode) {
         fetchAvailabilitySettings(selectedService.id);
       }
     }
@@ -310,6 +338,13 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
       actionText = "has been scheduled successfully";
     }
     
+    // Add admin override notice if applicable
+    const overrideNotice = isOverrideMode ? 
+      `<div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+        <h4 style="margin-top: 0; color: #856404;">⚠️ Admin Override Notice</h4>
+        <p style="margin: 0;">This appointment was created using admin override privileges, bypassing standard booking rules and availability constraints.</p>
+      </div>` : '';
+    
     const htmlBody = `
       <html>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -318,33 +353,35 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
               ${headerTitle}
             </h2>
 
+            ${overrideNotice}
+
             <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
               <p><strong>Greetings,</strong></p>
               <p>
-                We are pleased to confirm your ${editMode ? 'rescheduled' : 'upcoming'} closing appointment with <strong>FEMBi Mortgage</strong>.
+                We are pleased to confirm your ${editMode ? 'rescheduled' : 'upcoming'} closing appointment with <strong>First National Mortgage</strong>.
                 This email serves as your official appointment ${editMode ? 'reschedule' : ''} confirmation.
               </p>
               <p>
                 Should you have any questions or require further assistance, please do not hesitate to contact your 
-                <strong>FEMBi Mortgage Loan Officer</strong>. We are here to support you throughout this process.
+                <strong>First National Mortgage Loan Officer</strong>. We are here to support you throughout this process.
               </p>
               <p>
-                Thank you for choosing <strong>FEMBi Mortgage</strong>. We look forward to assisting you at your closing.
+                Thank you for choosing <strong>First National Mortgage</strong>. We look forward to assisting you at your closing.
               </p>
 
               <hr style="margin: 30px 0;">
 
               <p><strong>Saludos,</strong></p>
               <p>
-                Nos complace confirmar su cita ${editMode ? 'reagendada' : 'próxima'} para el cierre con <strong>FEMBi Mortgage</strong>.
+                Nos complace confirmar su cita ${editMode ? 'reagendada' : 'próxima'} para el cierre con <strong>First National Mortgage</strong>.
                 Este correo electrónico constituye la confirmación oficial de su cita ${editMode ? 'reagendada' : ''}.
               </p>
               <p>
                 Si tiene alguna pregunta o necesita asistencia adicional, no dude en comunicarse con su 
-                <strong>Oficial de Préstamos de FEMBi Mortgage</strong>. Estamos a su disposición para asistirle durante este proceso.
+                <strong>Oficial de Préstamos de First National Mortgage</strong>. Estamos a su disposición para asistirle durante este proceso.
               </p>
               <p>
-                Gracias por confiar en <strong>FEMBi Mortgage</strong>. Esperamos poder asistirle en su cierre.
+                Gracias por confiar en <strong>First National Mortgage</strong>. Esperamos poder asistirle en su cierre.
               </p>
             </div>
 
@@ -414,7 +451,7 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     
     if (readOnlyMode || loadingStates.submitting) return;
 
-    if (!editMode && !isLoanDetailsValidated) {
+    if (!editMode && !isLoanDetailsValidated && !isOverrideMode) {
       setError("Please enter a valid Loan ID and press Enter to load loan details before submitting.");
       return;
     }
@@ -425,7 +462,7 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     }
 
     if (!selectedSlot) {
-      setError("Please select a time slot.");
+      setError("Please select a time slot or use admin override.");
       return;
     }
 
@@ -455,12 +492,28 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
           ...bookingData,
           LoanDetails: {
             notes: notes,
-            loanType: loanDetails.loanType,
-            loanPurpose: loanDetails.loanPurpose
+            loanType: loanDetails?.loanType || '',
+            loanPurpose: loanDetails?.loanPurpose || ''
           }
         };
         
         response = await bookingService.postBooking(createData);
+
+        if (response && typeof response === 'object') {
+          if ('Status' in response && response.Status === 0) {
+            const errorMessage = response.Message || 'Failed to create booking. Please try again.';
+            setError(errorMessage);
+            console.error('Booking creation failed:', response);
+            return;
+          }
+        }
+          
+          if ('status' in response && response.status === 0) {
+            const errorMessage = response.message || response.Message || 'Failed to create booking. Please try again.';
+            setError(errorMessage);
+            console.error('Booking creation failed:', response);
+            return;
+          }
       }
 
       if (response) {
@@ -573,10 +626,40 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     }
   }, [editMode]);
 
+  // UPDATED: Handle both regular and override modes
   const handleDateTimeSelect = useCallback(() => {
     if (!selectedSlot || !selectedDate || readOnlyMode) return;
 
+    // Handle override mode
+    if (isOverrideMode && overrideSlot) {
+      console.log('🔧 Using admin override slot for booking data');
+      
+      // For override mode, we already have the backend times in the slot
+      const backendStartTime = overrideSlot.startTime;
+      const backendEndTime = overrideSlot.endTime;
+      
+      // Convert to user timezone for display in form fields
+      const userStartTime = TimezoneService.convertBackendTimeToLocalReliable(backendStartTime);
+      const userEndTime = TimezoneService.convertBackendTimeToLocalReliable(backendEndTime);
+      
+      const dateStr = format(userStartTime, 'yyyy-MM-dd');
+      const time24 = format(userStartTime, 'HH:mm');
 
+      setBookingData((prev) => ({
+        ...prev,
+        DateTimeInfo: {
+          SelectedDate: dateStr,
+          SelectedTime: time24,
+          FromDate: backendStartTime,
+          ToDate: backendEndTime,
+        },
+        StaffMemberIds: [overrideSlot.staffMemberId || 'admin-override'],
+      }));
+      
+      return;
+    }
+
+    // Regular mode handling (your existing logic)
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const startTimeUser = TimezoneService.convertBackendTimeToLocalReliable(selectedSlot.startTime);
     const time24 = format(startTimeUser, 'HH:mm');
@@ -591,11 +674,11 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
       },
       StaffMemberIds: [selectedSlot.staffMemberId],
     }));
-  }, [selectedSlot, selectedDate, readOnlyMode]);
+  }, [selectedSlot, selectedDate, readOnlyMode, isOverrideMode, overrideSlot]);
 
   // UPDATED: Apply availability filtering to time slots
   const fetchAvailableTimeSlots = useCallback(async () => {     
-  if (!selectedDate || !bookingData?.ServiceId) return;
+  if (!selectedDate || !bookingData?.ServiceId || isOverrideMode) return; // Skip if in override mode
 
   updateLoadingState('timeSlots', true);
   try {
@@ -660,7 +743,8 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
   } finally {
     updateLoadingState('timeSlots', false);
   }
-}, [selectedService, selectedDate, editMode, isViewMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, selectedSlot, dateRange, bookingData.DateTimeInfo?.FromDate, bookingData.DateTimeInfo?.ToDate]); // 🔥 Added new dependencies
+}, [selectedService, selectedDate, editMode, isViewMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, selectedSlot, dateRange, bookingData.DateTimeInfo?.FromDate, bookingData.DateTimeInfo?.ToDate, isOverrideMode]); // 🔥 Added isOverrideMode
+
   const fetchAllFollowers = useCallback(async () => {
     updateLoadingState('followers', true);
     try {
@@ -872,16 +956,16 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
   }, [fetchedFollowers, selectedLoanFollowers, addedFollowers]);
 
   useEffect(() => {
-    if (!readOnlyMode && selectedDate && bookingData.ServiceId) {
+    if (!readOnlyMode && selectedDate && bookingData.ServiceId && !isOverrideMode) {
       fetchAvailableTimeSlots();
     }
-  }, [selectedService, selectedDate, readOnlyMode]);
+  }, [selectedService, selectedDate, readOnlyMode, isOverrideMode, fetchAvailableTimeSlots]);
 
   useEffect(() => {
     if (!readOnlyMode) {
       handleDateTimeSelect();
     }
-  }, [selectedSlot, selectedDate, handleDateTimeSelect, readOnlyMode]);
+  }, [selectedSlot, selectedDate, handleDateTimeSelect, readOnlyMode, isOverrideMode, overrideSlot]);
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -1197,12 +1281,12 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
               actionBar: { actions: [] }
             }}
             readOnly={readOnlyMode}
-            // NEW: Apply availability constraints for create mode
-            minDate={!editMode && !readOnlyMode && dateRange ? dateRange.minDate : undefined}
-            maxDate={!editMode && !readOnlyMode && dateRange ? dateRange.maxDate : undefined}
+            // NEW: Apply availability constraints for create mode only (not in override mode)
+            minDate={!editMode && !readOnlyMode && dateRange && !isOverrideMode ? dateRange.minDate : undefined}
+            maxDate={!editMode && !readOnlyMode && dateRange && !isOverrideMode ? dateRange.maxDate : undefined}
             shouldDisableDate={(date) => {
-              // For create mode, apply availability constraints
-              if (!editMode && !readOnlyMode) {
+              // For create mode, apply availability constraints (but not in override mode)
+              if (!editMode && !readOnlyMode && !isOverrideMode) {
                 // Require service selection first
                 if (!selectedService) {
                   return true;
@@ -1241,15 +1325,15 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
                 return dateToCheck < today;
               }
               
-              // Default: don't disable
+              // Default: don't disable (for override mode)
               return false;
             }}
-            // Keep disablePast for create mode only
-            disablePast={!editMode && !readOnlyMode}
+            // Keep disablePast for create mode only (not override mode)
+            disablePast={!editMode && !readOnlyMode && !isOverrideMode}
           />
           
           {/* Show message when no service is selected */}
-          {!editMode && !readOnlyMode && !selectedService && (
+          {!editMode && !readOnlyMode && !selectedService && !isOverrideMode && (
             <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
               <Typography variant="body2" color="grey.700">
                 Please select a service first to see available dates.
@@ -1258,7 +1342,7 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
           )}
           
           {/* Show message when service is selected but availability is loading */}
-          {!editMode && !readOnlyMode && selectedService && isLoadingAvailability && (
+          {!editMode && !readOnlyMode && selectedService && isLoadingAvailability && !isOverrideMode && (
             <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
               <Typography variant="body2" color="grey.700">
                 Loading availability for selected service...
@@ -1267,59 +1351,54 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
           )}
         </Grid>
 
-        {/* Debug info display (remove after debugging) */}
-        {/* {!editMode && !readOnlyMode && process.env.NODE_ENV === 'development' && (
-          <Grid item xs={12} sx={{padding: '16px'}}>
-            <Box sx={{ p: 2, bgcolor: 'grey.100', borderRadius: 1, mt: 2 }}>
-              <Typography variant="h6" color="grey.700">DEBUG INFO</Typography>
-              <Typography variant="body2" color="grey.700">
-                <strong>Selected Service:</strong> {selectedService?.id || 'None'}<br/>
-                <strong>Has Availability Settings:</strong> {availabilitySettings ? 'Yes' : 'No'}<br/>
-                <strong>Has Date Range:</strong> {dateRange ? 'Yes' : 'No'}<br/>
-                <strong>Loading Availability:</strong> {isLoadingAvailability ? 'Yes' : 'No'}<br/>
-                {availabilitySettings && (
-                  <>
-                    <strong>Min Lead Time:</strong> {availabilitySettings.minimumLeadTime}<br/>
-                    <strong>Max Advance:</strong> {availabilitySettings.maximumAdvance}<br/>
-                  </>
-                )}
-                {dateRange && (
-                  <>
-                    <strong>Min Date:</strong> {dateRange.minDate.toLocaleDateString()}<br/>
-                    <strong>Max Date:</strong> {dateRange.maxDate.toLocaleDateString()}<br/>
-                    <strong>Min DateTime (Local):</strong> {dateRange.minDateTime.toLocaleString()}<br/>
-                    <strong>Max DateTime (Local):</strong> {dateRange.maxDateTime.toLocaleString()}<br/>
-                  </>
-                )}
-              </Typography>
-            </Box>
+        {/* Admin Override Section */}
+        {!readOnlyMode && (
+          <Grid item xs={12} sx={{ padding: '16px' }}>
+            <AdminOverride
+              isAdmin={isAdmin}
+              isEditMode={editMode}
+              selectedDate={selectedDate}
+              onOverrideSlot={handleOverrideSlot}
+              onCancelOverride={handleCancelOverride}
+              disabled={loadingStates.submitting || loadingStates.initializing}
+            />
           </Grid>
-        )} */}
+        )}
 
-        {/* Availability info display */}
-        {/* {!editMode && !readOnlyMode && dateRange && availabilitySettings && (
-          <Grid item xs={12} sx={{padding: '16px'}}>
-            <Box sx={{ bgcolor: 'grey.100', borderRadius: 1, mt: 2, p: 2 }}>
-              <Typography variant="body2" color="grey.700">
-                <strong>Booking Window:</strong> From {dateRange.minDate.toLocaleDateString()} to {dateRange.maxDate.toLocaleDateString()}
+        {/* Show override confirmation when in override mode */}
+        {isOverrideMode && overrideSlot && (
+          <Grid item xs={12} sx={{ padding: '16px' }}>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Admin Override Active
               </Typography>
-              <Typography variant="caption" color="grey.700">
-                Minimum lead time: {availabilitySettings.minimumLeadTime} | Maximum advance: {availabilitySettings.maximumAdvance}
+              <Typography variant="body2">
+                Custom time slot: {overrideSlot.displayText}
               </Typography>
-            </Box>
+              <Button
+                size="small"
+                onClick={handleCancelOverride}
+                sx={{ mt: 1 }}
+                variant="outlined"
+                color="warning"
+              >
+                Cancel Override
+              </Button>
+            </Alert>
           </Grid>
-        )} */}
+        )}
 
         <Grid container sx={{display: 'flex', flexDirection: 'column', width: '100%', padding: '16px'}}>
-          {(timeSlots.length > 0 || selectedSlot || (editMode && selectedDate)) && (
+          {/* Time Selector - Only show when NOT in override mode */}
+          {(timeSlots.length > 0 || selectedSlot || (editMode && selectedDate)) && !isOverrideMode && (
             <TimeSelector
               timeSlots={timeSlots}
               selectedSlot={selectedSlot}
               onSelect={!readOnlyMode ? setSelectedSlot : () => {}}
               loading={loadingStates.timeSlots}
               readOnly={readOnlyMode}
-              editMode={editMode} // 🔥 NEW: Pass edit mode
-              originalSlot={editMode && initialData ? { // 🔥 NEW: Pass original slot data
+              editMode={editMode}
+              originalSlot={editMode && initialData ? {
                 startTime: initialData.start?.dateTime || '',
                 endTime: initialData.end?.dateTime || '',
                 displayText: '',
@@ -1369,7 +1448,7 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
                   fullWidth
                   variant="contained"
                   onClick={handleSubmit}
-                  disabled={isAnyLoading || (!editMode && !isLoanDetailsValidated)}
+                  disabled={isAnyLoading || (!editMode && !isLoanDetailsValidated && !isOverrideMode)}
                   onMouseDown={(e) => e.preventDefault()}
                   sx={{
                     position: 'relative',

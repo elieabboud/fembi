@@ -76,7 +76,7 @@ const Login: React.FC = () => {
           >
             <img src={logoImg} alt="FNTIS Logo" style={{ width: '200px', marginBottom: '16px' }} />
             <Typography component="h1" variant="h5" sx={{ mb: 4, fontWeight: 'bold', textAlign: 'center', textTransform: 'uppercase' }}>
-              welcome to fembi bookings
+              welcome to fntis closings
             </Typography>
             
             <Button

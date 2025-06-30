@@ -239,7 +239,7 @@ const Confirmation: React.FC<ConfirmationProps> = ({
               </Stack>
 
               <Typography variant="body2" sx={{ mt: 2 }}>
-                You can also find this appointment in your FEMBi Calendar.
+                You can also find this appointment in your First National Calendar.
               </Typography>
             </>
           )}
