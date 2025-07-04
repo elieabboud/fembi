@@ -80,14 +80,11 @@ ${htmlBody}
 
       const response = await bookingService.sendEmail(emailRequest);
 
-
     } catch (error) {
       console.error('❌ Error sending email:', error);
       alert('Error sending email. Please check your connection and try again.');
     }
   }
-
-
 
   /**
    * Option 3: Copy formatted data to clipboard
@@ -118,173 +115,126 @@ ${htmlBody}
     }
   }
 
-  /**
-   * Generate HTML table specifically optimized for email clients
-   */
-  private static generateHTMLTableForEmail(bookings: calendarBooking[], columns: Column[]): string {
-    const userTimezone = TimezoneService.getUserTimezoneDisplay();
-    
-    // Generate table rows with inline styles
-    const tableRows = bookings.map((booking, index) => {
-      const rowBgColor = index % 2 === 0 ? '#f8f9fa' : '#ffffff';
-      
-      const cells = columns.map(column => {
-        let value = this.getCellValue(booking, column);
-        
-        // Special styling for status column
-        if (column.label === 'Status') {
-          let statusBadge = '';
-          switch (value) {
-            case 'Upcoming':
-              statusBadge = `<span style="background-color: #d32f2f; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">${value}</span>`;
-              break;
-            case 'In Progress':
-              statusBadge = `<span style="background-color: #ff9800; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">${value}</span>`;
-              break;
-            case 'Completed':
-              statusBadge = `<span style="background-color: #2196f3; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">${value}</span>`;
-              break;
-            default:
-              statusBadge = `<span style="background-color: #9e9e9e; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">${value}</span>`;
-          }
-          return `<td style="border: 1px solid #ddd; padding: 8px; text-align: center; font-family: Arial, sans-serif;">${statusBadge}</td>`;
-        }
-        
-        return `<td style="border: 1px solid #ddd; padding: 8px; font-family: Arial, sans-serif; font-size: 13px;">${value}</td>`;
-      }).join('');
-      
-      return `<tr style="background-color: ${rowBgColor};">${cells}</tr>`;
+
+ private static generateHTMLTableForEmail(bookings: calendarBooking[], columns: Column[]): string {
+  const userTimezone = TimezoneService.getUserTimezoneDisplay();
+
+  const tableRows = bookings.map((booking, index) => {
+    const rowBgColor = index % 2 === 0 ? '#fafafa' : '#ffffff';
+    const cells = columns.map(column => {
+      let value = this.getCellValue(booking, column);
+      if (column.label === 'Status') {
+        const colorMap: any = {
+          'Upcoming': '#e53935',
+          'In Progress': '#fb8c00',
+          'Completed': '#1e88e5',
+          'Default': '#9e9e9e'
+        };
+        const bgColor = colorMap[value] || colorMap['Default'];
+        return `<td style="border:1px solid #e0e0e0; padding:14px; text-align:center; font-size:14px;"><span style="background:${bgColor};color:white;padding:6px 14px;border-radius:20px;display:inline-block;min-width:90px;font-weight:600;">${value}</span></td>`;
+      }
+      return `<td style="border:1px solid #e0e0e0; padding:14px; font-size:14px; vertical-align:top;">${value}</td>`;
     }).join('');
+    return `<tr style="background-color:${rowBgColor};">${cells}</tr>`;
+  }).join('');
 
-    // Generate header cells
-    const headerCells = columns.map(column => 
-      `<th style="border: 1px solid #ddd; padding: 10px 8px; background-color: #1976d2; color: white; font-weight: bold; font-size: 13px; font-family: Arial, sans-serif; text-align: left;">${column.label}</th>`
-    ).join('');
-
-    // Create email-optimized HTML
-    return `
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Bookings Report</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
-  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f5f5f5;">
-    <tr>
-      <td align="center">
-        <!-- Main Container -->
-        <table border="0" cellpadding="0" cellspacing="0" width="800" style="background-color: white; margin: 20px auto; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-          
-          <!-- Header -->
-          <tr>
-            <td style="background-color: #1976d2; color: white; padding: 30px; text-align: center;">
-              <h1 style="margin: 0 0 10px 0; font-size: 28px; font-weight: bold; color: white;">📊 Bookings Report</h1>
-              <p style="margin: 5px 0; font-size: 16px; color: white;">Generated on: ${new Date().toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}</p>
-              
-              <!-- Stats -->
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 20px;">
-                <tr>
-                  <td width="33%" style="text-align: center; color: white;">
-                    <div style="font-size: 24px; font-weight: bold;">${bookings.length}</div>
-                    <div style="font-size: 12px; opacity: 0.8;">Total Records</div>
-                  </td>
-                  <td width="33%" style="text-align: center; color: white;">
-                    <div style="font-size: 24px; font-weight: bold;">${bookings.filter(b => b.status === 'upcoming').length}</div>
-                    <div style="font-size: 12px; opacity: 0.8;">Upcoming</div>
-                  </td>
-                  <td width="33%" style="text-align: center; color: white;">
-                    <div style="font-size: 24px; font-weight: bold;">${bookings.filter(b => b.status === 'completed').length}</div>
-                    <div style="font-size: 12px; opacity: 0.8;">Completed</div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          
-          <!-- Content -->
-          <tr>
-            <td style="padding: 30px;">
-              
-              <!-- Timezone Info -->
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #e3f2fd; border: 1px solid #1976d2; border-radius: 4px; margin-bottom: 20px;">
-                <tr>
-                  <td style="padding: 15px;">
-                    <p style="margin: 0; font-size: 14px; color: #1976d2;">
-                      <strong>🌍 Timezone Information:</strong><br>
-                      All times are displayed in: <strong>${userTimezone}</strong><br>
-                      <em>Times have been automatically converted from Eastern Time (EST/EDT)</em>
-                    </p>
-                  </td>
-                </tr>
-              </table>
-              
-              <!-- Data Table -->
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse; border: 1px solid #ddd;">
-                <thead>
-                  <tr>${headerCells}</tr>
-                </thead>
-                <tbody>
-                  ${tableRows}
-                </tbody>
-              </table>
-              
-            </td>
-          </tr>
-          
-          <!-- Footer -->
-          <tr>
-            <td style="padding: 20px; background-color: #f8f9fa; text-align: center; border-top: 1px solid #ddd;">
-              <p style="margin: 5px 0; font-size: 14px; color: #666;">
-                <strong>📅 Generated by First National Bookings System</strong>
-              </p>
-              <p style="margin: 5px 0; font-size: 12px; color: #666;">
-                All times automatically converted to your timezone: <strong>${userTimezone}</strong>
-              </p>
-              <p style="margin: 5px 0; font-size: 12px; color: #666;">
-                For questions about this report, please contact your system administrator.
-              </p>
-            </td>
-          </tr>
-          
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
+  const headerCells = columns.map(column => 
+    `<th style="border:1px solid #e0e0e0; padding:16px; background:#1976d2; color:white; font-weight:600; font-size:15px; text-align:left;">${column.label}</th>`
+  ).join('');
+  return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body style="margin:0; padding:0; font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6f8; color:#333;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f8;">
+      <tr>
+        <td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%; margin:0; background:#fff;">
+            <tr>
+              <td style="background-color: #1976d2; color:white; padding:30px; text-align:center;">
+                <h1 style="margin:0; color:white;">📊 FNTIS Bookings Report</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px; background:#e3f2fd; border-bottom:1px solid #ddd;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td align="center" style="text-align:center; padding: 0 10px;">
+                      <div style="font-size:28px; font-weight:bold; color:#1976d2;">${bookings.length}</div>
+                      <div>Total Records</div>
+                    </td>
+                    <td align="center" style="text-align:center; padding: 0 10px;">
+                      <div style="font-size:28px; font-weight:bold; color:#1976d2;">${bookings.filter(b => b.status === 'upcoming').length}</div>
+                      <div>Upcoming</div>
+                    </td>
+                    <td align="center" style="text-align:center; padding: 0 10px;">
+                      <div style="font-size:28px; font-weight:bold; color:#1976d2;">${bookings.filter(b => b.status === 'inProgress').length}</div>
+                      <div>In Progress</div>
+                    </td>
+                    <td align="center" style="text-align:center; padding: 0 10px;">
+                      <div style="font-size:28px; font-weight:bold; color:#1976d2;">${bookings.filter(b => b.status === 'completed').length}</div>
+                      <div>Completed</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="width:100%;">
+                <table style="width: 100%; border-collapse:collapse;" cellpadding="5" cellspacing="0" border="0">
+                  <thead>
+                    <tr>
+                      ${headerCells}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${tableRows}
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="text-align:center; padding:20px; color:#777; font-size:14px;">
+                Report generated in timezone: ${userTimezone}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
 </html>`;
-  }
+}
+
+
 
   /**
    * Generate plain text table for email body - Enhanced formatting
    */
   private static generatePlainTextTable(bookings: calendarBooking[], columns: Column[]): string {
     const userTimezone = TimezoneService.getUserTimezoneDisplay();
-    const separator = '='.repeat(80);
-    const lineSeparator = '-'.repeat(80);
+    const separator = '='.repeat(100);
+    const lineSeparator = '-'.repeat(100);
     
     const header = `
 ${separator}
-📊 BOOKINGS REPORT
+📊 FNTIS BOOKINGS REPORT - FULL PAGE VIEW
 ${separator}
 
 📅 Generated: ${new Date().toLocaleString()}
 📊 Total Records: ${bookings.length}
 📍 Timezone: ${userTimezone} (converted from Eastern Time)
 
-📈 Summary:
-   • Upcoming: ${bookings.filter(b => b.status === 'upcoming').length}
+📈 Summary Statistics:
+   • Upcoming Appointments: ${bookings.filter(b => b.status === 'upcoming').length}
    • In Progress: ${bookings.filter(b => b.status === 'inProgress').length}  
    • Completed: ${bookings.filter(b => b.status === 'completed').length}
+   • Other Status: ${bookings.filter(b => !['upcoming', 'inProgress', 'completed'].includes(b.status || '')).length}
 
+${separator}
+DETAILED BOOKING RECORDS
 ${separator}`;
 
     const tableData = bookings.map((booking, index) => {
@@ -294,16 +244,18 @@ ${separator}`;
       }).join('\n   ');
       
       return `
-📋 Record ${index + 1}:
+📋 Record ${index + 1} of ${bookings.length}:
    ${bookingData}
 ${lineSeparator}`;
     }).join('');
 
     const footer = `
 ${separator}
-📧 Generated by First National Bookings System
+📧 FNTIS BOOKING MANAGEMENT SYSTEM
+${separator}
 🌍 All times converted to your timezone: ${userTimezone}
 📞 For support, contact your system administrator
+🏢 First National Title & Insurance Services, Inc.
 ${separator}`;
 
     return `${header}${tableData}${footer}`;

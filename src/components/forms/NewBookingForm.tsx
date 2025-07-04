@@ -353,35 +353,35 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
               ${headerTitle}
             </h2>
 
-            ${overrideNotice}
+           
 
             <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
               <p><strong>Greetings,</strong></p>
               <p>
-                We are pleased to confirm your ${editMode ? 'rescheduled' : 'upcoming'} closing appointment with <strong>First National Mortgage</strong>.
+                We are pleased to confirm your ${editMode ? 'rescheduled' : 'upcoming'} closing appointment with <strong>FEMBi Mortgage</strong>.
                 This email serves as your official appointment ${editMode ? 'reschedule' : ''} confirmation.
               </p>
               <p>
                 Should you have any questions or require further assistance, please do not hesitate to contact your 
-                <strong>First National Mortgage Loan Officer</strong>. We are here to support you throughout this process.
+                <strong>FEMBi Mortgage Loan Officer</strong>. We are here to support you throughout this process.
               </p>
               <p>
-                Thank you for choosing <strong>First National Mortgage</strong>. We look forward to assisting you at your closing.
+                Thank you for choosing <strong>FEMBi Mortgage</strong>. We look forward to assisting you at your closing.
               </p>
 
               <hr style="margin: 30px 0;">
 
               <p><strong>Saludos,</strong></p>
               <p>
-                Nos complace confirmar su cita ${editMode ? 'reagendada' : 'próxima'} para el cierre con <strong>First National Mortgage</strong>.
+                Nos complace confirmar su cita ${editMode ? 'reagendada' : 'próxima'} para el cierre con <strong>FEMBi Mortgage</strong>.
                 Este correo electrónico constituye la confirmación oficial de su cita ${editMode ? 'reagendada' : ''}.
               </p>
               <p>
                 Si tiene alguna pregunta o necesita asistencia adicional, no dude en comunicarse con su 
-                <strong>Oficial de Préstamos de First National Mortgage</strong>. Estamos a su disposición para asistirle durante este proceso.
+                <strong>Oficial de Préstamos de FEMBi Mortgage</strong>. Estamos a su disposición para asistirle durante este proceso.
               </p>
               <p>
-                Gracias por confiar en <strong>First National Mortgage</strong>. Esperamos poder asistirle en su cierre.
+                Gracias por confiar en <strong>FEMBi Mortgage</strong>. Esperamos poder asistirle en su cierre.
               </p>
             </div>
 
@@ -1045,7 +1045,13 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
                   {loadingStates.loanDetails ? <CircularProgress size={24} color="inherit" /> : 'Enter'}
                 </Button>
               )}
+             
             </Grid>
+             {error.length > 0 && !readOnlyMode && (
+              <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>
+                {error}
+              </Typography>
+              )}
           </Grid>
         </Box>
 
@@ -1303,7 +1309,6 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
                 return false;
               }
               
-              // 🔥 NEW LOGIC FOR EDIT MODE: Only disable dates before the selected date
               if (editMode) {
                 // Always allow the currently selected date
                 if (selectedDate && date.toDateString() === selectedDate.toDateString()) {

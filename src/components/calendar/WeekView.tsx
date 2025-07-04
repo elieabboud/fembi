@@ -200,15 +200,15 @@ const WeekView: React.FC<WeekViewProps> = ({
                         <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: '0.7rem' }}>
                           {formatEventTimeMonth(event)}
                         </Typography>
-                        <Typography variant="caption" sx={{ display: 'block', fontSize: '0.8rem' }}>
+                        <Typography variant="caption" sx={{ fontSize: '0.8rem', display: 'inline', marginLeft: 2 }}>
                           {event?.customerName}
                         </Typography>
-                        {event?.serviceLocation?.displayName && (
+                        {event?.serviceName && duration >= 90 && (
                           <Typography
                             variant="caption"
-                            sx={{ display: 'block', fontSize: '0.7rem', opacity: 0.9 }}
+                            sx={{ fontSize: '0.7rem', opacity: 0.9, display: duration >= 90? 'block':'inline', marginLeft: duration >= 90? 0 : 2 }}
                           >
-                            {event?.serviceLocation?.displayName}
+                            {event?.serviceName}
                           </Typography>
                         )}
                       </Paper>

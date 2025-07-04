@@ -224,19 +224,20 @@ const DayView: React.FC<DayViewProps> = ({
                   '&:hover': {
                     opacity: 0.9,
                     boxShadow: 2
-                  }
+                  },
+                  paddingTop: duration >= 90? 1 : 0
                 }}
               >
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', display: 'inline'}}>
                   {formatEventTime(event)}
                 </Typography>
-                <Typography variant="body1" sx={{ fontWeight: 'bold', fontSize: '0.85rem' }}>
+                <Typography variant="body1" sx={{ fontWeight: 'bold', fontSize: '0.85rem', display: 'inline', marginLeft: 2 }}>
                   {event?.customerName}
                 </Typography>
                 {event?.serviceName && (
                   <Typography
                     variant="caption"
-                    sx={{ display: 'block', fontSize: '0.7rem', opacity: 0.9 }}
+                    sx={{ fontSize: '0.7rem', opacity: 0.9, display: duration >= 90? 'block':'inline', marginLeft: duration >= 90? 0 : 2 }}
                   >
                     {event?.serviceName}
                   </Typography>

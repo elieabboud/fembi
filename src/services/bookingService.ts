@@ -355,12 +355,12 @@ export const bookingService = {
             <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
               <p><strong>Greetings,</strong></p>
               <p>
-                We regret to inform you that your closing appointment with <strong>First National Mortgage</strong> has been cancelled.
+                We regret to inform you that your closing appointment with <strong>FEMBi Mortgage</strong> has been cancelled.
                 This email serves as your official cancellation notification.
               </p>
               <p>
                 If you need to reschedule or have any questions about this cancellation, please contact your 
-                <strong>First National Mortgage Loan Officer</strong> immediately.
+                <strong>FEMBi Mortgage Loan Officer</strong> immediately.
               </p>
               <p>
                 We apologize for any inconvenience this may cause and are ready to assist you in rescheduling at your earliest convenience.
@@ -370,12 +370,12 @@ export const bookingService = {
 
               <p><strong>Saludos,</strong></p>
               <p>
-                Lamentamos informarle que su cita de cierre con <strong>First National Mortgage</strong> ha sido cancelada.
+                Lamentamos informarle que su cita de cierre con <strong>FEMBi Mortgage</strong> ha sido cancelada.
                 Este correo electrónico constituye su notificación oficial de cancelación.
               </p>
               <p>
                 Si necesita reprogramar o tiene alguna pregunta sobre esta cancelación, comuníquese con su 
-                <strong>Oficial de Préstamos de First National Mortgage</strong> inmediatamente.
+                <strong>Oficial de Préstamos de FEMBi Mortgage</strong> inmediatamente.
               </p>
               <p>
                 Nos disculpamos por cualquier inconveniente que esto pueda causar y estamos listos para ayudarle a reprogramar lo antes posible.
@@ -417,7 +417,7 @@ export const bookingService = {
             
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; text-align: center;">
               <p><strong>📞 Need Help?</strong></p>
-              <p>Contact your First National Mortgage team for immediate assistance with rescheduling.</p>
+              <p>Contact your FEMBi Mortgage team for immediate assistance with rescheduling.</p>
               <p style="color: #d32f2f; font-weight: bold;">This appointment has been removed from all calendars.</p>
             </div>
           </div>
