@@ -1,0 +1,29 @@
+stages:
+  - deploy
+
+variables:
+  ENVIRONMENT: "dev" # default, can be overridden by pipeline
+  FORCE_BUILD: "false" # default, can be set to true to force pipeline run
+
+
+deploy_backend:
+  stage: deploy
+  tags:
+    - tac-micro-1
+  before_script:
+    - ssh ubuntu@tac-compute-4 -p 1069 "rm -rf /tmp/tacresearch_gitlab/fembi/bookingfrontend &&
+      git clone git@pandora-sshbox.tacresearch.com:tac-research/solutions/clients/fembi/bookingfrontend.git /tmp/tacresearch_gitlab/fembi/bookingfrontend"
+  script:
+    - echo 'ENVIRONMENT' $ENVIRONMENT
+    - echo 'FORCE_BUILD' $FORCE_BUILD
+    - echo 'CI_COMMIT_BRANCH' $CI_COMMIT_BRANCH
+    - ssh ubuntu@tac-compute-4 -p 1069 "export ENVIRONMENT=$ENVIRONMENT; cd /tmp/tacresearch_gitlab/fembi/bookingfrontend &&
+      echo 'ENVIRONMENT IN TC4 ' $ENVIRONMENT &&
+      git checkout $CI_COMMIT_BRANCH && if [ \"$ENVIRONMENT\" = \"prd\" ]; then cp .env_prd .env; else cp .env_sandbox .env; fi &&
+      docker compose down && docker rmi fbc-backend-$ENVIRONMENT:1.0.0 || true &&
+      docker compose build --build-arg ENVIRONMENT=$ENVIRONMENT && ENVIRONMENT=$ENVIRONMENT docker compose up -d --build"
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" && $CI_MERGE_REQUEST_APPROVED == "true"'
+      when: always
+    - if: '$FORCE_BUILD == "true"'
+      when: always

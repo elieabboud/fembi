@@ -225,7 +225,7 @@ export const exportBookingsToExcel = (
       } else if (id === 'LoanOfficer' && col.label === 'Loan Officer') {
         value = row.loanData?.loanOfficer || row.LoanOfficer;
       } else if (id === 'dpa' && col.label === 'DPA Program') {
-        value = row.loanData?.dpa || row.loanData?.loanType || row.dpa;
+        value = row.loanData?.dpa || row.dpa || '';
       } else if (id === 'start' && col.label === 'Closing Date') {
         if (row.start?.dateTime) {
           value = TimezoneService.formatDateForUser(row.start.dateTime, 'MMMM d, yyyy');

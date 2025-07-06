@@ -283,7 +283,7 @@ ${separator}`;
     } else if (id === 'LoanOfficer' && column.label === 'Loan Officer') {
       value = booking.loanData?.loanOfficer || booking.LoanOfficer;
     } else if (id === 'dpa' && column.label === 'DPA Program') {
-      value = booking.loanData?.dpa || booking.loanData?.loanType || booking.dpa;
+      value = booking.loanData?.dpa || booking.dpa || '';
     } else if (id === 'start' && column.label === 'Closing Date') {
       if (booking.start?.dateTime) {
         value = TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy');
