@@ -193,122 +193,137 @@ const Bookings: React.FC = () => {
     fetchAllData();
   }, [dataFetched, fetchBookingsData]);
   
-  // Filter bookings when search query or filter values change
   useEffect(() => {
     let filtered = [...bookings];
     
-    const searchInBooking = (booking: calendarBooking, query: string): boolean => {
-      const lowercaseQuery = query.toLowerCase();
-      
-      const getNestedValue = (obj: any, path: string): string => {
-        return path.split('.').reduce((current, key) => current?.[key], obj) || '';
-      };
-      
-      const extractSearchableText = (value: any): string => {
-        if (value === null || value === undefined) return '';
-        if (typeof value === 'string') return value;
-        if (typeof value === 'number') return value.toString();
-        if (typeof value === 'boolean') return value.toString();
-        if (typeof value === 'object') {
-          return JSON.stringify(value);
-        }
-        return String(value);
-      };
-      
-      const getFormattedDateTimeValues = (booking: calendarBooking): string[] => {
-        const values: string[] = [];
+   const searchInBooking = (booking: calendarBooking, query: string): boolean => {
+  const lowercaseQuery = query.toLowerCase();
+  
+  const getNestedValue = (obj: any, path: string): string => {
+    return path.split('.').reduce((current, key) => current?.[key], obj) || '';
+  };
+  
+  const extractSearchableText = (value: any): string => {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return value.toString();
+    if (typeof value === 'boolean') return value.toString();
+    if (typeof value === 'object') {
+      return JSON.stringify(value);
+    }
+    return String(value);
+  };
+  
+  const getFormattedDateTimeValues = (booking: calendarBooking): string[] => {
+    const values: string[] = [];
+    
+    if (booking.start?.dateTime) {
+      try {
+        values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy'));
+        values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMM d, yyyy'));
+        values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MM/dd/yyyy'));
+        values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'yyyy-MM-dd'));
         
-        if (booking.start?.dateTime) {
-          try {
-            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy')); // "June 1, 2025"
-            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMM d, yyyy'));   // "Jun 1, 2025"
-            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MM/dd/yyyy'));    // "06/01/2025"
-            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'yyyy-MM-dd'));    // "2025-06-01"
-            
-            values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a'));        // "9:00 AM"
-            values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'HH:mm'));         // "09:00"
-            values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'h a'));           // "9 AM"
-            
-            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy') + ' ' + 
-                      TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a')); // "June 1, 2025 9:00 AM"
-          } catch (error) {
-            console.warn('Error formatting date/time for search:', error);
-          }
-        }
+        values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a'));
+        values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'HH:mm'));
+        values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'h a'));
         
-        return values;
-      };
-      
-      const searchableFields = [
-        // Direct booking properties
-        'bookingId',
-        'customerName',
-        'serviceName',
-        'customerEmailAddress',
-        'customerPhone',
-        'status',
-        'encompassLoanId',
-        'LoanCloser',
-        'LoanOfficer',
-        'dpa',
-        
-        // Loan data properties
-        'loanData.borrowerFirstName',
-        'loanData.borrowerLastName',
-        'loanData.borrowerEmail',
-        'loanData.borrowerPhone',
-        'loanData.borrowerAddress',
-        'loanData.borrowerCity',
-        'loanData.borrowerState',
-        'loanData.borrowerZipCode',
-        'loanData.loanNumber',
-        'loanData.loanType',
-        'loanData.loanAmount',
-        'loanData.loanOfficer',
-        'loanData.loanCloser',
-        'loanData.dpa',
-        'loanData.notes',
-        
-        // Service location properties
-        'serviceLocation.displayName',
-        'serviceLocation.address.street',
-        'serviceLocation.address.city',
-        'serviceLocation.address.state',
-        'serviceLocation.address.postalCode',
-        
-        // Customer array (if exists)
-        'customers.0.name',
-        'customers.0.emailAddress',
-        'customers.0.phone'
-      ];
-      
-      // Search through all defined fields
-      const fieldMatches = searchableFields.some(fieldPath => {
-        const value = getNestedValue(booking, fieldPath);
-        const searchableText = extractSearchableText(value).toLowerCase();
-        return searchableText.includes(lowercaseQuery);
-      });
-      
-      // Search through formatted date/time values
-      const formattedDateTimeValues = getFormattedDateTimeValues(booking);
-      const dateTimeMatches = formattedDateTimeValues.some(dateTimeValue => 
-        dateTimeValue.toLowerCase().includes(lowercaseQuery)
-      );
-      
-      // Also search for status in formatted form
-      const formattedStatus = booking.status ? (() => {
-        switch (booking.status) {
-          case 'upcoming': return 'Upcoming';
-          case 'inProgress': return 'In Progress';
-          case 'completed': return 'Completed';
-          case 'canceled': return 'Canceled';
-          // default: return booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
-        }
-      })() : '';
-      const statusMatches = formattedStatus.toLowerCase().includes(lowercaseQuery);
-      
-      return fieldMatches || dateTimeMatches || statusMatches;
-    };
+        values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy') + ' ' + 
+                  TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a'));
+      } catch (error) {
+        console.warn('Error formatting date/time for search:', error);
+      }
+    }
+    
+    return values;
+  };
+  
+  const searchableFields = [
+    'bookingId',
+    'customerName',
+    'serviceName',
+    'customerEmailAddress',
+    'customerPhone',
+    'status',
+    'encompassLoanId',
+    'LoanCloser',
+    'LoanOfficer',
+    'dpa',
+    
+    'loanData.borrowerFirstName',
+    'loanData.borrowerLastName',
+    'loanData.borrowerEmail',
+    'loanData.borrowerPhone',
+    'loanData.borrowerAddress',
+    'loanData.borrowerCity',
+    'loanData.borrowerState',
+    'loanData.borrowerZipCode',
+    'loanData.loanNumber',
+    'loanData.loanType',
+    'loanData.loanAmount',
+    'loanData.loanOfficer',
+    'loanData.loanCloser',
+    'loanData.dpa',
+    'loanData.notes',
+    'loanData.loanPurpose',
+    
+    'serviceLocation.displayName',
+    'serviceLocation.address.street',
+    'serviceLocation.address.city',
+    'serviceLocation.address.state',
+    'serviceLocation.address.postalCode',
+    
+    'customers.0.name',
+    'customers.0.emailAddress',
+    'customers.0.phone'
+  ];
+  
+  const specificLoanPurposeChecks = [
+    booking.loanData?.loanPurpose,
+    booking.loanData?.loanType,
+  ].filter(Boolean).map(value => extractSearchableText(value).toLowerCase());
+  
+  const fieldMatches = searchableFields.some(fieldPath => {
+    const value = getNestedValue(booking, fieldPath);
+    const searchableText = extractSearchableText(value).toLowerCase();
+    return searchableText.includes(lowercaseQuery);
+  });
+  
+  const loanPurposeMatches = specificLoanPurposeChecks.some(text => 
+    text.includes(lowercaseQuery)
+  );
+  
+  const formattedDateTimeValues = getFormattedDateTimeValues(booking);
+  const dateTimeMatches = formattedDateTimeValues.some(dateTimeValue => 
+    dateTimeValue.toLowerCase().includes(lowercaseQuery)
+  );
+  
+  const formattedStatus = booking.status ? (() => {
+    switch (booking.status) {
+      case 'upcoming': return 'Upcoming';
+      case 'inProgress': return 'In Progress';
+      case 'completed': return 'Completed';
+      case 'canceled': return 'Canceled';
+      default: return booking.status;
+    }
+  })() : '';
+  const statusMatches = formattedStatus.toLowerCase().includes(lowercaseQuery);
+  
+  const borrowerNameMatches = (() => {
+    if (booking.loanData) {
+      const fullName = `${booking.loanData.borrowerFirstName || ''} ${booking.loanData.borrowerLastName || ''}`.trim().toLowerCase();
+      return fullName.includes(lowercaseQuery);
+    }
+    return false;
+  })();
+  
+  
+  return fieldMatches || 
+         loanPurposeMatches || 
+         dateTimeMatches || 
+         statusMatches || 
+         borrowerNameMatches;
+};
     
     // Apply search query filter using enhanced search
     if (searchQuery.trim()) {
