@@ -148,7 +148,7 @@ export const createBookingColumns = (): Column[] => {
       id: 'dpa',
       label: 'DPA Program',
       format: (value, row) => {
-        return row?.loanData?.dpa || row?.loanData?.loanType || row?.dpa || value || '-';
+        return row?.loanData?.dpa || row?.dpa || value || '-';
       },
       comparator: (a: calendarBooking, b: calendarBooking) => {
         const dpaA = a.loanData?.dpa || a.loanData?.loanType || a.dpa || '';

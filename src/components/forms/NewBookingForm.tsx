@@ -102,6 +102,8 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   
   // NEW: State to track if loan details have been loaded and validated
   const [isLoanDetailsValidated, setIsLoanDetailsValidated] = useState<boolean>(false);
+
+  const [initialSelectedDate, setInitialSelectedDate] = useState<Date | null>(null);
   
   const [bookingData, setBookingData] = useState<CreateAppointmentRequest>(
   {
@@ -899,6 +901,7 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
             const [year, month, day] = dateStr.split('-').map(Number);
             const correctDate = new Date(year, month - 1, day);
             setSelectedDate(correctDate);
+            setInitialSelectedDate(correctDate);
           } else {
             setSelectedDate(new Date());
           }
@@ -1316,10 +1319,10 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
                 }
                 
                 // If we have a selected date, disable dates before it
-                if (selectedDate) {
-                  const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+                if (initialSelectedDate) {
+                  const initialDateOnly = new Date(initialSelectedDate.getFullYear(), initialSelectedDate.getMonth(), initialSelectedDate.getDate());
                   const dateToCheck = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                  return dateToCheck < selectedDateOnly;
+                  return dateToCheck < initialDateOnly;
                 }
                 
                 // Fallback: disable past dates
