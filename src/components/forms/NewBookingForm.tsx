@@ -169,12 +169,10 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   }, []);
 
   const handleCancelOverride = useCallback(() => {
-    console.log('❌ Admin override cancelled');
     setIsOverrideMode(false);
     setOverrideSlot(null);
     setSelectedSlot(null);
     
-    // Refetch regular time slots if we have a date and service
     if (selectedDate && bookingData.ServiceId && !readOnlyMode) {
       fetchAvailableTimeSlots();
     }
@@ -628,58 +626,54 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     }
   }, [editMode]);
 
-  // UPDATED: Handle both regular and override modes
-  const handleDateTimeSelect = useCallback(() => {
-    if (!selectedSlot || !selectedDate || readOnlyMode) return;
+ const handleDateTimeSelect = useCallback(() => {
+  if (!selectedDate || readOnlyMode) return;
 
-    // Handle override mode
-    if (isOverrideMode && overrideSlot) {
-      console.log('🔧 Using admin override slot for booking data');
-      
-      // For override mode, we already have the backend times in the slot
-      const backendStartTime = overrideSlot.startTime;
-      const backendEndTime = overrideSlot.endTime;
-      
-      // Convert to user timezone for display in form fields
-      const userStartTime = TimezoneService.convertBackendTimeToLocalReliable(backendStartTime);
-      const userEndTime = TimezoneService.convertBackendTimeToLocalReliable(backendEndTime);
-      
-      const dateStr = format(userStartTime, 'yyyy-MM-dd');
-      const time24 = format(userStartTime, 'HH:mm');
-
-      setBookingData((prev) => ({
-        ...prev,
-        DateTimeInfo: {
-          SelectedDate: dateStr,
-          SelectedTime: time24,
-          FromDate: backendStartTime,
-          ToDate: backendEndTime,
-        },
-        StaffMemberIds: [overrideSlot.staffMemberId || 'admin-override'],
-      }));
-      
-      return;
-    }
-
-    // Regular mode handling (your existing logic)
-    const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    const startTimeUser = TimezoneService.convertBackendTimeToLocalReliable(selectedSlot.startTime);
-    const time24 = format(startTimeUser, 'HH:mm');
+  if (isOverrideMode && overrideSlot) {
+    console.log('🔧 Using admin override slot for booking data');
+    
+    const backendStartTime = overrideSlot.startTime;
+    const backendEndTime = overrideSlot.endTime;
+    
+    const userStartTime = TimezoneService.convertBackendTimeToLocalReliable(backendStartTime);
+    const userEndTime = TimezoneService.convertBackendTimeToLocalReliable(backendEndTime);
+    
+    const dateStr = format(userStartTime, 'yyyy-MM-dd');
+    const time24 = format(userStartTime, 'HH:mm');
 
     setBookingData((prev) => ({
       ...prev,
       DateTimeInfo: {
         SelectedDate: dateStr,
         SelectedTime: time24,
-        FromDate: selectedSlot.startTime,
-        ToDate: selectedSlot.endTime,
+        FromDate: backendStartTime,
+        ToDate: backendEndTime,
       },
-      StaffMemberIds: [selectedSlot.staffMemberId],
+      StaffMemberIds: [overrideSlot.staffMemberId || 'admin-override'],
     }));
-  }, [selectedSlot, selectedDate, readOnlyMode, isOverrideMode, overrideSlot]);
+    
+    return;
+  }
 
-  // UPDATED: Apply availability filtering to time slots
-  const fetchAvailableTimeSlots = useCallback(async () => {     
+  if (!selectedSlot) return;
+  
+  const dateStr = format(selectedDate, 'yyyy-MM-dd');
+  const startTimeUser = TimezoneService.convertBackendTimeToLocalReliable(selectedSlot.startTime);
+  const time24 = format(startTimeUser, 'HH:mm');
+
+  setBookingData((prev) => ({
+    ...prev,
+    DateTimeInfo: {
+      SelectedDate: dateStr,
+      SelectedTime: time24,
+      FromDate: selectedSlot.startTime,
+      ToDate: selectedSlot.endTime,
+    },
+    StaffMemberIds: [selectedSlot.staffMemberId],
+  }));
+}, [selectedSlot, selectedDate, readOnlyMode, isOverrideMode, overrideSlot]);
+
+const fetchAvailableTimeSlots = useCallback(async () => {     
   if (!selectedDate || !bookingData?.ServiceId || isOverrideMode) return; // Skip if in override mode
 
   updateLoadingState('timeSlots', true);
@@ -690,7 +684,6 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     const day = String(selectedDate.getDate()).padStart(2, '0');
     const backendDateString = `${year}-${month}-${day}T00:00:00`;
 
-    // 🔥 NEW: Prepare current selected slot for filtering
     let currentSelectedSlot: { startTime: string; endTime: string } | undefined;
     
     if (editMode && bookingData.DateTimeInfo?.FromDate && bookingData.DateTimeInfo?.ToDate) {
@@ -698,18 +691,15 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
         startTime: bookingData.DateTimeInfo.FromDate,
         endTime: bookingData.DateTimeInfo.ToDate
       };
-      
     }
 
-    // 🔥 UPDATED: Pass current selected slot to the API call
     const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
       bookingData.ServiceId,
       backendDateString,
-      editMode, // Pass edit mode flag
-      currentSelectedSlot // 🔥 NEW: Pass current selected slot
+      editMode,
+      currentSelectedSlot
     );
 
-    // Apply availability filtering for create mode only
     let filteredSlots = response;
     
     if (!editMode && !readOnlyMode && dateRange) {
@@ -718,7 +708,6 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
 
     setTimeSlots(filteredSlots);
 
-    // 🔥 ENHANCED: Auto-select matching slot in edit mode
     if (editMode && bookingData.DateTimeInfo?.SelectedTime && !selectedSlot) {
       const timeToMatch = bookingData.DateTimeInfo.SelectedTime;
       
@@ -745,8 +734,7 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
   } finally {
     updateLoadingState('timeSlots', false);
   }
-}, [selectedService, selectedDate, editMode, isViewMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, selectedSlot, dateRange, bookingData.DateTimeInfo?.FromDate, bookingData.DateTimeInfo?.ToDate, isOverrideMode]); // 🔥 Added isOverrideMode
-
+}, [selectedService, selectedDate, editMode, isViewMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, dateRange, bookingData.DateTimeInfo?.FromDate, bookingData.DateTimeInfo?.ToDate, isOverrideMode]);
   const fetchAllFollowers = useCallback(async () => {
     updateLoadingState('followers', true);
     try {
@@ -962,13 +950,13 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     if (!readOnlyMode && selectedDate && bookingData.ServiceId && !isOverrideMode) {
       fetchAvailableTimeSlots();
     }
-  }, [selectedService, selectedDate, readOnlyMode, isOverrideMode, fetchAvailableTimeSlots]);
+  }, [selectedDate, bookingData.ServiceId, isOverrideMode]);
 
   useEffect(() => {
-    if (!readOnlyMode) {
+    if (!readOnlyMode && (selectedSlot || (isOverrideMode && overrideSlot))) {
       handleDateTimeSelect();
     }
-  }, [selectedSlot, selectedDate, handleDateTimeSelect, readOnlyMode, isOverrideMode, overrideSlot]);
+  }, [selectedSlot, isOverrideMode, overrideSlot]);
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -1290,18 +1278,14 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
               actionBar: { actions: [] }
             }}
             readOnly={readOnlyMode}
-            // NEW: Apply availability constraints for create mode only (not in override mode)
             minDate={!editMode && !readOnlyMode && dateRange && !isOverrideMode ? dateRange.minDate : undefined}
             maxDate={!editMode && !readOnlyMode && dateRange && !isOverrideMode ? dateRange.maxDate : undefined}
             shouldDisableDate={(date) => {
-              // For create mode, apply availability constraints (but not in override mode)
               if (!editMode && !readOnlyMode && !isOverrideMode) {
-                // Require service selection first
                 if (!selectedService) {
                   return true;
                 }
                 
-                // If we have dateRange constraints, apply them
                 if (dateRange) {
                   const shouldDisable = AvailabilityService.shouldDisableDate(date, dateRange);
                   if (shouldDisable) {
@@ -1313,19 +1297,23 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
               }
               
               if (editMode) {
-                // Always allow the currently selected date
-                if (selectedDate && date.toDateString() === selectedDate.toDateString()) {
-                  return false;
-                }
-                
-                // If we have a selected date, disable dates before it
                 if (initialSelectedDate) {
-                  const initialDateOnly = new Date(initialSelectedDate.getFullYear(), initialSelectedDate.getMonth(), initialSelectedDate.getDate());
-                  const dateToCheck = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                  return dateToCheck < initialDateOnly;
+                  const originalDateOnly = new Date(
+                    initialSelectedDate.getFullYear(), 
+                    initialSelectedDate.getMonth(), 
+                    initialSelectedDate.getDate()
+                  );
+                  const dateToCheck = new Date(
+                    date.getFullYear(), 
+                    date.getMonth(), 
+                    date.getDate()
+                  );
+                  
+                  // Allow the original date and any future dates
+                  return dateToCheck < originalDateOnly;
                 }
                 
-                // Fallback: disable past dates
+                // Fallback: disable past dates relative to today
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 const dateToCheck = new Date(date);
@@ -1333,7 +1321,7 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
                 return dateToCheck < today;
               }
               
-              // Default: don't disable (for override mode)
+              // Default: don't disable (for override mode and other cases)
               return false;
             }}
             // Keep disablePast for create mode only (not override mode)

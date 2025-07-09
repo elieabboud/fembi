@@ -1,3 +1,9 @@
+// Debug logging for environment variables
+//console.log('Environment Variables Debug:');
+//console.log('REACT_APP_BACKEND_URL:', process.env.REACT_APP_BACKEND_URL);
+//console.log('NODE_ENV:', process.env.NODE_ENV);
+//console.log('All REACT_APP_ variables:', Object.keys(process.env).filter(key => key.startsWith('REACT_APP_')));
+
 export const config = {
     // MSAL Configuration
     msalConfig: {
@@ -15,7 +21,11 @@ export const config = {
     },
     // API Configuration
     apiConfig: {
-      baseUrl: "https://localhost:44349", 
+      baseUrl: (() => {
+        const backendUrl = process.env.REACT_APP_BACKEND_URL || "https://localhost:44349";
+        console.log('Final baseUrl being used:', backendUrl);
+        return backendUrl;
+      })(),
       scopes: ["https://graph.microsoft.com/.default"]
     },
     // App Configuration

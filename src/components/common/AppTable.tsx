@@ -149,6 +149,7 @@ const AppTable: React.FC<AppTableProps> = ({
   };
 
   const handleEditClick = (row: any) => {
+    localStorage.setItem("selectedItem",JSON.stringify(row.start));
     setSelectedRow(row);
     setDialogMode('edit');
     setShowEditBooking(true);
