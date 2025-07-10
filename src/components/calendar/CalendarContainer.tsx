@@ -190,8 +190,13 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   }
 };
 
-  // Handle event click for editing
   const handleEventClick = useCallback((booking: calendarBooking) => {
+    console.log('Calendar event clicked:', booking);
+    
+    // Store the original selected item for edit mode
+    localStorage.setItem("selectedItem", JSON.stringify(booking.start));
+    
+    // Set the selected booking for editing
     setSelectedRow(booking);
     setShowEditBooking(true);
   }, []);
@@ -405,7 +410,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
         onClose= {() => setNewBooking(false)}/>
       </Dialog>
       
-      {/* EDIT BOOKING DIALOG */}
+      {/* 🔥 FIXED: EDIT BOOKING DIALOG */}
       <Dialog
         open={showEditBooking}
         onClose={() => setShowEditBooking(false)}

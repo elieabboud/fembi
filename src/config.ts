@@ -22,7 +22,7 @@ export const config = {
     // API Configuration
     apiConfig: {
       baseUrl: (() => {
-        const backendUrl = process.env.REACT_APP_BACKEND_URL || "https://localhost:44349";
+        const backendUrl = "https://localhost:44349";
         console.log('Final baseUrl being used:', backendUrl);
         return backendUrl;
       })(),

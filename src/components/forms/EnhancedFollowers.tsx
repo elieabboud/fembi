@@ -39,39 +39,6 @@ const groupFollowersByTypeWithSmartGrouping = (followers: FollowerWithType[]): {
   const grouped = followers.reduce((acc, follower) => {
     let groupKey = follower.type || 'Other';
     
-    // Smart grouping for similar types - MORE AGGRESSIVE GROUPING
-
-    // if (/^SELLER\d*$/.test(groupKey)) {
-      
-    //   groupKey = 'SELLER';
-    // } else if (groupKey.toLowerCase().includes('buy')) {
-    //   // Group all buyer-related types under "BUYERS"
-    //   groupKey = 'BUYERS';
-    // } else if (groupKey.toLowerCase().includes('loan')) {
-    //   // Group all loan-related types under their specific category
-    //   if (groupKey.toLowerCase().includes('officer')) {
-    //     groupKey = 'LOAN_OFFICERS';
-    //   } else if (groupKey.toLowerCase().includes('closer')) {
-    //     groupKey = 'LOAN_CLOSERS';
-    //   } else {
-    //     groupKey = 'LOAN_TEAM';
-    //   }
-    // } else if (groupKey.toLowerCase().includes('process')) {
-    //   groupKey = 'PROCESSORS';
-    // } else if (groupKey.toLowerCase().includes('manager') || groupKey.toLowerCase().includes('supervisor')) {
-    //   groupKey = 'MANAGEMENT';
-    // } else if (groupKey.toLowerCase().includes('underwriter')) {
-    //   groupKey = 'UNDERWRITERS';
-    // } else if (groupKey.toLowerCase().includes('assistant')) {
-    //   groupKey = 'ASSISTANTS';
-    // } else if (groupKey.toLowerCase().includes('attorney') || groupKey.toLowerCase().includes('legal')) {
-    //   groupKey = 'ATTORNEYS';
-    // } else if (groupKey.toLowerCase().includes('agent')) {
-    //   groupKey = 'AGENTS';
-    // } else if (groupKey.toLowerCase().includes('coborrower') || groupKey.toLowerCase().includes('co-borrower')) {
-    //   groupKey = 'CO_BORROWERS';
-    // }
-    
     if (!acc[groupKey]) {
       acc[groupKey] = [];
     }
@@ -120,9 +87,10 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+  // 🔥 FIXED: Create unified followers list properly
   const allFollowers = [
     ...regularFollowers.map((email): FollowerWithType => ({ email, type: 'System' })),
-    ...selectedLoanFollowers,
+    ...selectedLoanFollowers, // These already have types
     ...addedFollowers.map((email): FollowerWithType => ({ email, type: 'Custom' }))
   ];
 
@@ -226,6 +194,17 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
     );
   };
 
+  // 🔥 FIXED: Calculate available followers correctly
+  const getAvailableFollowersByType = () => {
+    return Object.entries(groupFollowersByTypeWithSmartGrouping(loanDetailsFollowers)).map(([type, followers]) => {
+      const available = followers.filter(
+        f => !selectedLoanFollowers.some(s => s.email === f.email)
+      );
+      return { type, available };
+    }).filter(({ available }) => available.length > 0);
+  };
+
+  const availableFollowerGroups = getAvailableFollowersByType();
 
   return (
     <Box sx={{ py: 2 }}>
@@ -237,60 +216,64 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
         <CircularProgress size={20} sx={{ my: 2 }} />
       ) : (
         <>
-          {/* Unified follower display */}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
-            {allFollowers.map((follower) => renderUnifiedChip(follower))}
-          </Box>
-
-          {/* Available Followers by Group (No Accordions) */}
-          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', fontSize: '0.8rem' }}>
-            Available Team Members
-          </Typography>
-
-          {Object.entries(groupFollowersByTypeWithSmartGrouping(loanDetailsFollowers)).map(([type, followers]) => {
-            const available = followers.filter(
-              f => !selectedLoanFollowers.some(s => s.email === f.email)
-            );
-            if (available.length === 0) return null;
-
-            return (
-              <Box key={type} sx={{ mb: 2 }}>
-                <Typography 
-                  variant="body2" 
-                  sx={{ 
-                    fontWeight: 'bold', 
-                    mb: 1, 
-                    color: getTypeColor(type), 
-                    fontSize: '0.8rem' 
-                  }}
-                >
-                  {type.replace(/_/g, ' ')} ({available.length} available)
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {available.map(f => (
-                    <Chip
-                      key={f.email}
-                      size="small"
-                      label={f.email}
-                      onClick={() => onToggleLoanFollower(f)}
-                      sx={{
-                        fontSize: '0.7rem',
-                        height: '28px',
-                        borderColor: getTypeColor(type),
-                        color: getTypeColor(type),
-                        '&:hover': {
-                          backgroundColor: getTypeColor(type),
-                          color: '#193667',
-                        },
-                        cursor: 'pointer',
-                      }}
-                      variant="outlined"
-                    />
-                  ))}
-                </Box>
+          {/* 🔥 FIXED: Always show followers if any exist */}
+          {allFollowers.length > 0 && (
+            <>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', fontSize: '0.8rem' }}>
+                Selected Followers
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
+                {allFollowers.map((follower) => renderUnifiedChip(follower))}
               </Box>
-            );
-          })}
+            </>
+          )}
+
+          {/* Available Followers by Group */}
+          {availableFollowerGroups.length > 0 && (
+            <>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', fontSize: '0.8rem' }}>
+                Available Team Members
+              </Typography>
+
+              {availableFollowerGroups.map(({ type, available }) => (
+                <Box key={type} sx={{ mb: 2 }}>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      fontWeight: 'bold', 
+                      mb: 1, 
+                      color: getTypeColor(type), 
+                      fontSize: '0.8rem' 
+                    }}
+                  >
+                    {type.replace(/_/g, ' ')} ({available.length} available)
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {available.map(f => (
+                      <Chip
+                        key={f.email}
+                        size="small"
+                        label={f.email}
+                        onClick={() => onToggleLoanFollower(f)}
+                        sx={{
+                          fontSize: '0.7rem',
+                          height: '28px',
+                          borderColor: getTypeColor(type),
+                          color: getTypeColor(type),
+                          '&:hover': {
+                            backgroundColor: getTypeColor(type),
+                            color: '#193667',
+                          },
+                          cursor: 'pointer',
+                        }}
+                        variant="outlined"
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              ))}
+            </>
+          )}
 
           {/* Add Custom Follower */}
           <Box sx={{ my: 2 }}>
@@ -347,13 +330,15 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
 
           {/* Summary */}
           <Typography variant="caption" color="text.secondary">
-            Total followers: {regularFollowers.length + selectedLoanFollowers.length + addedFollowers.length}
+            Total followers: {allFollowers.length}
+            {regularFollowers.length > 0 && ` (${regularFollowers.length} system)`}
+            {selectedLoanFollowers.length > 0 && ` (${selectedLoanFollowers.length} from loan)`}
+            {addedFollowers.length > 0 && ` (${addedFollowers.length} custom)`}
           </Typography>
         </>
       )}
     </Box>
   );
 };
-
 
 export default EnhancedFollowers;
