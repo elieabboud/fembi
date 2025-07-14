@@ -1,47 +1,56 @@
 import { BookingStatus, calendarBooking } from "../types/calendarBooking";
+import { TimezoneService } from "./timezoneUtils";
 
 export function determineBookingStatus(booking: calendarBooking): BookingStatus {
-if (!booking.start?.dateTime || !booking.end?.dateTime) {
+  if (!booking.start?.dateTime || !booking.end?.dateTime) {
     return 'upcoming';
-}
+  }
 
-const now = new Date();
-const startTime = new Date(booking.start.dateTime);
-const endTime = new Date(booking.end.dateTime);
+  try {
+    const now = new Date();
+    
+    // Convert backend times (EST/EDT) to user's local timezone for comparison
+    const startTimeUser = TimezoneService.convertBackendTimeToLocalReliable(booking.start.dateTime);
+    const endTimeUser = TimezoneService.convertBackendTimeToLocalReliable(booking.end.dateTime);
 
-if (now < startTime) {
+    // Compare using user's local times
+    if (now < startTimeUser) {
+      return 'upcoming';
+    } else if (now >= startTimeUser && now <= endTimeUser) {
+      return 'inProgress';
+    } else {
+      return 'completed';
+    }
+  } catch (error) {
+    console.error('Error determining booking status:', error, booking);
+    // Fallback to treating as upcoming if there's an error
     return 'upcoming';
-} else if (now >= startTime && now <= endTime) {
-    return 'inProgress';
-} else {
-    return 'completed';
-}
+  }
 }
 
 export function addStatusToBookings(bookings: calendarBooking[]): calendarBooking[] {
-    if (!Array.isArray(bookings)) {
-        console.error('addStatusToBookings called with non-array:', bookings);
-        return [];
-    }
+  if (!Array.isArray(bookings)) {
+    console.error('addStatusToBookings called with non-array:', bookings);
+    return [];
+  }
 
-    return bookings.map(booking => addStatusToBooking(booking));
+  return bookings.map(booking => addStatusToBooking(booking));
 }
 
 export function addStatusToBooking(booking: calendarBooking): calendarBooking {
-    if (!booking) {
-        console.error('addStatusToBooking called with null/undefined booking');
-        return booking;
-    }
+  if (!booking) {
+    console.error('addStatusToBooking called with null/undefined booking');
+    return booking;
+  }
 
-    const status = determineBookingStatus(booking);
+  const status = determineBookingStatus(booking);
 
-    return {
-        ...booking,
-        status
-    };
+  return {
+    ...booking,
+    status
+  };
 }
 
-// 🔥 FIXED: Status-based color assignment instead of random
 export const getColorByStatus = (status?: BookingStatus): string => {
   switch (status) {
     case 'completed':
@@ -57,54 +66,50 @@ export const getColorByStatus = (status?: BookingStatus): string => {
   }
 };
 
-// Keep the old random function for backward compatibility if needed
-  export const getColorByServiceLocation = (serviceLocation: string): string => {
-    if(!serviceLocation) return 'transparent';
-    const colors = [
-      '#4285F4', // Blue
-      '#EA4335', // Red
-      '#34A853', // Green
-      '#8E24AA', // Purple
-      '#33B679', // Teal
-      '#039BE5', // Light Blue
-      '#0B8043', // Dark Green
-      '#3F51B5', // Indigo
-    ];
+export const getColorByServiceLocation = (serviceLocation: string): string => {
+  if(!serviceLocation) return 'transparent';
+  const colors = [
+    '#4285F4', // Blue
+    '#EA4335', // Red
+    '#34A853', // Green
+    '#8E24AA', // Purple
+    '#33B679', // Teal
+    '#039BE5', // Light Blue
+    '#0B8043', // Dark Green
+    '#3F51B5', // Indigo
+  ];
 
-    if (serviceLocation?.length === 0) return colors[0];
-    var hash = 0;
-    for (var i = 0; i < serviceLocation?.length; i++) {
-        var charCode = serviceLocation?.charCodeAt(i);
-        hash += charCode;
-    }
-    
-    return colors[(hash) % colors.length];
-  };
+  if (serviceLocation?.length === 0) return colors[0];
+  var hash = 0;
+  for (var i = 0; i < serviceLocation?.length; i++) {
+    var charCode = serviceLocation?.charCodeAt(i);
+    hash += charCode;
+  }
+  
+  return colors[(hash) % colors.length];
+};
 
 export function addColorToBookings(bookings: calendarBooking[]): calendarBooking[] {
-    if (!Array.isArray(bookings)) {
-        console.error('addColorToBookings called with non-array:', bookings);
-        return [];
-    }
+  if (!Array.isArray(bookings)) {
+    console.error('addColorToBookings called with non-array:', bookings);
+    return [];
+  }
 
-    return bookings.map(booking => addColorToBooking(booking));
+  return bookings.map(booking => addColorToBooking(booking));
 }
 
-// 🔥 FIXED: Use status-based colors instead of random colors
 export function addColorToBooking(booking: calendarBooking): calendarBooking {
-    if (!booking) {
-        console.error('addColorToBooking called with null/undefined booking');
-        return booking;
-    }
+  if (!booking) {
+    console.error('addColorToBooking called with null/undefined booking');
+    return booking;
+  }
 
-    // Ensure the booking has a status (it should already have one from addStatusToBooking)
-    const status = booking.status || determineBookingStatus(booking);
-    const color = getColorByServiceLocation(booking.serviceName);
+  const status = booking.status || determineBookingStatus(booking);
+  const color = getColorByServiceLocation(booking.serviceName);
 
-
-    return {
-        ...booking,
-        status,
-        color
-    };
+  return {
+    ...booking,
+    status,
+    color
+  };
 }

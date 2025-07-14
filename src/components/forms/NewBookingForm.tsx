@@ -210,20 +210,21 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     return amount.toLocaleString();
   };
 
-  // NEW: Fetch availability settings when service is selected
   const fetchAvailabilitySettings = useCallback(async (serviceId?: string) => {
-    if (editMode || readOnlyMode || isOverrideMode) return; // Skip for edit mode and override mode
+    if (editMode || readOnlyMode || isOverrideMode) return;
     
     setIsLoadingAvailability(true);
+    
+    setTimeSlots([]);
+    setSelectedSlot(null);
+    
     try {
-      
       const settings = await bookingService.getAvailability(serviceId);
       setAvailabilitySettings(settings);
       
       const calculatedRange = AvailabilityService.calculateDateRange(settings);
       setDateRange(calculatedRange);
       
-      // 🔥 NEW: Auto-select the first available date
       if (calculatedRange.minDate) {
         setSelectedDate(calculatedRange.minDate);
       }
@@ -257,13 +258,19 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     }
   };
 
-  // UPDATED: Handle service change with availability fetching
   const handleServiceChange = (event: React.ChangeEvent<{ value: unknown }>) => {
     if (readOnlyMode) return;
     
     const selectedValue = event.target.value as string;
     const selectedService = services.find(s => s.displayName === selectedValue);
+    
     if (selectedService) {
+      console.log('🏢 Service selected:', selectedService.displayName);
+      
+      setTimeSlots([]);
+      setSelectedSlot(null);
+      setSelectedDate(null);
+      
       setSelectedService(selectedService);
       setBookingData(prev => ({
         ...prev,
@@ -272,7 +279,6 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
         ServicePrice: selectedService.defaultPrice,
       }));
 
-      // NEW: Fetch availability settings when service is selected (but not in override mode)
       if (!editMode && !readOnlyMode && !isOverrideMode) {
         fetchAvailabilitySettings(selectedService.id);
       }
@@ -693,69 +699,78 @@ const sendEmailNotifications = async (response: any) => {
 }, [selectedSlot, selectedDate, readOnlyMode, isOverrideMode, overrideSlot]);
 
 const fetchAvailableTimeSlots = useCallback(async () => {   
-  debugger;  
-  if (!selectedDate || !bookingData?.ServiceId || isOverrideMode) return; // Skip if in override mode
+    if (!selectedDate || !bookingData?.ServiceId || isOverrideMode) return;
 
-  updateLoadingState('timeSlots', true);
-  try {
-   
-    const year = selectedDate.getFullYear();
-    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-    const day = String(selectedDate.getDate()).padStart(2, '0');
-    const backendDateString = `${year}-${month}-${day}T00:00:00`;
-
-    let currentSelectedSlot: { startTime: string; endTime: string } | undefined;
+    updateLoadingState('timeSlots', true);
     
-    if (editMode && bookingData.DateTimeInfo?.FromDate && bookingData.DateTimeInfo?.ToDate) {
-      currentSelectedSlot = {
-        startTime: bookingData.DateTimeInfo.FromDate,
-        endTime: bookingData.DateTimeInfo.ToDate
-      };
-    }
-
-    const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
-      bookingData.ServiceId,
-      backendDateString,
-      editMode,
-      currentSelectedSlot
-    );
-
-    let filteredSlots = response;
-    
-    if (!editMode && !readOnlyMode && dateRange) {
-      filteredSlots = AvailabilityService.filterTimeSlots(response, selectedDate, dateRange);
-    }
-
-    setTimeSlots(filteredSlots);
-
-    if (editMode && bookingData.DateTimeInfo?.SelectedTime && !selectedSlot) {
-      const timeToMatch = bookingData.DateTimeInfo.SelectedTime;
-      
-      const matchingSlot = filteredSlots.find(slot => {
-        try {
-          const userSlotTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
-          const slotTimeFormatted = format(userSlotTime, 'HH:mm');
-          return slotTimeFormatted === timeToMatch;
-        } catch (error) {
-          console.error('Error comparing slot time:', error);
-          return false;
-        }
-      });
-      
-      if (matchingSlot) {
-        debugger;
-        setSelectedSlot(matchingSlot);
-      } else {
-        console.warn('⚠️ Could not find matching slot for time:', timeToMatch);
-      }
-    }
-  } catch (error) {
-    console.error('Error fetching time slots for selected service:', error);
     setTimeSlots([]);
-  } finally {
-    updateLoadingState('timeSlots', false);
-  }
-}, [selectedService, selectedDate, editMode, isViewMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, dateRange, bookingData.DateTimeInfo?.FromDate, bookingData.DateTimeInfo?.ToDate, isOverrideMode]);
+    setSelectedSlot(null);
+    
+    try {
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const backendDateString = `${year}-${month}-${day}T00:00:00`;
+
+      let currentSelectedSlot: { startTime: string; endTime: string } | undefined;
+      
+      if (editMode && bookingData.DateTimeInfo?.FromDate && bookingData.DateTimeInfo?.ToDate) {
+        currentSelectedSlot = {
+          startTime: bookingData.DateTimeInfo.FromDate,
+          endTime: bookingData.DateTimeInfo.ToDate
+        };
+      }
+
+      // Fetch raw time slots from API
+      const response: TimeSlot[] = await bookingService.getAvailableTimeSlots(
+        bookingData.ServiceId,
+        backendDateString,
+        editMode,
+        currentSelectedSlot
+      );
+
+
+      let filteredSlots = response;
+      
+      // Apply availability filtering BEFORE setting state (not in edit/read-only mode)
+      if (!editMode && !readOnlyMode && dateRange) {
+        const slotsBeforeFilter = filteredSlots.length;
+        filteredSlots = AvailabilityService.filterTimeSlots(response, selectedDate, dateRange);
+      }
+
+      setTimeSlots(filteredSlots);
+
+      if (editMode && bookingData.DateTimeInfo?.SelectedTime && !selectedSlot) {
+        const timeToMatch = bookingData.DateTimeInfo.SelectedTime;
+        
+        const matchingSlot = filteredSlots.find(slot => {
+          try {
+            const userSlotTime = TimezoneService.convertBackendTimeToLocal(slot.startTime);
+            const slotTimeFormatted = format(userSlotTime, 'HH:mm');
+            const matches = slotTimeFormatted === timeToMatch;
+            return matches;
+          } catch (error) {
+            console.error('❌ Error comparing slot time:', error);
+            return false;
+          }
+        });
+        
+        if (matchingSlot) {
+          setSelectedSlot(matchingSlot);
+        } else {
+          console.warn('⚠️ Could not find matching slot for time:', timeToMatch);
+        }
+      }
+      
+    } catch (error) {
+      console.error('❌ Error fetching time slots:', error);
+      setTimeSlots([]);
+      setSelectedSlot(null);
+    } finally {
+      updateLoadingState('timeSlots', false);
+    }
+  }, [selectedService, selectedDate, editMode, isViewMode, bookingData.DateTimeInfo?.SelectedTime, bookingData.ServiceId, dateRange, bookingData.DateTimeInfo?.FromDate, bookingData.DateTimeInfo?.ToDate, isOverrideMode]);
+
   const fetchAllFollowers = useCallback(async () => {
     updateLoadingState('followers', true);
     try {

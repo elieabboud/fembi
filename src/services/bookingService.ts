@@ -289,7 +289,7 @@ async getAvailableTimeSlots(
   },
 
 
-  async sendCancellationEmail(appointmentId: string, appointmentData: any): Promise<void> {
+async sendCancellationEmail(appointmentId: string, appointmentData: any): Promise<void> {
   try {
     const globalFollowers = await this.getGlobalFollowers();
     const loanDetails = await bookingService.getLoanDetails(appointmentData.loanData?.loanId || appointmentData.encompassLoanId, false);
@@ -324,20 +324,30 @@ async getAvailableTimeSlots(
       return;
     }
     
-    const appointmentDate = appointmentData.start?.dateTime 
-      ? new Date(appointmentData.start.dateTime).toLocaleDateString()
-      : 'N/A';
-    const appointmentTime = appointmentData.start?.dateTime
-      ? new Date(appointmentData.start.dateTime).toLocaleTimeString('en-US', {
+    let appointmentDate = 'N/A';
+    let appointmentTime = 'N/A';
+    
+    if (appointmentData.start?.dateTime) {
+      try {
+        appointmentDate = TimezoneService.formatDateForUser(appointmentData.start.dateTime, 'MMMM d, yyyy');
+        appointmentTime = TimezoneService.formatTimeForUser(appointmentData.start.dateTime, 'h:mm a');
+      } catch (error) {
+        console.error('Error formatting appointment date/time:', error);
+        appointmentDate = new Date(appointmentData.start.dateTime).toLocaleDateString();
+        appointmentTime = new Date(appointmentData.start.dateTime).toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
           hour12: true
-        })
-      : 'N/A';
+        });
+      }
+    }
     
     const borrowerName = appointmentData.customerName || 
       `${appointmentData.loanData?.borrowerFirstName || ''} ${appointmentData.loanData?.borrowerLastName || ''}`.trim() ||
       'N/A';
+    
+    const userTimezone = TimezoneService.getUserTimezoneDisplay();
+    const showTimezoneInfo = TimezoneService.shouldShowTimezoneWarning();
     
     const htmlBody = `
       <html>
@@ -388,7 +398,7 @@ async getAvailableTimeSlots(
               <h3 style="margin-top: 0; color: #6c757d;">Cancelled Appointment Details</h3>
               <p><strong>Location:</strong> ${getPhysicalAddressForService(appointmentData.serviceName) || 'N/A'}</p>
               <p><strong>Original Date:</strong> ${appointmentDate}</p>
-              <p><strong>Original Time:</strong> ${appointmentTime}</p>
+              <p><strong>Original Time:</strong> ${appointmentTime}${showTimezoneInfo ? ` (${userTimezone})` : ' (Eastern Time)'}</p>
               <p><strong>Loan ID:</strong> ${loanDetails.loanNumber || appointmentData.encompassLoanId || 'N/A'}</p>
               <p><strong>Cancellation Date:</strong> ${new Date().toLocaleDateString()}</p>
             </div>
@@ -414,6 +424,16 @@ async getAvailableTimeSlots(
                 <li>Call our office if you need immediate assistance</li>
               </ul>
             </div>
+            
+            ${showTimezoneInfo ? `
+            <div style="background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #1976d2;">🌍 Timezone Information</h3>
+              <p style="margin: 0; font-size: 14px;">
+                <strong>Times shown in:</strong> ${userTimezone}<br>
+                <strong>Note:</strong> All appointment times are automatically converted from Eastern Time to your local timezone.
+              </p>
+            </div>
+            ` : ''}
             
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; text-align: center;">
               <p><strong>📞 Need Help?</strong></p>
