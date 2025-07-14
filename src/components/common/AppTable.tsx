@@ -173,7 +173,7 @@ const AppTable: React.FC<AppTableProps> = ({
   
   try {
     
-    try {
+    try { // TODO: Must send Cancellation email after we delete the booking
       await bookingService.sendCancellationEmail(selectedRow.bookingId, selectedRow);
     } catch (emailError) {
       console.error('❌ Failed to send cancellation email:', emailError);

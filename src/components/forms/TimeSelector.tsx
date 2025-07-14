@@ -107,7 +107,7 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
         <Box sx={{ display: 'flex', width: '100%', justifyContent: 'center', height: 'auto', my: 2 }}>
           <CircularProgress size={20} thickness={4} sx={{ my: 1 }} />
           <Typography variant="body2" sx={{ ml: 2 }}>
-            Loading available times...
+            { readOnly? "Loading selected time..." : "Loading available times..." }
           </Typography>
         </Box>
       )}
@@ -156,7 +156,7 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
               selectedSlot.staffMemberId === originalSlotAtIndex.staffMemberId;
             
             // 🔥 NEW: Check if this is the original slot in edit mode
-            const isOriginalSlot = editMode && originalSlot && 
+            const isOriginalSlot = !editMode && originalSlot && 
               originalSlotAtIndex.startTime === originalSlot.startTime &&
               originalSlotAtIndex.endTime === originalSlot.endTime &&
               originalSlotAtIndex.staffMemberId === originalSlot.staffMemberId;
@@ -235,7 +235,7 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
           No time slots available for this date. Please select a different date.
         </Typography>
-      ) : readOnly && !selectedSlotDisplay ? (
+      ) : readOnly && !selectedSlotDisplay && !loading ? (
         /* Read-only mode without selected slot */
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
           No time slot selected

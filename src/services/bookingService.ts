@@ -97,7 +97,6 @@ async getAvailableTimeSlots(
             return slotStartTime > now;
           } else {
 
-            debugger;
             var originalSelectedDate = JSON.parse(localStorage.getItem("selectedItem"));
             if(slot.startTime < originalSelectedDate.dateTime){
               return false;
@@ -293,6 +292,7 @@ async getAvailableTimeSlots(
   async sendCancellationEmail(appointmentId: string, appointmentData: any): Promise<void> {
   try {
     const globalFollowers = await this.getGlobalFollowers();
+    const loanDetails = await bookingService.getLoanDetails(appointmentData.loanData?.loanId || appointmentData.encompassLoanId, false);
     
     const recipientEmails: string[] = [];
     const ccEmails: string[] = [...globalFollowers];
@@ -386,19 +386,17 @@ async getAvailableTimeSlots(
 
             <div style="background-color: #f8f9fa; border-left: 4px solid #6c757d; padding: 15px; margin: 20px 0;">
               <h3 style="margin-top: 0; color: #6c757d;">Cancelled Appointment Details</h3>
-              <p><strong>Location:</strong> ${appointmentData.serviceName || 'N/A'}</p>
+              <p><strong>Location:</strong> ${getPhysicalAddressForService(appointmentData.serviceName) || 'N/A'}</p>
               <p><strong>Original Date:</strong> ${appointmentDate}</p>
               <p><strong>Original Time:</strong> ${appointmentTime}</p>
-              <p><strong>Loan ID:</strong> ${appointmentData.loanData?.loanNumber || appointmentData.encompassLoanId || 'N/A'}</p>
+              <p><strong>Loan ID:</strong> ${loanDetails.loanNumber || appointmentData.encompassLoanId || 'N/A'}</p>
               <p><strong>Cancellation Date:</strong> ${new Date().toLocaleDateString()}</p>
             </div>
             
             <div style="background-color: #e9ecef; border-left: 4px solid #007bff; padding: 15px; margin: 20px 0;">
               <h3 style="margin-top: 0; color: #007bff;">Borrower Information</h3>
               <p><strong>Name:</strong> ${borrowerName}</p>
-              ${appointmentData.loanData?.borrowerAddress ? `
-                <p><strong>Address:</strong> ${appointmentData.loanData.borrowerAddress}, ${appointmentData.loanData.borrowerCity || ''}, ${appointmentData.loanData.borrowerState || ''} ${appointmentData.loanData.borrowerZipCode || ''}</p>
-              ` : ''}
+              <p><strong>Address: </strong>${loanDetails?.borrowerAddress + ', ' || ''}${loanDetails?.borrowerCity + ', ' || ''}${loanDetails?.borrowerState + ' ' || ''}${loanDetails?.borrowerZipCode || ''}</p>
             </div>
             
             <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
@@ -444,4 +442,13 @@ async getAvailableTimeSlots(
   }
 },
 
+}
+
+function getPhysicalAddressForService(serviceName: any) {
+  switch(serviceName) {
+    case "FEMBi Mortgage - San Juan":
+      return "322 Ave De Diego Esq. Roosevelt Suite 201, San Juan, PR, 00920";
+    case "FEMBi Mortgage - Ponce":
+      return "San Rafael Industrial Park 1634 Ste 201, Ponce, PR, 00716";
+  }
 }

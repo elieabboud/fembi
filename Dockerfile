@@ -1,14 +1,32 @@
-# FROM node:18-alpine
-FROM node:latest
-WORKDIR /fembi-booking-webapp
+# Multi-stage build for optimized production
+FROM node:18-alpine AS builder
 
-COPY . /fembi-booking-webapp
+WORKDIR /app
+COPY package*.json ./
 
-RUN npm cache clean --force
-RUN npm install -g npm@10.3.0
-RUN npm install
+RUN npm ci --only=production --silent
+
+COPY . .
 
 RUN npm run build
 
-EXPOSE 3000
-CMD ["npm", "run", "start"]
+# Production stage with nginx
+FROM nginx:alpine AS production
+
+COPY --from=builder /app/build /usr/share/nginx/html
+
+# Create custom nginx config for React Router support
+RUN echo 'server {' > /etc/nginx/conf.d/default.conf && \
+    echo '    listen 80;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    server_name localhost;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    root /usr/share/nginx/html;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    index index.html;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    location / {' >> /etc/nginx/conf.d/default.conf && \
+    echo '        try_files $uri $uri/ /index.html;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    }' >> /etc/nginx/conf.d/default.conf && \
+    echo '}' >> /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

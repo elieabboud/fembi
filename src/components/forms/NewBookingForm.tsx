@@ -279,24 +279,31 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     }
   };
 
-  const sendEmailNotifications = async (response: any) => {
+const sendEmailNotifications = async (response: any) => {
   if (readOnlyMode) return;
 
   updateLoadingState('sendingEmail', true);
   
   try {
     const currentUserEmail = user?.email || '';
-
     const globalFollowers = await bookingService.getGlobalFollowers();
     
     const recipientEmails: string[] = [];
     const ccEmails: string[] = [...globalFollowers];
-    const mainRecipientEmail : string[] = [];
     
     if (currentUserEmail) {
       recipientEmails.push(currentUserEmail);
+    }
+    
+    if (loanDetails?.loanCloserEmail && loanDetails.loanCloserEmail.trim() !== '') {
       recipientEmails.push(loanDetails.loanCloserEmail);
+    }
+    
+    if (loanDetails?.loanOfficerEmail && loanDetails.loanOfficerEmail.trim() !== '') {
       recipientEmails.push(loanDetails.loanOfficerEmail);
+    }
+    
+    if (bookingData.BorrowerInformation.Email && bookingData.BorrowerInformation.Email.trim() !== '') {
       recipientEmails.push(bookingData.BorrowerInformation.Email);
     }
     
@@ -304,15 +311,20 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
       const followerEmails = bookingData.Followers
         .split(',')
         .map(email => email.trim())
-        .filter(email => email.length > 0 && email.includes('@'));
+        .filter(email => email.length > 0 && email.includes('@') && email.includes('.'));
       recipientEmails.push(...followerEmails);
     }
     
-    const uniqueEmails = Array.from(new Set(recipientEmails));
+    const uniqueEmails = Array.from(new Set(recipientEmails))
+      .filter(email => email && email.trim() !== '' && email.includes('@') && email.includes('.'));
     
     if (uniqueEmails.length === 0) {
+      console.warn('⚠️ No valid recipient emails found, skipping email notification');
+      updateLoadingState('sendingEmail', false);
       return;
     }
+    
+    console.log('📧 Sending email to recipients:', uniqueEmails);
     
     const appointmentDate = new Date(bookingData.DateTimeInfo.SelectedDate).toLocaleDateString();
     const appointmentTime = bookingData.DateTimeInfo.SelectedTime;
@@ -323,7 +335,7 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     });
     const borrowerName = `${bookingData.BorrowerInformation.FirstName} ${bookingData.BorrowerInformation.LastName}`.trim();
 
-    // 🔥 NEW: Different titles based on operation type
+    // Different titles based on operation type
     let title: string;
     let headerTitle: string;
     let actionText: string;
@@ -338,7 +350,6 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
       actionText = "has been scheduled successfully";
     }
     
-    // Add admin override notice if applicable
     const overrideNotice = isOverrideMode ? 
       `<div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
         <h4 style="margin-top: 0; color: #856404;">⚠️ Admin Override Notice</h4>
@@ -353,7 +364,6 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
               ${headerTitle}
             </h2>
 
-           
 
             <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
               <p><strong>Greetings,</strong></p>
@@ -373,8 +383,8 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
 
               <p><strong>Saludos,</strong></p>
               <p>
-                Nos complace confirmar su cita ${editMode ? 'reagendada' : 'próxima'} para el cierre con <strong>FEMBi Mortgage</strong>.
-                Este correo electrónico constituye la confirmación oficial de su cita ${editMode ? 'reagendada' : ''}.
+                Nos complace confirmar su cita ${editMode ? 'reprogramada' : 'próxima'} para el cierre con <strong>FEMBi Mortgage</strong>.
+                Este correo electrónico constituye la confirmación oficial de su cita ${editMode ? 'reprogramada' : ''}.
               </p>
               <p>
                 Si tiene alguna pregunta o necesita asistencia adicional, no dude en comunicarse con su 
@@ -387,11 +397,11 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
 
             <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0;">
               <h3 style="margin-top: 0; color: #28a745;">Appointment Details</h3>
-              <p><strong>Location:</strong> ${bookingData.ServiceName}</p>
+              <p><strong>Location:</strong> ${getPhysicalAddressForService(bookingData.ServiceName)}</p>
               <p><strong>Settlement Agent:</strong> First National Title Services, Inc.</p>
               <p><strong>Date:</strong> ${appointmentDate}</p>
               <p><strong>Time:</strong> ${formattedTime}</p>
-              <p><strong>Loan ID:</strong> ${loanDetails.loanNumber}</p>
+              <p><strong>Loan ID:</strong> ${loanDetails?.loanNumber || 'N/A'}</p>
             </div>
             
             <div style="background-color: #e9ecef; border-left: 4px solid #007bff; padding: 15px; margin: 20px 0;">
@@ -402,10 +412,12 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
             
             <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
               <h3 style="margin-top: 0; color: #856404;">Loan Information</h3>
-              <p><strong>Loan Closer:</strong> ${loanDetails.loanCloser}</p>
-              <p><strong>Loan Officer:</strong> ${loanDetails.loanOfficer}</p>
-              <p><strong>Loan Type:</strong> ${loanDetails.loanType}</p>
-              <p><strong>Loan Purpose:</strong> ${loanDetails.loanPurpose}</p>
+              <p><strong>Loan Closer:</strong> ${loanDetails?.loanCloser || 'N/A'}</p>
+              ${loanDetails?.loanCloserEmail ? `<p><strong>Loan Closer Email:</strong> ${loanDetails.loanCloserEmail}</p>` : ''}
+              <p><strong>Loan Officer:</strong> ${loanDetails?.loanOfficer || 'N/A'}</p>
+              ${loanDetails?.loanOfficerEmail ? `<p><strong>Loan Officer Email:</strong> ${loanDetails.loanOfficerEmail}</p>` : ''}
+              <p><strong>Loan Type:</strong> ${loanDetails?.loanType || 'N/A'}</p>
+              <p><strong>Loan Purpose:</strong> ${loanDetails?.loanPurpose || 'N/A'}</p>
             </div>
             
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d;">
@@ -420,9 +432,9 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     const icsFilename = ICSGeneratorService.generateICSFilename(bookingData);
 
     const emailRequest: EmailRequestDTO = {
-      To: mainRecipientEmail,
-      Bcc: uniqueEmails,
-      Cc: ccEmails,
+      To: [], // Keep To empty to avoid issues
+      Bcc: uniqueEmails, // Send to BCC to avoid exposing all recipients
+      Cc: ccEmails.filter(email => email && email.trim() !== '' && email.includes('@')), // Filter CC emails too
       Subject: `${title} - ${bookingData.ServiceName} for ${borrowerName}`,
       Body: htmlBody,
       IsHtml: true,
@@ -435,11 +447,18 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
       ]
     };
 
+    console.log('📧 Email request prepared:', {
+      recipientCount: uniqueEmails.length,
+      ccCount: emailRequest.Cc?.length || 0,
+      subject: emailRequest.Subject
+    });
+
     const emailResponse = await bookingService.sendEmail(emailRequest);
+    console.log('📧 Email sent successfully:', emailResponse);
     
   } catch (error) {
     console.error('❌ Error sending email notifications:', error);
-    
+    // Don't throw the error - just log it so the booking process isn't interrupted
   } finally {
     updateLoadingState('sendingEmail', false);
   }
@@ -673,7 +692,8 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
   }));
 }, [selectedSlot, selectedDate, readOnlyMode, isOverrideMode, overrideSlot]);
 
-const fetchAvailableTimeSlots = useCallback(async () => {     
+const fetchAvailableTimeSlots = useCallback(async () => {   
+  debugger;  
   if (!selectedDate || !bookingData?.ServiceId || isOverrideMode) return; // Skip if in override mode
 
   updateLoadingState('timeSlots', true);
@@ -723,6 +743,7 @@ const fetchAvailableTimeSlots = useCallback(async () => {
       });
       
       if (matchingSlot) {
+        debugger;
         setSelectedSlot(matchingSlot);
       } else {
         console.warn('⚠️ Could not find matching slot for time:', timeToMatch);
@@ -819,26 +840,33 @@ const fetchAvailableTimeSlots = useCallback(async () => {
         setIsLoanDetailsValidated(true);
         
         setNotes(initialData.loanData?.notes || loanDetails.notes || '');
+        
         if (loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0) {
           const followersWithTypes = parseFollowersWithTypes(loanDetails.followers);
           setLoanDetailsFollowers(followersWithTypes);
           
           if (initialData.followers) {
-            const existingFollowerEmails = initialData.followers.split(',').map(email => email.trim()).filter(email => email.length > 0);
+            
+            const existingFollowerEmails = initialData.followers
+              .split(',')
+              .map(email => email.trim())
+              .filter(email => email.length > 0);
+            
             
             const selectedFromLoan = followersWithTypes.filter(lf => 
               existingFollowerEmails.includes(lf.email)
             );
             
-            const systemAndCustomFollowers = existingFollowerEmails.filter(email => 
+            const customFollowers = existingFollowerEmails.filter(email => 
               !followersWithTypes.find(lf => lf.email === email)
             );
-
+            
             setSelectedLoanFollowers(selectedFromLoan);
-            setFetchedFollowers(systemAndCustomFollowers);
-            setAddedFollowers([]);
+            setFetchedFollowers([]);
+            setAddedFollowers(customFollowers); 
             
           } else {
+
             setSelectedLoanFollowers([]);
             setFetchedFollowers([]);
             setAddedFollowers([]);
@@ -847,8 +875,12 @@ const fetchAvailableTimeSlots = useCallback(async () => {
           setLoanDetailsFollowers([]);
           setSelectedLoanFollowers([]);
           
-          if (formattedData.Followers) {
-            const existingFollowerEmails = formattedData.Followers.split(',').map(email => email.trim()).filter(email => email.length > 0);
+          if (initialData.followers) {            
+            const existingFollowerEmails = initialData.followers
+              .split(',')
+              .map(email => email.trim())
+              .filter(email => email.length > 0);
+            
             setFetchedFollowers(existingFollowerEmails);
             setAddedFollowers([]);
           } else {
@@ -857,7 +889,6 @@ const fetchAvailableTimeSlots = useCallback(async () => {
           }
         }
         
-        // Set the booking data with loan details
         setBookingData((prev) => ({
           ...formattedData,
           BorrowerInformation: {
@@ -895,14 +926,18 @@ const fetchAvailableTimeSlots = useCallback(async () => {
           }
         }
 
-        // 🔥 REMOVED: Don't set fetchedFollowers from formattedData.Followers here
-        // This is now handled above in the loan followers logic
-
       } catch (error) {
         console.error('Error initializing edit mode:', error);
+        
         // On error, still try to set basic followers if available
-        if (formattedData.Followers) {
-          const followerArray = formattedData.Followers.split(',').map(email => email.trim()).filter(email => email.length > 0);
+        if (initialData.followers) {
+          console.log('📧 Error occurred, setting followers as basic list:', initialData.followers);
+          
+          const followerArray = initialData.followers
+            .split(',')
+            .map(email => email.trim())
+            .filter(email => email.length > 0);
+          
           setFetchedFollowers(followerArray);
           setSelectedLoanFollowers([]);
           setAddedFollowers([]);
@@ -947,7 +982,7 @@ const fetchAvailableTimeSlots = useCallback(async () => {
   }, [fetchedFollowers, selectedLoanFollowers, addedFollowers]);
 
   useEffect(() => {
-    if (!readOnlyMode && selectedDate && bookingData.ServiceId && !isOverrideMode) {
+    if (selectedDate && bookingData.ServiceId && !isOverrideMode) {
       fetchAvailableTimeSlots();
     }
   }, [selectedDate, bookingData.ServiceId, isOverrideMode]);
@@ -1390,11 +1425,11 @@ const fetchAvailableTimeSlots = useCallback(async () => {
             <TimeSelector
               timeSlots={timeSlots}
               selectedSlot={selectedSlot}
-              onSelect={!readOnlyMode ? setSelectedSlot : () => {}}
+              onSelect={setSelectedSlot}
               loading={loadingStates.timeSlots}
               readOnly={readOnlyMode}
               editMode={editMode}
-              originalSlot={editMode && initialData ? {
+              originalSlot={(editMode || readOnlyMode) && initialData ? {
                 startTime: initialData.start?.dateTime || '',
                 endTime: initialData.end?.dateTime || '',
                 displayText: '',
@@ -1403,7 +1438,7 @@ const fetchAvailableTimeSlots = useCallback(async () => {
             />
           )}
           
-          <EnhancedFollowers
+          {!readOnlyMode && <EnhancedFollowers
             editMode={editMode || readOnlyMode}
             regularFollowers={fetchedFollowers}              
             loanDetailsFollowers={loanDetailsFollowers}      
@@ -1417,7 +1452,7 @@ const fetchAvailableTimeSlots = useCallback(async () => {
               }
             }}
             loading={loadingStates.followers}
-          />
+          />}
           {error.length > 0 && !readOnlyMode && (
             <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>
               {error}
@@ -1483,3 +1518,12 @@ const fetchAvailableTimeSlots = useCallback(async () => {
 };
 
 export default CreateBookingForm;
+
+function getPhysicalAddressForService(ServiceName: string) {
+  switch(ServiceName) {
+    case "FEMBi Mortgage - San Juan":
+      return "322 Ave De Diego Esq. Roosevelt Suite 201, San Juan, PR, 00920";
+    case "FEMBi Mortgage - Ponce":
+      return "San Rafael Industrial Park 1634 Ste 201, Ponce, PR, 00716";
+  }
+}

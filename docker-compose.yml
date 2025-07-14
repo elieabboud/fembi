@@ -5,9 +5,10 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    restart: unless-stopped
     image: fbc-frontend-${ENVIRONMENT}:1.0.0
     ports:
-      - "${EXPOSED_DOCKER_PORT}:3000"
+      - "${EXPOSED_DOCKER_PORT}:80"
     container_name: fbc-frontend-${ENVIRONMENT}
     networks:
       - booking-network

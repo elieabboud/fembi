@@ -90,7 +90,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
   // 🔥 FIXED: Create unified followers list properly
   const allFollowers = [
     ...regularFollowers.map((email): FollowerWithType => ({ email, type: 'System' })),
-    ...selectedLoanFollowers, // These already have types
+    ...selectedLoanFollowers,
     ...addedFollowers.map((email): FollowerWithType => ({ email, type: 'Custom' }))
   ];
 
@@ -121,6 +121,13 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
     const isSystem = type === 'System';
     const canDelete = !isSystem;
 
+    function toTitleCase(str: string) {
+      return str.replace(
+        /\w\S*/g,
+        text => text.charAt(0).toUpperCase() + text.substring(1).toLowerCase()
+      );
+    }
+
     return (
       <Box
         key={email}
@@ -128,6 +135,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
           display: 'flex',
           alignItems: 'center',
           height: 28,
+          width: '100%',
           borderRadius: '16px',
           overflow: 'hidden',
           mr: 0.5,
@@ -142,12 +150,17 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
             color: 'white',
             fontSize: '0.7rem',
             px: 1,
+            minWidth: '25%',
+            maxWidth: '25%',
             display: 'flex',
             alignItems: 'center',
             height: '100%',
+            alignContent: 'center',
+            justifyContent: 'center',
+            textAlign: 'center'
           }}
         >
-          {type.replace(/_/g, ' ')}
+          {toTitleCase(type.replace(/_/g, ' '))}
         </Box>
 
         {/* Email */}
@@ -157,6 +170,8 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
             color: 'white',
             fontSize: '0.7rem',
             px: 1,
+            minWidth: '70%',
+            maxWidth: '70%',
             display: 'flex',
             alignItems: 'center',
             height: '100%',
@@ -166,7 +181,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
         </Box>
 
         {/* Delete Icon */}
-        {canDelete && (
+        {canDelete? (
           <IconButton
             size="small"
             onClick={() => {
@@ -180,14 +195,37 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
               backgroundColor: color,
               color: 'white',
               height: 28,
-              width: 28,
+              minWidth: '100%',
+              maxWidth: '100%',
               borderRadius: 0,
+              fontSize: '15px',
               '&:hover': {
                 backgroundColor: '#1565c0',
               },
+              alignItems: 'flex-start',
+              justifyContent: 'left',
             }}
           >
             ✕
+          </IconButton>
+        ) : (
+          <IconButton
+            size="small"
+            sx={{
+              backgroundColor: color,
+              color: 'white',
+              height: 28,
+              minWidth: '5%',
+              maxWidth: '5%',
+              borderRadius: 0,
+              fontSize: '15px',
+              cursor: 'default',
+              '&:hover': {
+                backgroundColor: color,
+              },
+            }}
+          >
+            
           </IconButton>
         )}
       </Box>
@@ -222,7 +260,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
               <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', fontSize: '0.8rem' }}>
                 Selected Followers
               </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2, justifyContent: 'space-evenly' }}>
                 {allFollowers.map((follower) => renderUnifiedChip(follower))}
               </Box>
             </>
