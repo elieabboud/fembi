@@ -66,13 +66,13 @@ ${htmlBody}
     return true;
   }
 
-  static async sendEmailWithRecipient(bookings: calendarBooking[], columns: Column[], recipientEmail?: string){
+  static async sendEmailWithRecipient(bookings: calendarBooking[], columns: Column[], recipientEmail?: string[]){
     const subject = `Bookings Report - ${bookings.length} items (${new Date().toLocaleDateString()})`;
     const htmlBody = this.generateHTMLTableForEmail(bookings, columns);
 
     try {
       const emailRequest: EmailRequestDTO = {
-        To: [recipientEmail || ''],
+        To: recipientEmail,
         Subject: subject,
         Body: htmlBody,
         IsHtml: true, // This ensures the HTML table is rendered properly

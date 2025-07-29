@@ -20,12 +20,14 @@ import {
   IconButton,
   useMediaQuery,
   Snackbar,
+  Autocomplete,
 } from '@mui/material';
 import {
   Email as EmailIcon,
   AttachFile as AttachFileIcon,
   ContentCopy as CopyIcon,
   ExpandMore as ExpandMoreIcon,
+  Add as AddIcon,
 } from '@mui/icons-material';
 import AppTable from '../components/common/AppTable';
 import SearchBar from '../components/common/SearchBar';
@@ -50,32 +52,28 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 // Custom sorting function for bookings
 const sortBookings = (bookings: calendarBooking[]): calendarBooking[] => {
   return [...bookings].sort((a, b) => {
-    // Define status priority: inProgress = 1, upcoming = 2, completed = 3
     const getStatusPriority = (status: BookingStatus | undefined) => {
       switch (status) {
         case 'inProgress': return 1;
         case 'upcoming': return 2;
         case 'completed': return 3;
-        default: return 4; // For any other status
+        default: return 4;
       }
     };
 
     const statusPriorityA = getStatusPriority(a.status);
     const statusPriorityB = getStatusPriority(b.status);
 
-    // First sort by status priority
     if (statusPriorityA !== statusPriorityB) {
       return statusPriorityA - statusPriorityB;
     }
 
-    // If same status, sort by time (earliest first)
     if (a.start?.dateTime && b.start?.dateTime) {
       const timeA = new Date(a.start.dateTime).getTime();
       const timeB = new Date(b.start.dateTime).getTime();
       return timeA - timeB;
     }
 
-    // If one doesn't have a start time, put it at the end
     if (!a.start?.dateTime) return 1;
     if (!b.start?.dateTime) return -1;
 
@@ -113,10 +111,11 @@ const Bookings: React.FC = () => {
   const [dataFetched, setDataFetched] = useState(false);
   const [isLastOperationEdit, setIsLastOperationEdit] = useState(false);
 
-  // Email functionality state
+  // Email functionality state - UPDATED for multiple recipients
   const [emailMenuAnchor, setEmailMenuAnchor] = useState<null | HTMLElement>(null);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
-  const [recipientEmail, setRecipientEmail] = useState('');
+  const [recipientEmails, setRecipientEmails] = useState<string[]>([]); // Changed from single string to array
+  const [emailInputValue, setEmailInputValue] = useState(''); // For the input field value
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -131,6 +130,12 @@ const Bookings: React.FC = () => {
   const [loanOfficersOptions, setLoanOfficersOptions] = useState<{id: string, label: string}[]>([]);
   const [serviceOptions, setServiceOptions] = useState<{ id: string, label: string }[]>([]);
 
+  // Email validation helper
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email.trim());
+  };
+
   const handleConfirmationClose = () => {
     setShowSuccessMessage(false);
     setTimeout(() => {
@@ -142,7 +147,6 @@ const Bookings: React.FC = () => {
     setNewBooking(false);
   }
 
-  // New handler for selection change
   const handleSelectionChange = (selectedRows: calendarBooking[]) => {
     setSelectedBookings(selectedRows);
   };
@@ -157,7 +161,6 @@ const Bookings: React.FC = () => {
       const bookingsWithStatus = addStatusToBookings(response);
       const filteredBookings = bookingsWithStatus.filter(booking => booking.bookingId !== null);
       
-      // Apply custom sorting
       const sortedBookings = sortBookings(filteredBookings);
 
       setBookings(sortedBookings);
@@ -196,141 +199,138 @@ const Bookings: React.FC = () => {
   useEffect(() => {
     let filtered = [...bookings];
     
-   const searchInBooking = (booking: calendarBooking, query: string): boolean => {
-  const lowercaseQuery = query.toLowerCase();
-  
-  const getNestedValue = (obj: any, path: string): string => {
-    return path.split('.').reduce((current, key) => current?.[key], obj) || '';
-  };
-  
-  const extractSearchableText = (value: any): string => {
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number') return value.toString();
-    if (typeof value === 'boolean') return value.toString();
-    if (typeof value === 'object') {
-      return JSON.stringify(value);
-    }
-    return String(value);
-  };
-  
-  const getFormattedDateTimeValues = (booking: calendarBooking): string[] => {
-    const values: string[] = [];
-    
-    if (booking.start?.dateTime) {
-      try {
-        values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy'));
-        values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMM d, yyyy'));
-        values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MM/dd/yyyy'));
-        values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'yyyy-MM-dd'));
+    const searchInBooking = (booking: calendarBooking, query: string): boolean => {
+      const lowercaseQuery = query.toLowerCase();
+      
+      const getNestedValue = (obj: any, path: string): string => {
+        return path.split('.').reduce((current, key) => current?.[key], obj) || '';
+      };
+      
+      const extractSearchableText = (value: any): string => {
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number') return value.toString();
+        if (typeof value === 'boolean') return value.toString();
+        if (typeof value === 'object') {
+          return JSON.stringify(value);
+        }
+        return String(value);
+      };
+      
+      const getFormattedDateTimeValues = (booking: calendarBooking): string[] => {
+        const values: string[] = [];
         
-        values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a'));
-        values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'HH:mm'));
-        values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'h a'));
+        if (booking.start?.dateTime) {
+          try {
+            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy'));
+            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMM d, yyyy'));
+            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MM/dd/yyyy'));
+            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'yyyy-MM-dd'));
+            
+            values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a'));
+            values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'HH:mm'));
+            values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'h a'));
+            
+            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy') + ' ' + 
+                      TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a'));
+          } catch (error) {
+            console.warn('Error formatting date/time for search:', error);
+          }
+        }
         
-        values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy') + ' ' + 
-                  TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a'));
-      } catch (error) {
-        console.warn('Error formatting date/time for search:', error);
-      }
-    }
+        return values;
+      };
+      
+      const searchableFields = [
+        'bookingId',
+        'customerName',
+        'serviceName',
+        'customerEmailAddress',
+        'customerPhone',
+        'status',
+        'encompassLoanId',
+        'LoanCloser',
+        'LoanOfficer',
+        'dpa',
+        
+        'loanData.borrowerFirstName',
+        'loanData.borrowerLastName',
+        'loanData.borrowerEmail',
+        'loanData.borrowerPhone',
+        'loanData.borrowerAddress',
+        'loanData.borrowerCity',
+        'loanData.borrowerState',
+        'loanData.borrowerZipCode',
+        'loanData.loanNumber',
+        'loanData.loanType',
+        'loanData.loanAmount',
+        'loanData.loanOfficer',
+        'loanData.loanCloser',
+        'loanData.dpa',
+        'loanData.notes',
+        'loanData.loanPurpose',
+        
+        'serviceLocation.displayName',
+        'serviceLocation.address.street',
+        'serviceLocation.address.city',
+        'serviceLocation.address.state',
+        'serviceLocation.address.postalCode',
+        
+        'customers.0.name',
+        'customers.0.emailAddress',
+        'customers.0.phone'
+      ];
+      
+      const specificLoanPurposeChecks = [
+        booking.loanData?.loanPurpose,
+        booking.loanData?.loanType,
+      ].filter(Boolean).map(value => extractSearchableText(value).toLowerCase());
+      
+      const fieldMatches = searchableFields.some(fieldPath => {
+        const value = getNestedValue(booking, fieldPath);
+        const searchableText = extractSearchableText(value).toLowerCase();
+        return searchableText.includes(lowercaseQuery);
+      });
+      
+      const loanPurposeMatches = specificLoanPurposeChecks.some(text => 
+        text.includes(lowercaseQuery)
+      );
+      
+      const formattedDateTimeValues = getFormattedDateTimeValues(booking);
+      const dateTimeMatches = formattedDateTimeValues.some(dateTimeValue => 
+        dateTimeValue.toLowerCase().includes(lowercaseQuery)
+      );
+      
+      const formattedStatus = booking.status ? (() => {
+        switch (booking.status) {
+          case 'upcoming': return 'Upcoming';
+          case 'inProgress': return 'In Progress';
+          case 'completed': return 'Completed';
+          case 'canceled': return 'Canceled';
+          default: return booking.status;
+        }
+      })() : '';
+      const statusMatches = formattedStatus.toLowerCase().includes(lowercaseQuery);
+      
+      const borrowerNameMatches = (() => {
+        if (booking.loanData) {
+          const fullName = `${booking.loanData.borrowerFirstName || ''} ${booking.loanData.borrowerLastName || ''}`.trim().toLowerCase();
+          return fullName.includes(lowercaseQuery);
+        }
+        return false;
+      })();
+      
+      return fieldMatches || 
+             loanPurposeMatches || 
+             dateTimeMatches || 
+             statusMatches || 
+             borrowerNameMatches;
+    };
     
-    return values;
-  };
-  
-  const searchableFields = [
-    'bookingId',
-    'customerName',
-    'serviceName',
-    'customerEmailAddress',
-    'customerPhone',
-    'status',
-    'encompassLoanId',
-    'LoanCloser',
-    'LoanOfficer',
-    'dpa',
-    
-    'loanData.borrowerFirstName',
-    'loanData.borrowerLastName',
-    'loanData.borrowerEmail',
-    'loanData.borrowerPhone',
-    'loanData.borrowerAddress',
-    'loanData.borrowerCity',
-    'loanData.borrowerState',
-    'loanData.borrowerZipCode',
-    'loanData.loanNumber',
-    'loanData.loanType',
-    'loanData.loanAmount',
-    'loanData.loanOfficer',
-    'loanData.loanCloser',
-    'loanData.dpa',
-    'loanData.notes',
-    'loanData.loanPurpose',
-    
-    'serviceLocation.displayName',
-    'serviceLocation.address.street',
-    'serviceLocation.address.city',
-    'serviceLocation.address.state',
-    'serviceLocation.address.postalCode',
-    
-    'customers.0.name',
-    'customers.0.emailAddress',
-    'customers.0.phone'
-  ];
-  
-  const specificLoanPurposeChecks = [
-    booking.loanData?.loanPurpose,
-    booking.loanData?.loanType,
-  ].filter(Boolean).map(value => extractSearchableText(value).toLowerCase());
-  
-  const fieldMatches = searchableFields.some(fieldPath => {
-    const value = getNestedValue(booking, fieldPath);
-    const searchableText = extractSearchableText(value).toLowerCase();
-    return searchableText.includes(lowercaseQuery);
-  });
-  
-  const loanPurposeMatches = specificLoanPurposeChecks.some(text => 
-    text.includes(lowercaseQuery)
-  );
-  
-  const formattedDateTimeValues = getFormattedDateTimeValues(booking);
-  const dateTimeMatches = formattedDateTimeValues.some(dateTimeValue => 
-    dateTimeValue.toLowerCase().includes(lowercaseQuery)
-  );
-  
-  const formattedStatus = booking.status ? (() => {
-    switch (booking.status) {
-      case 'upcoming': return 'Upcoming';
-      case 'inProgress': return 'In Progress';
-      case 'completed': return 'Completed';
-      case 'canceled': return 'Canceled';
-      default: return booking.status;
-    }
-  })() : '';
-  const statusMatches = formattedStatus.toLowerCase().includes(lowercaseQuery);
-  
-  const borrowerNameMatches = (() => {
-    if (booking.loanData) {
-      const fullName = `${booking.loanData.borrowerFirstName || ''} ${booking.loanData.borrowerLastName || ''}`.trim().toLowerCase();
-      return fullName.includes(lowercaseQuery);
-    }
-    return false;
-  })();
-  
-  
-  return fieldMatches || 
-         loanPurposeMatches || 
-         dateTimeMatches || 
-         statusMatches || 
-         borrowerNameMatches;
-};
-    
-    // Apply search query filter using enhanced search
     if (searchQuery.trim()) {
       filtered = filtered.filter(booking => searchInBooking(booking, searchQuery));
     }
     
-    // Apply status filter
     if (statusFilter.length > 0) {
       filtered = filtered.filter(booking => {
         if(!booking.status) return false;
@@ -338,7 +338,6 @@ const Bookings: React.FC = () => {
       });
     }
 
-    // Apply loan Officers filter
     if (officersFilter.length > 0) {
       filtered = filtered.filter(booking => {
         if (!booking.loanData) return false;
@@ -347,17 +346,14 @@ const Bookings: React.FC = () => {
       });
     }
     
-    // Apply location filter
     if (serviceFilter) {
       filtered = filtered.filter(booking => booking.serviceName === serviceFilter);
     }
 
-    // Apply date filter
     if (dateFilter) {
       filtered = filtered.filter(booking => isBookingOnDate(booking, dateFilter));
     }
 
-    // Apply sorting to filtered results
     const sortedFiltered = sortBookings(filtered);
     setFilteredBookings(sortedFiltered);
   }, [searchQuery, bookings, statusFilter, officersFilter, serviceFilter, dateFilter]);
@@ -404,13 +400,12 @@ const Bookings: React.FC = () => {
     
     switch (option) {
       case 'eml':
-        EmailService.createEMLFile(dataToEmail, columns, recipientEmail);
+        EmailService.createEMLFile(dataToEmail, columns, recipientEmails.join(', '));
         break;
       case 'mailto':
-        const success = EmailService.openDefaultEmailClient(dataToEmail, columns, recipientEmail);
+        const success = EmailService.openDefaultEmailClient(dataToEmail, columns, recipientEmails.join(', '));
         if (!success) {
-          // Fallback to EML if mailto fails
-          EmailService.createEMLFile(dataToEmail, columns, recipientEmail);
+          EmailService.createEMLFile(dataToEmail, columns, recipientEmails.join(', '));
         }
         break;
       case 'copy':
@@ -432,17 +427,50 @@ const Bookings: React.FC = () => {
     handleEmailMenuClose();
   };
 
-  const handleSendEmailWithRecipient = async () => {
+  const handleSendEmailWithRecipients = async () => {
+    if (recipientEmails.length === 0) {
+      alert('Please add at least one email recipient.');
+      return;
+    }
+
     setIsSending(true);
     const dataToEmail = selectedBookings.length > 0 ? selectedBookings : filteredBookings;
-    await EmailService.sendEmailWithRecipient(dataToEmail, columns, recipientEmail);
-    setIsSending(false);
-    setEmailDialogOpen(false);
-    setRecipientEmail('');
-    setSnackbarOpen(true);
+    
+    try {
+      await EmailService.sendEmailWithRecipient(dataToEmail, columns, recipientEmails);
+      setEmailDialogOpen(false);
+      setRecipientEmails([]);
+      setEmailInputValue('');
+      setSnackbarOpen(true);
+    } catch (error) {
+      console.error('Error sending email:', error);
+      alert('Failed to send email. Please try again.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
-  // Export handler
+  const handleEmailRecipientsChange = (event: any, newValue: string[]) => {
+    // Filter out invalid emails and duplicates
+    const validEmails = newValue.filter((email, index, self) => 
+      isValidEmail(email) && self.indexOf(email) === index
+    );
+    setRecipientEmails(validEmails);
+  };
+
+  // Handle adding email on Enter key
+  const handleEmailInputKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Enter' && emailInputValue.trim()) {
+      event.preventDefault();
+      const email = emailInputValue.trim();
+      
+      if (isValidEmail(email) && !recipientEmails.includes(email)) {
+        setRecipientEmails([...recipientEmails, email]);
+        setEmailInputValue('');
+      }
+    }
+  };
+
   const handleExport = () => {
     const dataToExport = selectedBookings.length > 0 ? selectedBookings : filteredBookings;
     const filename = selectedBookings.length > 0 
@@ -460,48 +488,48 @@ const Bookings: React.FC = () => {
     );
   }
 
-const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
-  try {
-    setNewBooking(false);
-    setLoadingPostResponse(true);
-    setSubmittedData(bookingData);
-    
-    setIsLastOperationEdit(false);
-    
-    const realLoanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
-    setLoanDetails(realLoanDetails);
-    
-    setShowSuccessMessage(true);
-    
-    await fetchBookingsData();
-  } catch (error) {
-    console.error('Error fetching Loan Details:', error);
-    setShowSuccessMessage(true);
-  } finally {
-    setLoadingPostResponse(false);
-  }
-};
+  const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
+    try {
+      setNewBooking(false);
+      setLoadingPostResponse(true);
+      setSubmittedData(bookingData);
+      
+      setIsLastOperationEdit(false);
+      
+      const realLoanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
+      setLoanDetails(realLoanDetails);
+      
+      setShowSuccessMessage(true);
+      
+      await fetchBookingsData();
+    } catch (error) {
+      console.error('Error fetching Loan Details:', error);
+      setShowSuccessMessage(true);
+    } finally {
+      setLoadingPostResponse(false);
+    }
+  };
 
-const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
-  try {
-    setLoadingPostResponse(true);
-    setSubmittedData(bookingData);
-    
-    setIsLastOperationEdit(true);
-    
-    const realLoanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
-    setLoanDetails(realLoanDetails);
-    
-    setShowSuccessMessage(true);
-    
-    await fetchBookingsData();
-  } catch (error) {
-    console.error('Error fetching Loan Details:', error);
-    setShowSuccessMessage(true);
-  } finally {
-    setLoadingPostResponse(false);
-  }
-};
+  const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
+    try {
+      setLoadingPostResponse(true);
+      setSubmittedData(bookingData);
+      
+      setIsLastOperationEdit(true);
+      
+      const realLoanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
+      setLoanDetails(realLoanDetails);
+      
+      setShowSuccessMessage(true);
+      
+      await fetchBookingsData();
+    } catch (error) {
+      console.error('Error fetching Loan Details:', error);
+      setShowSuccessMessage(true);
+    } finally {
+      setLoadingPostResponse(false);
+    }
+  };
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -533,9 +561,7 @@ const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response
         </Box>
       </Box>
 
-      <Box
-        id = "bookings-header"
-      >
+      <Box id="bookings-header">
         <Box id="search-bar">
           <SearchBar
             placeholder="Search schedules..."
@@ -578,7 +604,6 @@ const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response
         </Box>
 
         <Box id="filters">
-
           <FilterDropdown
             id="status-filter"
             label="Status"
@@ -602,7 +627,6 @@ const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response
             value={serviceFilter}
             onChange={handleServiceFilterChange}
           />
-
         </Box>
         
         <Box id="actions">
@@ -664,35 +688,105 @@ const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response
             <EmailIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText 
-            primary="Send to Recipient" 
-            secondary="Specify email address"
+            primary="Send to Recipients" 
+            secondary="Specify email addresses"
           />
         </MenuItem>
       </Menu>
 
-      {/* Email Dialog */}
-      <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Send Bookings Report</DialogTitle>
         <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Recipient Email"
-            type="email"
-            fullWidth
-            variant="outlined"
-            value={recipientEmail}
-            onChange={(e) => setRecipientEmail(e.target.value)}
-            placeholder="Enter recipient's email address"
-          />
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            {selectedBookings.length > 0 && ` Including ${selectedBookings.length} selected bookings.`}
+          <Box sx={{ mb: 2, pt: 1}}>
+            <Autocomplete
+              multiple
+              freeSolo
+              value={recipientEmails}
+              onChange={handleEmailRecipientsChange}
+              inputValue={emailInputValue}
+              onInputChange={(event, newInputValue) => {
+                setEmailInputValue(newInputValue);
+              }}
+              options={[]}
+              renderTags={(value: string[], getTagProps) =>
+                value.map((option: string, index: number) => {
+                  const { key, ...tagProps } = getTagProps({ index });
+                  return (
+                    <Chip
+                      key={key}
+                      variant="outlined"
+                      label={option}
+                      {...tagProps}
+                      sx={{
+                        backgroundColor: isValidEmail(option) ? 'primary.main' : 'error.main',
+                        color: isValidEmail(option) ? 'white' : 'white',
+                        '& .MuiChip-deleteIcon': {
+                          color: 'white',
+                        },
+                      }}
+                    />
+                  );
+                })
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  variant="outlined"
+                  label="Email Recipients"
+                  placeholder="Type email addresses and press Enter"
+                  helperText="Press Enter to add each email address. You can add multiple recipients."
+                  onKeyDown={handleEmailInputKeyDown}
+                  fullWidth
+                />
+              )}
+              sx={{ mb: 2 }}
+            />
+          </Box>
+          
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {recipientEmails.length > 0 && (
+              <>
+                Recipients: <strong>{recipientEmails.length}</strong> email(s)
+                <br />
+              </>
+            )}
+            {selectedBookings.length > 0 && `Including ${selectedBookings.length} selected bookings.`}
           </Typography>
+
+          {recipientEmails.length > 0 && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Recipients ({recipientEmails.length}):
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {recipientEmails.map((email, index) => (
+                  <Chip
+                    key={index}
+                    label={email}
+                    size="small"
+                    variant="outlined"
+                    color={isValidEmail(email) ? 'primary' : 'error'}
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEmailDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSendEmailWithRecipient} variant="contained" disabled={isSending}>
-            {isSending ? 'Sending...' : 'Send'}
+          <Button onClick={() => {
+            setEmailDialogOpen(false);
+            setRecipientEmails([]);
+            setEmailInputValue('');
+          }}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSendEmailWithRecipients} 
+            variant="contained" 
+            disabled={isSending || recipientEmails.length === 0}
+            startIcon={isSending ? <CircularProgress size={16} /> : <EmailIcon />}
+          >
+            {isSending ? 'Sending...' : `Send to ${recipientEmails.length} Recipient${recipientEmails.length !== 1 ? 's' : ''}`}
           </Button>
         </DialogActions>
       </Dialog>
@@ -785,7 +879,7 @@ const handleEditSuccess = async (bookingData: CreateAppointmentRequest, response
       open={snackbarOpen}
       autoHideDuration={3000}
       onClose={() => setSnackbarOpen(false)}
-      message="Email sent successfully"
+      message="Email sent successfully to all recipients"
     />
     </LocalizationProvider>
     

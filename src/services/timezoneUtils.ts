@@ -1,32 +1,27 @@
-// src/services/timezoneUtils.ts - DYNAMIC VERSION FOR ALL TIMEZONES
 import { format, parseISO, isValid } from 'date-fns';
 import { TimeSlot } from '../types/service';
 
 export class TimezoneService {
-  private static readonly BACKEND_TIMEZONE = 'America/New_York'; // EST/EDT
+  private static readonly BACKEND_TIMEZONE = 'America/New_York';
+  private static readonly DISPLAY_TIMEZONE = 'America/Puerto_Rico';
   
+
   static getUserTimezone(): string {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return this.DISPLAY_TIMEZONE;
   }
 
-  /**
-   * 🌍 DYNAMIC METHOD: Works for ANY timezone automatically
-   * Calculates the offset between EST and user's timezone dynamically
-   */
+
   static convertBackendTimeToLocal(backendTimeString: string): Date {
     if (!backendTimeString) {
       return new Date();
     }
 
     try {
-
-      // Parse the backend time (EST local time)
       const backendTime = parseISO(backendTimeString);
       if (!isValid(backendTime)) {
         throw new Error('Invalid date');
       }
 
-      // Get the date components
       const year = backendTime.getFullYear();
       const month = backendTime.getMonth();
       const day = backendTime.getDate();
@@ -34,200 +29,151 @@ export class TimezoneService {
       const minutes = backendTime.getMinutes();
       const seconds = backendTime.getSeconds();
 
-      // 🎯 DYNAMIC APPROACH: Use the same date/time in both timezones
-      // and calculate the actual difference
+      const isDST = this.isDaylightSavingTime(backendTime);
       
-      // Create a reference date (same date as our target)
-      const referenceDate = new Date(year, month, day, hours, minutes, seconds);
+      let prHours = hours;
+      if (!isDST) {
+        prHours = hours + 1;
+      }
+
+      let prDay = day;
+      let prMonth = month;
+      let prYear = year;
       
-      // Get this SAME moment expressed in EST timezone
-      const estTime = new Date(referenceDate.toLocaleString('sv-SE', { 
-        timeZone: this.BACKEND_TIMEZONE 
-      }));
+      if (prHours >= 24) {
+        prHours = prHours - 24;
+        prDay = day + 1;
+        
+        const daysInMonth = new Date(prYear, prMonth + 1, 0).getDate();
+        if (prDay > daysInMonth) {
+          prDay = 1;
+          prMonth = month + 1;
+          if (prMonth > 11) {
+            prMonth = 0;
+            prYear = year + 1;
+          }
+        }
+      }
+
+      const prTime = new Date(prYear, prMonth, prDay, prHours, minutes, seconds);
       
-      // Get this SAME moment expressed in user's timezone  
-      const userTime = new Date(referenceDate.toLocaleString('sv-SE', { 
-        timeZone: this.getUserTimezone() 
-      }));
-      
-      // Calculate the difference
-      const offsetMs = userTime.getTime() - estTime.getTime();
-      const offsetHours = offsetMs / (1000 * 60 * 60);
-      
-      // Apply the offset to our target time
-      const result = new Date(referenceDate.getTime() + offsetMs);
-      
-      return result;
+      return prTime;
 
     } catch (error) {
-      console.error('❌ Dynamic conversion error:', error);
+      console.error('❌ Error converting backend time to Puerto Rico time:', error);
       return parseISO(backendTimeString);
     }
   }
 
-  /**
-   * 🚀 SIMPLIFIED DYNAMIC METHOD: Uses Intl.DateTimeFormat properly
-   */
+
   static convertBackendTimeToLocalReliable(backendTimeString: string): Date {
-    if (!backendTimeString) {
-      return new Date();
-    }
-
-    try {
-
-      const backendTime = parseISO(backendTimeString);
-      if (!isValid(backendTime)) {
-        throw new Error('Invalid date');
-      }
-
-      // Extract time components
-      const year = backendTime.getFullYear();
-      const month = backendTime.getMonth();
-      const day = backendTime.getDate();
-      const hours = backendTime.getHours();
-      const minutes = backendTime.getMinutes();
-      const seconds = backendTime.getSeconds();
-
-      // 🎯 THE KEY: Create this time as if it's in EST, then convert to user timezone
-      
-      // Method: Create the time in UTC, then adjust for timezone differences
-      // Step 1: Create a date object representing this time
-      const baseTime = new Date(year, month, day, hours, minutes, seconds);
-      
-      // Step 2: Calculate timezone offsets for the same moment
-      const now = new Date(); // Use current time as reference for DST handling
-      
-      // Get EST offset from UTC (in minutes)
-      const estOffsetMinutes = this.getTimezoneOffsetFromUTC(this.BACKEND_TIMEZONE, now);
-      
-      // Get user timezone offset from UTC (in minutes)  
-      const userOffsetMinutes = this.getTimezoneOffsetFromUTC(this.getUserTimezone(), now);
-      
-      // Calculate the difference between user timezone and EST
-      const offsetDifferenceMinutes = userOffsetMinutes - estOffsetMinutes;
-      const offsetDifferenceMs = offsetDifferenceMinutes * 60 * 1000;
-
-      // Apply the offset
-      const result = new Date(baseTime.getTime() + offsetDifferenceMs);
-      
-      
-      return result;
-
-    } catch (error) {
-      console.error('❌ Reliable conversion error:', error);
-      return parseISO(backendTimeString);
-    }
+    return this.convertBackendTimeToLocal(backendTimeString);
   }
 
-  /**
-   * Helper: Get timezone offset from UTC in minutes
-   */
-  private static getTimezoneOffsetFromUTC(timezone: string, date: Date): number {
-    try {
-      // Create formatter for the target timezone
-      const formatter = new Intl.DateTimeFormat('sv-SE', {
-        timeZone: timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
 
-      // Get the time in the target timezone
-      const tzTimeString = formatter.format(date);
-      const tzTime = new Date(tzTimeString.replace(' ', 'T'));
-
-      // Get the time in UTC
-      const utcTime = new Date(date.toISOString().substring(0, 19) + 'Z');
-
-      // Calculate offset in minutes
-      const offsetMs = tzTime.getTime() - utcTime.getTime();
-      const offsetMinutes = offsetMs / (1000 * 60);
-
-      return offsetMinutes;
-
-    } catch (error) {
-      console.error(`Error calculating offset for ${timezone}:`, error);
-      return 0;
-    }
-  }
-
-  /**
-   * Convert user's local time back to EST for backend
-   */
-  static convertLocalTimeToBackend(localTime: Date): string {
-    if (!localTime || !isValid(localTime)) {
+  static convertLocalTimeToBackend(prTime: Date): string {
+    if (!prTime || !isValid(prTime)) {
       return new Date().toISOString();
     }
 
     try {
+      const year = prTime.getFullYear();
+      const month = prTime.getMonth();
+      const day = prTime.getDate();
+      const hours = prTime.getHours();
+      const minutes = prTime.getMinutes();
+      const seconds = prTime.getSeconds();
 
-      // Use Intl to get EST equivalent
-      const estFormatter = new Intl.DateTimeFormat('sv-SE', {
-        timeZone: this.BACKEND_TIMEZONE,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
+      const isDST = this.isDaylightSavingTime(prTime);
+      
+      let backendHours = hours;
+      if (!isDST) {
+        backendHours = hours - 1;
+      }
 
-      const estTimeString = estFormatter.format(localTime);
-      const backendFormat = estTimeString.replace(' ', 'T');
+      let backendDay = day;
+      let backendMonth = month;
+      let backendYear = year;
+      
+      if (backendHours < 0) {
+        backendHours = backendHours + 24;
+        backendDay = day - 1;
+        
+        if (backendDay < 1) {
+          backendMonth = month - 1;
+          if (backendMonth < 0) {
+            backendMonth = 11;
+            backendYear = year - 1;
+          }
+          const daysInPrevMonth = new Date(backendYear, backendMonth + 1, 0).getDate();
+          backendDay = daysInPrevMonth;
+        }
+      }
 
-      return backendFormat;
+      const backendTime = new Date(backendYear, backendMonth, backendDay, backendHours, minutes, seconds);
+      return format(backendTime, "yyyy-MM-dd'T'HH:mm:ss");
 
     } catch (error) {
-      console.error('❌ Error converting to backend:', error);
-      return format(localTime, "yyyy-MM-dd'T'HH:mm:ss");
+      console.error('❌ Error converting Puerto Rico time to backend:', error);
+      return format(prTime, "yyyy-MM-dd'T'HH:mm:ss");
     }
   }
 
-  /**
-   * Format backend EST time for user display
-   */
+
+  private static isDaylightSavingTime(date: Date): boolean {
+    try {
+      const year = date.getFullYear();
+      
+      
+      const march = new Date(year, 2, 1);
+      const firstSundayMarch = new Date(year, 2, 1 + (7 - march.getDay()) % 7);
+      const secondSundayMarch = new Date(firstSundayMarch.getTime() + 7 * 24 * 60 * 60 * 1000);
+      
+      const november = new Date(year, 10, 1);
+      const firstSundayNovember = new Date(year, 10, 1 + (7 - november.getDay()) % 7);
+      
+
+      return date >= secondSundayMarch && date < firstSundayNovember;
+      
+    } catch (error) {
+      console.error('Error checking DST:', error);
+      return false;
+    }
+  }
+
   static formatTimeForUser(backendTime: string, formatPattern: string = 'h:mm a'): string {
     if (!backendTime) return '';
     
     try {
-      const userTime = this.convertBackendTimeToLocalReliable(backendTime);
-      return format(userTime, formatPattern);
+      const prTime = this.convertBackendTimeToLocal(backendTime);
+      return format(prTime, formatPattern);
     } catch (error) {
-      console.error('❌ Error formatting time:', error);
+      console.error('❌ Error formatting time for Puerto Rico:', error);
       return 'Invalid time';
     }
   }
 
-  /**
-   * Format backend EST date for user display
-   */
+
   static formatDateForUser(backendTime: string, formatPattern: string = 'yyyy-MM-dd'): string {
     if (!backendTime) return '';
     
     try {
-      const userTime = this.convertBackendTimeToLocalReliable(backendTime);
-      return format(userTime, formatPattern);
+      const prTime = this.convertBackendTimeToLocal(backendTime);
+      return format(prTime, formatPattern);
     } catch (error) {
-      console.error('❌ Error formatting date:', error);
+      console.error('❌ Error formatting date for Puerto Rico:', error);
       return 'Invalid date';
     }
   }
 
-  /**
-   * 🌍 DYNAMIC: Convert time slots for ANY timezone
-   */
+
   static convertTimeSlotToLocal(timeSlot: TimeSlot): TimeSlot & { displayText: string } {
     try {
-      // Use the reliable dynamic conversion
-      const startTimeUser = this.convertBackendTimeToLocalReliable(timeSlot.startTime);
-      const endTimeUser = this.convertBackendTimeToLocalReliable(timeSlot.endTime);
+      const startTimePR = this.convertBackendTimeToLocal(timeSlot.startTime);
+      const endTimePR = this.convertBackendTimeToLocal(timeSlot.endTime);
 
-      // Format for display
-      const startFormatted = format(startTimeUser, 'h:mm a');
-      const endFormatted = format(endTimeUser, 'h:mm a');
+      const startFormatted = format(startTimePR, 'h:mm a');
+      const endFormatted = format(endTimePR, 'h:mm a');
       
       const displayText = `${startFormatted} - ${endFormatted}`;
 
@@ -237,7 +183,7 @@ export class TimezoneService {
       };
 
     } catch (error) {
-      console.error('❌ Error converting time slot:', error);
+      console.error('❌ Error converting time slot to Puerto Rico time:', error);
       return {
         ...timeSlot,
         displayText: timeSlot.displayText || 'Invalid time'
@@ -245,56 +191,71 @@ export class TimezoneService {
     }
   }
 
-  /**
-   * Get user's timezone display name
-   */
+
   static getUserTimezoneDisplay(): string {
+    return 'Atlantic Standard Time (AST)';
+  }
+
+
+  static shouldShowTimezoneWarning(): boolean {
+    return false;
+  }
+
+
+  static formatDateForApi(prDate: Date): string {
     try {
-      const timezone = this.getUserTimezone();
-      const now = new Date();
-      
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: timezone,
-        timeZoneName: 'longGeneric'
-      });
-      
-      const parts = formatter.formatToParts(now);
-      const timeZoneName = parts.find(part => part.type === 'timeZoneName')?.value;
-      
-      return timeZoneName || timezone;
+      return this.convertLocalTimeToBackend(prDate);
     } catch (error) {
-      console.error('Error getting timezone display:', error);
-      return this.getUserTimezone();
+      console.error('❌ Error formatting Puerto Rico date for API:', error);
+      return format(prDate, "yyyy-MM-dd'T'HH:mm:ss");
     }
   }
 
-  /**
-   * Check if user needs timezone warning
-   */
-  static shouldShowTimezoneWarning(): boolean {
-    const userTz = this.getUserTimezone();
-    return userTz !== this.BACKEND_TIMEZONE && 
-           userTz !== 'America/New_York' && 
-           userTz !== 'America/Toronto' &&
-           userTz !== 'US/Eastern';
+
+  static parseDateTime(dateTimeString: string): Date {
+    return this.convertBackendTimeToLocal(dateTimeString);
   }
 
-  /**
-   * 🧪 Test dynamic conversion with any timezone
-   */
-  static testDynamicConversion(): void {
 
-    const testTimes = [
-      "2025-05-26T09:00:00", // 9 AM EST
-      "2025-05-26T12:00:00", // 12 PM EST
-      "2025-05-26T16:00:00", // 4 PM EST
-    ];
-    
-    testTimes.forEach(testTime => {
+  static toDisplayDate(date: Date, formatPattern: string = 'yyyy-MM-dd'): string {
+    try {
+      return format(date, formatPattern);
+    } catch (error) {
+      console.error('❌ Error formatting display date:', error);
+      return 'Invalid date';
+    }
+  }
+
+
+  static toDisplayTime(date: Date, formatPattern: string = 'h:mm a'): string {
+    try {
+      return format(date, formatPattern);
+    } catch (error) {
+      console.error('❌ Error formatting display time:', error);
+      return 'Invalid time';
+    }
+  }
+
+
+  static getCurrentPuertoRicoTime(): Date {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const prTime = new Date(utc + (-4 * 3600000)); // UTC-4 for AST
+    return prTime;
+  }
+
+  static isToday(date: Date): boolean {
+    try {
+      const today = this.getCurrentPuertoRicoTime();
+      const checkDate = new Date(date);
       
-      const result = this.convertBackendTimeToLocalReliable(testTime);
-      const formatted = format(result, 'h:mm a');
-  
-    });
+      return today.getFullYear() === checkDate.getFullYear() &&
+             today.getMonth() === checkDate.getMonth() &&
+             today.getDate() === checkDate.getDate();
+    } catch (error) {
+      console.error('❌ Error checking if date is today:', error);
+      return false;
+    }
   }
+
 }

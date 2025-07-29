@@ -453,9 +453,9 @@ const sendEmailNotifications = async (response: any) => {
     const icsFilename = ICSGeneratorService.generateICSFilename(bookingData);
 
     const emailRequest: EmailRequestDTO = {
-      To: [], // Keep To empty to avoid issues
-      Bcc: uniqueEmails, // Send to BCC to avoid exposing all recipients
-      Cc: ccEmails.filter(email => email && email.trim() !== '' && email.includes('@')), // Filter CC emails too
+      To: [], 
+      Bcc: uniqueEmails,
+      Cc: ccEmails.filter(email => email && email.trim() !== '' && email.includes('@')),
       Subject: `${title} - ${bookingData.ServiceName} for ${borrowerName}`,
       Body: htmlBody,
       IsHtml: true,
@@ -468,14 +468,8 @@ const sendEmailNotifications = async (response: any) => {
       ]
     };
 
-    console.log('📧 Email request prepared:', {
-      recipientCount: uniqueEmails.length,
-      ccCount: emailRequest.Cc?.length || 0,
-      subject: emailRequest.Subject
-    });
-
+   
     const emailResponse = await bookingService.sendEmail(emailRequest);
-    console.log('📧 Email sent successfully:', emailResponse);
     
   } catch (error) {
     console.error('❌ Error sending email notifications:', error);
