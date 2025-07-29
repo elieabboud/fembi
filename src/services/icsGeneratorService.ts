@@ -349,7 +349,23 @@ export class ICSGeneratorService {
    * 🔥 FIXED: Create formatted description for appointment
    */
   static createAppointmentDescription(appointmentData: CreateAppointmentRequest, borrowerName: string): string {
-    const appointmentDate = new Date(appointmentData.DateTimeInfo.SelectedDate).toLocaleDateString();
+    let appointmentDate: string;
+    try {
+      const dateParts = appointmentData.DateTimeInfo.SelectedDate.split('-');
+      if (dateParts.length === 3) {
+        const year = parseInt(dateParts[0]);
+        const month = parseInt(dateParts[1]) - 1;
+        const day = parseInt(dateParts[2]);
+        
+        const localDate = new Date(year, month, day);
+        appointmentDate = localDate.toLocaleDateString();
+      } else {
+        appointmentDate = appointmentData.DateTimeInfo.SelectedDate;
+      }
+    } catch (error) {
+      console.error('Error parsing appointment date:', error);
+      appointmentDate = appointmentData.DateTimeInfo.SelectedDate;
+    }
     const appointmentTime = new Date(`2000-01-01T${appointmentData.DateTimeInfo.SelectedTime}`).toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
