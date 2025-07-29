@@ -330,9 +330,24 @@ const sendEmailNotifications = async (response: any) => {
       return;
     }
     
-    console.log('📧 Sending email to recipients:', uniqueEmails);
+    let appointmentDate: string;
+    try {
+      const dateParts = bookingData.DateTimeInfo.SelectedDate.split('-');
+      if (dateParts.length === 3) {
+        const year = parseInt(dateParts[0]);
+        const month = parseInt(dateParts[1]) - 1;
+        const day = parseInt(dateParts[2]);
+        
+        const localDate = new Date(year, month, day);
+        appointmentDate = localDate.toLocaleDateString();
+      } else {
+        appointmentDate = bookingData.DateTimeInfo.SelectedDate;
+      }
+    } catch (error) {
+      console.error('Error parsing appointment date:', error);
+      appointmentDate = bookingData.DateTimeInfo.SelectedDate;
+    }
     
-    const appointmentDate = new Date(bookingData.DateTimeInfo.SelectedDate).toLocaleDateString();
     const appointmentTime = bookingData.DateTimeInfo.SelectedTime;
     const formattedTime = new Date(`2000-01-01T${appointmentTime}`).toLocaleTimeString('en-US', {
       hour: 'numeric',
@@ -1434,99 +1449,135 @@ const fetchAvailableTimeSlots = useCallback(async () => {
           </Grid>
         )}
 
-        <Grid container sx={{display: 'flex', flexDirection: 'column', width: '100%', padding: '16px'}}>
-          {/* Time Selector - Only show when NOT in override mode */}
-          {(timeSlots.length > 0 || selectedSlot || (editMode && selectedDate)) && !isOverrideMode && (
+
+      {/* Time Display/Selector Section */}
+      <Grid container sx={{display: 'flex', flexDirection: 'column', width: '100%', padding: '16px'}}>
+        {/* For view mode (read-only), just show the time as text */}
+        {readOnlyMode ? (
+          <Box sx={{ justifySelf: 'start', py: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Appointment Time
+            </Typography>
+            
+            {initialData?.start?.dateTime && initialData?.end?.dateTime ? (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body1" sx={{ 
+                  p: 2, 
+                  bgcolor: 'grey.100', 
+                  borderRadius: 1,
+                  display: 'inline-block',
+                  fontWeight: 'medium'
+                }}>
+                  📅 {TimezoneService.formatDateForUser(initialData.start.dateTime, 'EEEE, MMMM d, yyyy')}
+                  <br />
+                  🕐 {TimezoneService.formatTimeForUser(initialData.start.dateTime, 'h:mm a')} - {TimezoneService.formatTimeForUser(initialData.end.dateTime, 'h:mm a')}
+                  <br />
+                  🌍 {TimezoneService.getUserTimezoneDisplay()}
+                </Typography>
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No time information available
+              </Typography>
+            )}
+          </Box>
+        ) : (
+          /* Regular TimeSelector for edit mode (upcoming only) or create mode */
+          (timeSlots.length > 0 || selectedSlot || (editMode && selectedDate)) && !isOverrideMode && (
             <TimeSelector
               timeSlots={timeSlots}
               selectedSlot={selectedSlot}
               onSelect={setSelectedSlot}
               loading={loadingStates.timeSlots}
-              readOnly={readOnlyMode}
+              readOnly={false}
               editMode={editMode}
-              originalSlot={(editMode || readOnlyMode) && initialData ? {
+              originalSlot={editMode && initialData ? {
                 startTime: initialData.start?.dateTime || '',
                 endTime: initialData.end?.dateTime || '',
                 displayText: '',
                 staffMemberId: initialData.staffMemberIds?.[0] || ''
               } : null}
             />
-          )}
-          
-          {!readOnlyMode && <EnhancedFollowers
-            editMode={editMode || readOnlyMode}
-            regularFollowers={fetchedFollowers}              
-            loanDetailsFollowers={loanDetailsFollowers}      
-            selectedLoanFollowers={selectedLoanFollowers}    
-            addedFollowers={addedFollowers}                  
-            onToggleLoanFollower={handleToggleLoanFollower}  
-            onAddFollower={handleAddFollower}                
-            onRemoveAddedFollower={(followerToRemove) => {   
-              if (!readOnlyMode) {
-                setAddedFollowers(prev => prev.filter(f => f !== followerToRemove));
-              }
-            }}
-            loading={loadingStates.followers}
-          />}
-          {error.length > 0 && !readOnlyMode && (
-            <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>
-              {error}
-            </Typography>
-          )}
+          )
+        )}
+        
+        {/* Rest of your existing content (followers, etc.) */}
+        {!readOnlyMode && <EnhancedFollowers
+          editMode={editMode || readOnlyMode}
+          regularFollowers={fetchedFollowers}              
+          loanDetailsFollowers={loanDetailsFollowers}      
+          selectedLoanFollowers={selectedLoanFollowers}    
+          addedFollowers={addedFollowers}                  
+          onToggleLoanFollower={handleToggleLoanFollower}  
+          onAddFollower={handleAddFollower}                
+          onRemoveAddedFollower={(followerToRemove) => {   
+            if (!readOnlyMode) {
+              setAddedFollowers(prev => prev.filter(f => f !== followerToRemove));
+            }
+          }}
+          loading={loadingStates.followers}
+        />}
+        
+        {error.length > 0 && !readOnlyMode && (
+          <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>
+            {error}
+          </Typography>
+        )}
 
-          {!readOnlyMode && (
-            <Grid sx={{display: 'flex', gap: '1rem'}}>
-              <Grid item xs={6}>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  onClick={onClose}
-                  disabled={loadingStates.submitting}
-                  sx={{
-                    backgroundColor: '#D3323A',
-                  }}
-                >
-                  Cancel
-                </Button>
-              </Grid>
-              <Grid item xs={6}>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  onClick={handleSubmit}
-                  disabled={isAnyLoading || (!editMode && !isLoanDetailsValidated && !isOverrideMode)}
-                  onMouseDown={(e) => e.preventDefault()}
-                  sx={{
-                    position: 'relative',
-                  }}
-                >
-                  {loadingStates.submitting ? (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <CircularProgress size={20} color="inherit" />
-                      {editMode ? 'Updating...' : 'Scheduling...'}
-                    </Box>
-                  ) : (
-                    editMode ? 'Update' : 'Schedule'
-                  )}
-                </Button>
-              </Grid>
-            </Grid>
-          )}
-
-          {readOnlyMode && (
-            <Grid sx={{display: 'flex', justifyContent: 'center', mt: '16px'}}>
+        {/* Buttons section remains the same */}
+        {!readOnlyMode && (
+          <Grid sx={{display: 'flex', gap: '1rem'}}>
+            <Grid item xs={6}>
               <Button
+                fullWidth
                 variant="contained"
                 onClick={onClose}
+                disabled={loadingStates.submitting}
                 sx={{
-                  minWidth: 150,
+                  backgroundColor: '#D3323A',
                 }}
               >
-                Close
+                Cancel
               </Button>
             </Grid>
-          )}
-        </Grid>
+            <Grid item xs={6}>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={handleSubmit}
+                disabled={isAnyLoading || (!editMode && !isLoanDetailsValidated && !isOverrideMode)}
+                onMouseDown={(e) => e.preventDefault()}
+                sx={{
+                  position: 'relative',
+                }}
+              >
+                {loadingStates.submitting ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={20} color="inherit" />
+                    {editMode ? 'Updating...' : 'Scheduling...'}
+                  </Box>
+                ) : (
+                  editMode ? 'Update' : 'Schedule'
+                )}
+              </Button>
+            </Grid>
+          </Grid>
+        )}
+
+        {readOnlyMode && (
+          <Grid sx={{display: 'flex', justifyContent: 'center', mt: '16px'}}>
+            <Button
+              variant="contained"
+              onClick={onClose}
+              sx={{
+                minWidth: 150,
+              }}
+            >
+              Close
+            </Button>
+          </Grid>
+        )}
+      </Grid>
       </Grid>
     </LocalizationProvider>
   );
