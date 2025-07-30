@@ -6,6 +6,7 @@ import { bookingService } from '../services/bookingService';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, addMonths, isEqual } from 'date-fns';
 import { addColorToBookings, addStatusToBookings } from '../services/bookingsUtils';
 import { formatDateForApi } from '../services/calendarUtils';
+import { useUrlQueryParams } from '../hooks/useUrlQueryParams';
 
 function Calendar() {
   const [loading, setLoading] = useState(true);
@@ -17,7 +18,8 @@ function Calendar() {
   });
   const [fetchingMore, setFetchingMore] = useState(false);
   
-  // Use a ref to track the last fetch parameters to prevent duplicate requests
+  const { queryParams, clearQueryParams, hasLoanId } = useUrlQueryParams();
+  
   const lastFetchParamsRef = useRef<{ start: string, end: string } | null>(null);
   
   // Add a fetch timer to prevent rapid successive calls
@@ -33,7 +35,7 @@ function Calendar() {
       if (lastFetchParamsRef.current && 
           lastFetchParamsRef.current.start === formattedStart && 
           lastFetchParamsRef.current.end === formattedEnd) {
-        return; // Skip duplicate fetches
+        return; 
       }
       
       // Update our tracking of what we're fetching
@@ -156,6 +158,8 @@ function Calendar() {
         bookings={calendarData} 
         onDateRangeChange={handleDateRangeChange}
         isFetchingMore={fetchingMore}
+        prefilledLoanId={queryParams.loanId}
+        clearQueryParams={clearQueryParams}
       />
     </Box>
   );

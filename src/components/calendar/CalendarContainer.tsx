@@ -25,12 +25,16 @@ interface CalendarContainerProps {
   bookings: calendarBooking[];
   onDateRangeChange: (date: Date, view: CalendarViewType) => void;
   isFetchingMore?: boolean;
+  prefilledLoanId?: string;
+  clearQueryParams?: () => void;
 }
 
 const CalendarContainer: React.FC<CalendarContainerProps> = ({ 
   bookings, 
   onDateRangeChange,
-  isFetchingMore = false
+  isFetchingMore = false,
+  prefilledLoanId,
+  clearQueryParams
 }) => {
   const { isAdmin } = useAuth();
   const [currentView, setCurrentView] = useState<CalendarViewType>('month');
@@ -82,6 +86,14 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   
   // Track the last applied date/view to prevent unnecessary updates
   const lastAppliedRef = useRef<{ date: Date, view: CalendarViewType } | null>(null);
+
+  // NEW: Effect to handle URL query parameters and auto-open booking modal
+  useEffect(() => {
+    if (prefilledLoanId && !newBooking) {
+      console.log('🔗 URL contains loanId:', prefilledLoanId, '- Opening booking modal');
+      setNewBooking(true);
+    }
+  }, [prefilledLoanId, newBooking]);
   
   // Centralized function to update date and view with a single API call
   const updateDateAndView = useCallback((date: Date, view: CalendarViewType) => {
@@ -155,6 +167,11 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   setShowEditBooking(false);
   setSubmittedData(bookingData);
   
+  // NEW: Clear URL params after successful booking
+  if (clearQueryParams) {
+    clearQueryParams();
+  }
+  
   try {
     // Fetch real loan details using the loan ID from the booking data
     const realLoanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
@@ -204,6 +221,14 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   const handleDayClick = useCallback((date: Date) => {
     updateDateAndView(date, 'day');
   }, [updateDateAndView]);
+
+  // UPDATED: Clear URL params when modal closes
+  const handleNewBookingClose = () => {
+    setNewBooking(false);
+    if (clearQueryParams) {
+      clearQueryParams();
+    }
+  };
   
   const renderCalendarView = () => {
     switch (currentView) {
@@ -396,10 +421,10 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
         </Box>
       )}
 
-      {/* NEW BOOKING DIALOG */}
+ 
       <Dialog
         open={newBooking}
-        onClose={() => setNewBooking(false)}
+        onClose={handleNewBookingClose}
         fullWidth
         maxWidth="sm"
         scroll="paper"
@@ -407,10 +432,12 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
       >
         <CreateBookingForm
         onSuccess={handleBookingSuccess}
-        onClose= {() => setNewBooking(false)}/>
+        onClose={handleNewBookingClose}
+        prefilledLoanId={prefilledLoanId}
+        />
       </Dialog>
       
-      {/* 🔥 FIXED: EDIT BOOKING DIALOG */}
+      {/* EDIT BOOKING DIALOG */}
       <Dialog
         open={showEditBooking}
         onClose={() => setShowEditBooking(false)}

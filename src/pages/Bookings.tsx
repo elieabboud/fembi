@@ -48,6 +48,7 @@ import { EmailService } from '../services/emailService';
 import { TimezoneService } from '../services/timezoneUtils';
 import { ClearIcon, DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { useUrlQueryParams } from '../hooks/useUrlQueryParams';
 
 // Custom sorting function for bookings
 const sortBookings = (bookings: calendarBooking[]): calendarBooking[] => {
@@ -85,6 +86,9 @@ const Bookings: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
+  
+  const { queryParams, clearQueryParams, hasLoanId } = useUrlQueryParams();
+  
   const [dateRange, setDateRange] = useState({
     start: startOfYear(new Date()),
     end: endOfYear(new Date()),
@@ -111,11 +115,11 @@ const Bookings: React.FC = () => {
   const [dataFetched, setDataFetched] = useState(false);
   const [isLastOperationEdit, setIsLastOperationEdit] = useState(false);
 
-  // Email functionality state - UPDATED for multiple recipients
+  // Email functionality state
   const [emailMenuAnchor, setEmailMenuAnchor] = useState<null | HTMLElement>(null);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
-  const [recipientEmails, setRecipientEmails] = useState<string[]>([]); // Changed from single string to array
-  const [emailInputValue, setEmailInputValue] = useState(''); // For the input field value
+  const [recipientEmails, setRecipientEmails] = useState<string[]>([]);
+  const [emailInputValue, setEmailInputValue] = useState('');
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -129,6 +133,12 @@ const Bookings: React.FC = () => {
   ];
   const [loanOfficersOptions, setLoanOfficersOptions] = useState<{id: string, label: string}[]>([]);
   const [serviceOptions, setServiceOptions] = useState<{ id: string, label: string }[]>([]);
+
+  useEffect(() => {
+    if (hasLoanId && !newBooking) {
+      setNewBooking(true);
+    }
+  }, [hasLoanId, queryParams.loanId, newBooking]);
 
   // Email validation helper
   const isValidEmail = (email: string): boolean => {
@@ -145,6 +155,9 @@ const Bookings: React.FC = () => {
 
   const handleNewBookingClose = () => {
     setNewBooking(false);
+    if (hasLoanId) {
+      clearQueryParams();
+    }
   }
 
   const handleSelectionChange = (selectedRows: calendarBooking[]) => {
@@ -451,14 +464,12 @@ const Bookings: React.FC = () => {
   };
 
   const handleEmailRecipientsChange = (event: any, newValue: string[]) => {
-    // Filter out invalid emails and duplicates
     const validEmails = newValue.filter((email, index, self) => 
       isValidEmail(email) && self.indexOf(email) === index
     );
     setRecipientEmails(validEmails);
   };
 
-  // Handle adding email on Enter key
   const handleEmailInputKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter' && emailInputValue.trim()) {
       event.preventDefault();
@@ -491,6 +502,9 @@ const Bookings: React.FC = () => {
   const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
     try {
       setNewBooking(false);
+      if (hasLoanId) {
+        clearQueryParams();
+      }
       setLoadingPostResponse(true);
       setSubmittedData(bookingData);
       
@@ -797,7 +811,6 @@ const Bookings: React.FC = () => {
         </Box>
       )}
 
-      {/* NEW BOOKING DIALOG */}
       <Dialog
         open={newBooking}
         onClose={handleNewBookingClose}
@@ -809,6 +822,7 @@ const Bookings: React.FC = () => {
         <CreateBookingForm
           onSuccess={handleBookingSuccess}
           onClose={handleNewBookingClose}
+          prefilledLoanId={queryParams.loanId}
         />
       </Dialog>
 
@@ -845,7 +859,6 @@ const Bookings: React.FC = () => {
         </Dialog>
       )}
 
-      {/* NEW BOOKING CONFIRMATION */}
       {showSuccessMessage && submittedData && (
         <Dialog
           open={showSuccessMessage}
