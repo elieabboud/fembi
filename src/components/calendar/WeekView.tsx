@@ -18,10 +18,10 @@ const WeekView: React.FC<WeekViewProps> = ({
   onDateChange,
   onEventClick 
 }) => {
-  const start = startOfWeek(currentDate, { weekStartsOn: 0 }); // 0 = Sunday
+  const start = startOfWeek(currentDate, { weekStartsOn: 1 });
 
-  const weekDays = Array.from({ length: 5 }, (_, i) => addDays(start, i+1));
-  const hours = Array.from({ length: 24 }, (_, i) => i); // 0 to 23
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const hours = Array.from({ length: 24 }, (_, i) => i);
 
   // Fixed function to properly filter events by day
   const getEventsByDay = (day: Date) => {

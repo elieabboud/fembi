@@ -11,7 +11,7 @@ import {
 import { CalendarViewType } from '../components/calendar/CalendarViewSelector';
 import { TimezoneService } from './timezoneUtils';
 
-export const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+export const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export const isToday = (date: Date) => {
   return isSameDay(date, new Date());

@@ -72,7 +72,7 @@ const MonthView: React.FC<MonthViewProps> = ({
 
       <Grid container sx={{ height: '600px', display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: 'repeat(5, 1fr)' }}>
         {Array.from({ length: 35 }).map((_, index) => {
-          const dayOffset = index - monthStart.getDay();
+          const dayOffset = index - ((monthStart.getDay() + 6) % 7);
           const day = new Date(monthStart);
           day.setDate(day.getDate() + dayOffset);
 

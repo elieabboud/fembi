@@ -44,6 +44,7 @@ type BookingFormProps = {
   isEditMode?: boolean;
   isViewMode?: boolean;
   setLoading?: (loading: boolean) => void;
+  prefilledLoanId?: string;
 }
 
 interface FollowerWithType {
@@ -58,7 +59,8 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   initialData, 
   isEditMode = false,
   isViewMode = false,
-  setLoading 
+  setLoading,
+  prefilledLoanId
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -75,12 +77,10 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     sendingEmail: false
   });
   
-  // NEW: Availability constraint states
   const [availabilitySettings, setAvailabilitySettings] = useState<AvailabilitySettings | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | null>(null);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
   
-  // NEW: Admin Override states
   const [isOverrideMode, setIsOverrideMode] = useState(false);
   const [overrideSlot, setOverrideSlot] = useState<TimeSlot | null>(null);
   
@@ -100,7 +100,6 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   const [selectedLoanFollowers, setSelectedLoanFollowers] = useState<FollowerWithType[]>([]);
   const [notes, setNotes] = useState<string>('');
   
-  // NEW: State to track if loan details have been loaded and validated
   const [isLoanDetailsValidated, setIsLoanDetailsValidated] = useState<boolean>(false);
 
   const [initialSelectedDate, setInitialSelectedDate] = useState<Date | null>(null);
@@ -157,14 +156,11 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     setLoadingStates(prev => ({ ...prev, [key]: value }));
   };
 
-  // NEW: Admin Override Handlers
   const handleOverrideSlot = useCallback((slot: TimeSlot) => {
-    console.log('🔧 Admin override slot created:', slot);
     setOverrideSlot(slot);
     setSelectedSlot(slot);
     setIsOverrideMode(true);
     
-    // Clear regular time slots since we're using override
     setTimeSlots([]);
   }, []);
 
@@ -204,7 +200,6 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     return 'Schedule a New Booking';
   };
 
-  // NEW: Function to format loan amount with commas
   const formatLoanAmount = (amount: number | undefined): string => {
     if (!amount) return '';
     return amount.toLocaleString();
@@ -265,7 +260,6 @@ const parseFollowersWithTypes = (followers: string[]): FollowerWithType[] => {
     const selectedService = services.find(s => s.displayName === selectedValue);
     
     if (selectedService) {
-      console.log('🏢 Service selected:', selectedService.displayName);
       
       setTimeSlots([]);
       setSelectedSlot(null);
@@ -566,10 +560,14 @@ const sendEmailNotifications = async (response: any) => {
     }
   };
 
- const fetchLoanDetails = async () => {
+  // UPDATED: Modified fetchLoanDetails to work with prefilledLoanId
+  const fetchLoanDetails = async () => {
     if (loadingStates.submitting || readOnlyMode) return;
 
-    if (!bookingData.EncompassDetails.EncompassLoanId.trim()) {
+    // Use prefilledLoanId if the form field is empty
+    const loanIdToUse = bookingData.EncompassDetails.EncompassLoanId || prefilledLoanId;
+
+    if (!loanIdToUse?.trim()) {
       setError("Please enter a Loan ID.");
       return;
     }
@@ -578,7 +576,7 @@ const sendEmailNotifications = async (response: any) => {
     setError("");
     
     try{
-      const loanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId || initialData?.encompassLoanId, true);
+      const loanDetails = await bookingService.getLoanDetails(loanIdToUse, true);
 
       if(loanDetails.notes === "Loan Id Already Used"){
          setError("Loan Id Already Used!");
@@ -664,7 +662,6 @@ const sendEmailNotifications = async (response: any) => {
   if (!selectedDate || readOnlyMode) return;
 
   if (isOverrideMode && overrideSlot) {
-    console.log('🔧 Using admin override slot for booking data');
     
     const backendStartTime = overrideSlot.startTime;
     const backendEndTime = overrideSlot.endTime;
@@ -850,6 +847,25 @@ const fetchAvailableTimeSlots = useCallback(async () => {
     }
   };
 
+  useEffect(() => {
+    if (prefilledLoanId && !editMode && !readOnlyMode && !bookingData.EncompassDetails.EncompassLoanId) {
+      
+      // Set the loan ID in the form
+      setBookingData(prev => ({
+        ...prev,
+        EncompassDetails: {
+          ...prev.EncompassDetails,
+          EncompassLoanId: prefilledLoanId,
+        },
+      }));
+      
+      // Auto-fetch loan details with a small delay to ensure state is updated
+      setTimeout(() => {
+        fetchLoanDetails();
+      }, 100);
+    }
+  }, [prefilledLoanId, editMode, readOnlyMode, bookingData.EncompassDetails.EncompassLoanId]);
+
  useEffect(() => {
   const initializeEditMode = async () => {
     if (editMode && initialData) {
@@ -955,7 +971,6 @@ const fetchAvailableTimeSlots = useCallback(async () => {
         
         // On error, still try to set basic followers if available
         if (initialData.followers) {
-          console.log('📧 Error occurred, setting followers as basic list:', initialData.followers);
           
           const followerArray = initialData.followers
             .split(',')
@@ -1083,7 +1098,13 @@ const fetchAvailableTimeSlots = useCallback(async () => {
                 InputProps={{
                   readOnly: editMode || readOnlyMode,
                 }}
-                helperText={!editMode && !readOnlyMode ? "Press Enter after entering Loan ID" : ""}
+                helperText={
+                  prefilledLoanId && !editMode && !readOnlyMode
+                    ? `Loan ID "${prefilledLoanId}" loaded from URL - Press Enter to fetch details`
+                    : !editMode && !readOnlyMode 
+                      ? "Press Enter after entering Loan ID" 
+                      : ""
+                }
               />
               {!editMode && !readOnlyMode && (
                 <Button 
@@ -1447,117 +1468,6 @@ const fetchAvailableTimeSlots = useCallback(async () => {
       {/* Time Display/Selector Section */}
       <Grid container sx={{display: 'flex', flexDirection: 'column', width: '100%', padding: '16px'}}>
         {/* For view mode (read-only), just show the time as text */}
-        {readOnlyMode ? (
-          <Box sx={{ justifySelf: 'start', py: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Appointment Time
-            </Typography>
-            
-            {initialData?.start?.dateTime && initialData?.end?.dateTime ? (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="body1" sx={{ 
-                  p: 2, 
-                  bgcolor: 'grey.100', 
-                  borderRadius: 1,
-                  display: 'inline-block',
-                  fontWeight: 'medium'
-                }}>
-                  📅 {TimezoneService.formatDateForUser(initialData.start.dateTime, 'EEEE, MMMM d, yyyy')}
-                  <br />
-                  🕐 {TimezoneService.formatTimeForUser(initialData.start.dateTime, 'h:mm a')} - {TimezoneService.formatTimeForUser(initialData.end.dateTime, 'h:mm a')}
-                  <br />
-                  🌍 {TimezoneService.getUserTimezoneDisplay()}
-                </Typography>
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                No time information available
-              </Typography>
-            )}
-          </Box>
-        ) : (
-          /* Regular TimeSelector for edit mode (upcoming only) or create mode */
-          (timeSlots.length > 0 || selectedSlot || (editMode && selectedDate)) && !isOverrideMode && (
-            <TimeSelector
-              timeSlots={timeSlots}
-              selectedSlot={selectedSlot}
-              onSelect={setSelectedSlot}
-              loading={loadingStates.timeSlots}
-              readOnly={false}
-              editMode={editMode}
-              originalSlot={editMode && initialData ? {
-                startTime: initialData.start?.dateTime || '',
-                endTime: initialData.end?.dateTime || '',
-                displayText: '',
-                staffMemberId: initialData.staffMemberIds?.[0] || ''
-              } : null}
-            />
-          )
-        )}
-        
-        {/* Rest of your existing content (followers, etc.) */}
-        {!readOnlyMode && <EnhancedFollowers
-          editMode={editMode || readOnlyMode}
-          regularFollowers={fetchedFollowers}              
-          loanDetailsFollowers={loanDetailsFollowers}      
-          selectedLoanFollowers={selectedLoanFollowers}    
-          addedFollowers={addedFollowers}                  
-          onToggleLoanFollower={handleToggleLoanFollower}  
-          onAddFollower={handleAddFollower}                
-          onRemoveAddedFollower={(followerToRemove) => {   
-            if (!readOnlyMode) {
-              setAddedFollowers(prev => prev.filter(f => f !== followerToRemove));
-            }
-          }}
-          loading={loadingStates.followers}
-        />}
-        
-        {error.length > 0 && !readOnlyMode && (
-          <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>
-            {error}
-          </Typography>
-        )}
-
-        {/* Buttons section remains the same */}
-        {!readOnlyMode && (
-          <Grid sx={{display: 'flex', gap: '1rem'}}>
-            <Grid item xs={6}>
-              <Button
-                fullWidth
-                variant="contained"
-                onClick={onClose}
-                disabled={loadingStates.submitting}
-                sx={{
-                  backgroundColor: '#D3323A',
-                }}
-              >
-                Cancel
-              </Button>
-            </Grid>
-            <Grid item xs={6}>
-              <Button
-                fullWidth
-                variant="contained"
-                onClick={handleSubmit}
-                disabled={isAnyLoading || (!editMode && !isLoanDetailsValidated && !isOverrideMode)}
-                onMouseDown={(e) => e.preventDefault()}
-                sx={{
-                  position: 'relative',
-                }}
-              >
-                {loadingStates.submitting ? (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <CircularProgress size={20} color="inherit" />
-                    {editMode ? 'Updating...' : 'Scheduling...'}
-                  </Box>
-                ) : (
-                  editMode ? 'Update' : 'Schedule'
-                )}
-              </Button>
-            </Grid>
-          </Grid>
-        )}
-
         {readOnlyMode && (
           <Grid sx={{display: 'flex', justifyContent: 'center', mt: '16px'}}>
             <Button
@@ -1578,6 +1488,7 @@ const fetchAvailableTimeSlots = useCallback(async () => {
 };
 
 export default CreateBookingForm;
+
 
 function getPhysicalAddressForService(ServiceName: string) {
   switch(ServiceName) {

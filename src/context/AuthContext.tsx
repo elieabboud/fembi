@@ -11,6 +11,7 @@ interface AuthContextType {
   login: () => Promise<void>;
   logout: () => void;
   loading: boolean;
+  refreshAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -19,7 +20,8 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   login: async () => {},
   logout: () => {},
-  loading: true
+  loading: true,
+  refreshAuth: async () => {}
 });
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -91,6 +93,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(user);
   }, []);
 
+  const refreshAuth = useCallback(async (): Promise<void> => {
+    try {
+      
+      const currentAccount = getAccount();
+      
+      if (currentAccount) {
+        
+        try {
+          await acquireToken();
+          
+          setIsAuthenticated(true);
+          convertAccountToUser(currentAccount);
+          
+          // Check admin status
+          const adminStatus = await checkAdminStatus();
+          setIsAdmin(adminStatus);
+          
+        } catch (tokenError) {
+          console.warn('⚠️ Token refresh failed, clearing auth state:', tokenError);
+          setIsAuthenticated(false);
+          setUser(null);
+          setIsAdmin(false);
+        }
+      } else {
+        setIsAuthenticated(false);
+        setUser(null);
+        setIsAdmin(false);
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing auth:', error);
+      setIsAuthenticated(false);
+      setUser(null);
+      setIsAdmin(false);
+    }
+  }, [checkAdminStatus, convertAccountToUser]);
+
+  // Initial authentication setup
   useEffect(() => {
     // Prevent double execution in development
     if (hasInitialized.current) {
@@ -102,10 +141,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setLoading(true);
       
       try {
-        // Handle redirect response first
+        // Handle redirect response first (for returning from Microsoft login)
         const account = await handleRedirectResponse();
         
         if (account) {
+          // User just logged in via redirect
           setIsAuthenticated(true);
           convertAccountToUser(account);
           
@@ -114,23 +154,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setIsAdmin(adminStatus);
           
         } else {
-          // Check for existing account
-          const currentAccount = getAccount();
-          
-          if (currentAccount) {
-            setIsAuthenticated(true);
-            convertAccountToUser(currentAccount);
-            
-            const adminStatus = await checkAdminStatus();
-            setIsAdmin(adminStatus);
-            
-          } else {
-            setIsAuthenticated(false);
-            setUser(null);
-            setIsAdmin(false);
-          }
+          // No redirect, check for existing authentication
+          await refreshAuth();
         }
       } catch (error) {
+        console.error('❌ Auth initialization error:', error);
         setIsAuthenticated(false);
         setUser(null);
         setIsAdmin(false);
@@ -140,15 +168,49 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     initializeAuth();
-  }, [checkAdminStatus, convertAccountToUser]);
+  }, [checkAdminStatus, convertAccountToUser, refreshAuth]);
 
   useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      // Check if MSAL-related storage changed
+      if (event.key?.startsWith('msal.') || event.key === 'msal.account.keys') {
+        
+        setTimeout(() => {
+          refreshAuth();
+        }, 100);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [refreshAuth]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        
+        if (!isAuthenticated) {
+          refreshAuth();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isAuthenticated, refreshAuth]);
+
+  // MSAL event listeners
+  useEffect(() => {
     const callbackId = msalInstance.addEventCallback((event) => {
-   
       
       if (event.eventType === EventType.ACQUIRE_TOKEN_SUCCESS || 
           event.eventType === EventType.LOGIN_SUCCESS) {
-       
         
         if (event.payload) {
           setIsAuthenticated(true);
@@ -179,15 +241,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [convertAccountToUser, checkAdminStatus]);
 
-
   const contextValue = useMemo(() => ({
     isAuthenticated,
     user,
     isAdmin,
     login: handleLogin,
     logout: handleLogout,
-    loading
-  }), [isAuthenticated, user, isAdmin, handleLogin, handleLogout, loading]);
+    loading,
+    refreshAuth
+  }), [isAuthenticated, user, isAdmin, handleLogin, handleLogout, loading, refreshAuth]);
 
   return (
     <AuthContext.Provider value={contextValue}>

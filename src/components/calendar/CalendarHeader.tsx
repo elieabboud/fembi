@@ -22,6 +22,24 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
     onViewChange,
     currentView,
  }) => {
+
+
+  const getDateFormat = () => {
+    switch (currentView) {
+      case 'month':
+        return 'MMM yyyy';
+      case 'week':
+        return 'MMM d, yyyy';
+      case 'day':
+        return 'EEEE, MMM d, yyyy'; 
+      case 'agenda':
+        return 'MMM yyyy';
+      default:
+        return 'MMM yyyy';
+    }
+  };
+
+
   return (
     <Box sx={{
       display: 'flex',
@@ -56,7 +74,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
           width: { xs: '100%', md: 'auto' },
           fontSize: { xs: '12px', md: '20px' },
         }}>
-          {format(currentDate, currentView === 'month' ? 'dd MMM yyyy' : 'dd MMM yyyy')} {/* Adjust format based on view */}
+          {format(currentDate, getDateFormat())}
         </Typography>
         <IconButton onClick={onNext}>
           <NextIcon />

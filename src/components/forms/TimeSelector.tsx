@@ -9,8 +9,8 @@ interface TimeSelectorProps {
   selectedSlot?: TimeSlot | null;
   loading?: boolean;
   readOnly?: boolean;
-  editMode?: boolean; // 🔥 NEW: Add edit mode prop
-  originalSlot?: TimeSlot | null; // 🔥 NEW: Track original slot
+  editMode?: boolean; 
+  originalSlot?: TimeSlot | null; 
 }
 
 const TimeSelector: React.FC<TimeSelectorProps> = ({ 
@@ -19,10 +19,9 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
   selectedSlot, 
   loading = false,
   readOnly = false,
-  editMode = false, // 🔥 NEW
-  originalSlot = null // 🔥 NEW
+  editMode = false,
+  originalSlot = null 
 }) => {
-  // 🔥 FIXED: Convert time slots ONLY once when they change
   const convertedTimeSlots = useMemo(() => {
     if (!timeSlots || timeSlots.length === 0) {
       return [];
@@ -36,7 +35,6 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
     return converted;
   }, [timeSlots]);
 
-  // 🔥 FIXED: Convert selected slot for display (don't modify original)
   const selectedSlotDisplay = useMemo(() => {
     if (!selectedSlot) {
       return null;
@@ -45,7 +43,6 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
     return converted;
   }, [selectedSlot]);
 
-  // 🔥 NEW: Convert original slot for display
   const originalSlotDisplay = useMemo(() => {
     if (!originalSlot) {
       return null;
@@ -57,12 +54,10 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
   const showTimezoneWarning = TimezoneService.shouldShowTimezoneWarning();
   const userTimezone = TimezoneService.getUserTimezoneDisplay();
 
-  // 🔥 FIXED: Handle slot selection - pass original slot back to parent
   const handleSlotSelection = (originalSlotIndex: number) => {
     if (readOnly) return;
     
     const originalSlot = timeSlots[originalSlotIndex];
-    // Pass the original slot (not converted) back to parent
     onSelect(originalSlot);
   };
 
@@ -72,7 +67,6 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
         {readOnly ? 'Selected Time' : editMode ? 'Update Time' : 'Select Time'}
       </Typography>
 
-      {/* 🔥 NEW: Show info about original slot in edit mode */}
       {editMode && originalSlotDisplay && !readOnly && (
         <Alert 
           severity="info" 
@@ -84,7 +78,6 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
         </Alert>
       )}
 
-      {/* Timezone Warning - only show if not in EST and not read-only */}
       {showTimezoneWarning && !readOnly && (
         <Alert 
           severity="info" 
@@ -155,7 +148,6 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
               selectedSlot.startTime === originalSlotAtIndex.startTime && 
               selectedSlot.staffMemberId === originalSlotAtIndex.staffMemberId;
             
-            // 🔥 NEW: Check if this is the original slot in edit mode
             const isOriginalSlot = !editMode && originalSlot && 
               originalSlotAtIndex.startTime === originalSlot.startTime &&
               originalSlotAtIndex.endTime === originalSlot.endTime &&
@@ -174,10 +166,10 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
                     backgroundColor: isSelected 
                       ? 'primary.main' 
                       : isOriginalSlot 
-                        ? 'warning.light' // 🔥 NEW: Different color for original slot
+                        ? 'warning.light' 
                         : 'grey.400',
                     color: isSelected || isOriginalSlot ? 'common.white' : 'text.primary',
-                    border: isOriginalSlot ? '2px solid #ff9800' : 'none', // 🔥 NEW: Border for original
+                    border: isOriginalSlot ? '2px solid #ff9800' : 'none',
                     position: 'relative',
                     minHeight: '48px', // Ensure enough space for text
                     display: 'flex',
@@ -196,7 +188,6 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
                     {convertedSlot.displayText}
                   </Typography>
                   
-                  {/* 🔥 NEW: Add indicator for original slot */}
                   {isOriginalSlot && !isSelected && (
                     <Typography 
                       variant="caption" 

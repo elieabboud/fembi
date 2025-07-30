@@ -87,10 +87,8 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   // Track the last applied date/view to prevent unnecessary updates
   const lastAppliedRef = useRef<{ date: Date, view: CalendarViewType } | null>(null);
 
-  // NEW: Effect to handle URL query parameters and auto-open booking modal
   useEffect(() => {
     if (prefilledLoanId && !newBooking) {
-      console.log('🔗 URL contains loanId:', prefilledLoanId, '- Opening booking modal');
       setNewBooking(true);
     }
   }, [prefilledLoanId, newBooking]);
@@ -167,7 +165,6 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   setShowEditBooking(false);
   setSubmittedData(bookingData);
   
-  // NEW: Clear URL params after successful booking
   if (clearQueryParams) {
     clearQueryParams();
   }
@@ -208,7 +205,6 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
 };
 
   const handleEventClick = useCallback((booking: calendarBooking) => {
-    console.log('Calendar event clicked:', booking);
     
     // Store the original selected item for edit mode
     localStorage.setItem("selectedItem", JSON.stringify(booking.start));
@@ -278,7 +274,18 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
     try {
       const response = await bookingService.getUsers({ tableName: 'user' });
       const agents = response.result as unknown as User[];
-      setLoanAgents(agents);
+      const agentsWithBookings = agents.filter(agent => {
+        const agentMicrosoftId = String(agent.microsoft_id);
+        
+        // Check if this agent has any bookings
+        const hasBookings = bookings.some(booking => {
+          const bookingOwnerId = String(booking.ownerId);
+          return bookingOwnerId === agentMicrosoftId;
+        });
+        
+        return hasBookings;
+      });
+      setLoanAgents(agentsWithBookings);
     } catch (error) {
       console.error('Error fetching users from database: ', error);
     }
@@ -313,10 +320,10 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   
   // Initialize agents on component mount
   useEffect(() => {
-    if (isAdmin) {
-      fetchUsersFromDatabase();
-    }
-  }, [isAdmin]);
+     if (isAdmin && bookings.length > 0) {
+        fetchUsersFromDatabase();
+      }
+  }, [isAdmin, bookings]);
 
   // Initialize selectedAgents with all agents when agents are first loaded
   useEffect(() => {
@@ -324,7 +331,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
       const allAgents = [...loanAgents];
       setSelectedAgents(allAgents);
     }
-  }, [loanAgents]); // Removed selectedAgents.length dependency
+  }, [loanAgents]);
 
   // Apply filtering whenever bookings or selected agents change
   useEffect(() => {
@@ -414,7 +421,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
               {selectedAgents.length === 0 ? ' (no officer selected)' :
                selectedAgents.length < loanAgents.length ? 
                 ` (filtered by ${selectedAgents.length} agent${selectedAgents.length !== 1 ? 's' : ''})` :
-                ' (all officers selected)'
+                ' (all officers with bookings selected)'
               }
             </Typography>
           </Box>
@@ -454,7 +461,6 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
         />
       </Dialog>
       
-      {/* NEW BOOKING CONFIRMATION */}
       {submittedData && (
         <Dialog
           open={showSuccessMessage}
