@@ -13,6 +13,7 @@ import {
   useTheme,
   alpha,
   CircularProgress,
+  Alert,
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
@@ -20,6 +21,8 @@ import {
   People as PeopleIcon,
   Event as EventIcon,
   AttachMoney as MoneyIcon,
+  Refresh as RefreshIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import {
   PieChart,
@@ -49,36 +52,98 @@ import { User } from '../types/userModel';
 const Dashboard: React.FC = () => {
   const theme = useTheme();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<dashboardStats | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  const fetchData = async (isRetry: boolean = false) => {
+    try {
+      if (isRetry) {
+        setError(null);
+      } else {
+        setLoading(true);
+      }
+
+      let agents: User[] = [];
+      let services: any[] = [];
+      let apiResponse: dashboardResponseDTO | null = null;
+
+      try {
+        const agentsResponse = await bookingService.getUsers({ tableName: 'user' });
+        agents = (agentsResponse?.result as unknown as User[]) || [];
+      } catch (agentsError) {
+        console.warn('⚠️ Failed to load agents:', agentsError);
+      }
+
+      try {
+        services = await bookingService.getAvailableServices();
+      } catch (servicesError) {
+        console.warn('⚠️ Failed to load services:', servicesError);
+      }
+
+      try {
+        apiResponse = await dashboardService.getDashboardData();
+        console.log('✅ Dashboard data loaded:', apiResponse);
+      } catch (dashboardError) {
+        console.warn('⚠️ Failed to load dashboard data:', dashboardError);
+        throw new Error('Unable to load dashboard data. Please try again.');
+      }
+
+      // Map the data with error handling built in
+      const mappedStats = mapApiResponseToDashboardStats(apiResponse, agents, services);
+      setStats(mappedStats);
+      setError(null);
+      
+    } catch (error) {
+      console.error('❌ Dashboard fetch error:', error);
+      setError(error instanceof Error ? error.message : 'An unexpected error occurred');
+      
+      // Set fallback stats so the dashboard still shows something
+      setStats({
+        summaryMetrics: {
+          totalClosings: 0,
+          currentMonthClosings: 0,
+          previousMonthClosings: 0,
+          monthlyGrowth: 0,
+        },
+        monthlyClosingsPie: [],
+        closingsByAgentPie: [],
+        closingsByServiceBar: [],
+        serviceNames: [],
+        agentMonthlyPerformance: [],
+        agents: [],
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const agents = (await bookingService.getUsers({ tableName: 'user' })).result as unknown as User[];
-        const services = (await bookingService.getAvailableServices());
-        const apiResponse: dashboardResponseDTO = await dashboardService.getDashboardData();
-        const mappedStats = mapApiResponseToDashboardStats(apiResponse, agents, services);
-        setStats(mappedStats);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
-  if (loading || !stats) {
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+    fetchData(true);
+  };
+
+  if (loading && !stats) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-        <CircularProgress />
-        <Typography variant="h6" sx={{ ml: 2 }}>
-          Loading dashboard data...
-        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <CircularProgress size={60} />
+          <Typography variant="h6">Loading dashboard data...</Typography>
+          {retryCount > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              Retry attempt {retryCount}
+            </Typography>
+          )}
+        </Box>
       </Box>
     );
   }
+
+  const showErrorAlert = error && !loading;
 
   const MetricCard = ({ 
     title, 
@@ -87,7 +152,8 @@ const Dashboard: React.FC = () => {
     changeType, 
     icon, 
     color = 'primary',
-    subtitle 
+    subtitle,
+    isError = false
   }: {
     title: string;
     value: string | number;
@@ -96,12 +162,14 @@ const Dashboard: React.FC = () => {
     icon: React.ReactNode;
     color?: 'primary' | 'secondary' | 'success' | 'warning' | 'error';
     subtitle?: string;
+    isError?: boolean;
   }) => (
     <Card 
       sx={{ 
         height: '100%',
         border: `1px solid ${alpha(theme.palette.grey[300], 0.12)}`,
         boxShadow: 'none',
+        opacity: isError ? 0.7 : 1,
         '&:hover': {
           boxShadow: theme.shadows[4],
           borderColor: alpha(theme.palette.primary.main, 0.25),
@@ -123,7 +191,7 @@ const Dashboard: React.FC = () => {
                 {subtitle}
               </Typography>
             )}
-            {change !== undefined && (
+            {change !== undefined && !isError && (
               <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
                 {changeType === 'increase' ? (
                   <TrendingUpIcon sx={{ fontSize: 16, color: 'success.main' }} />
@@ -144,16 +212,21 @@ const Dashboard: React.FC = () => {
                 </Typography>
               </Stack>
             )}
+            {isError && (
+              <Typography variant="caption" color="error.main" sx={{ mt: 1, display: 'block' }}>
+                Data unavailable
+              </Typography>
+            )}
           </Box>
           <Avatar
             sx={{
               width: 48,
               height: 48,
-              bgcolor: alpha(theme.palette[color].main, 0.08),
-              color: theme.palette[color].main,
+              bgcolor: alpha(theme.palette[isError ? 'error' : color].main, 0.08),
+              color: theme.palette[isError ? 'error' : color].main,
             }}
           >
-            {icon}
+            {isError ? <WarningIcon /> : icon}
           </Avatar>
         </Stack>
       </CardContent>
@@ -163,17 +236,20 @@ const Dashboard: React.FC = () => {
   const ChartCard = ({ 
     title, 
     children, 
-    action 
+    action,
+    isEmpty = false
   }: { 
     title: string; 
     children: React.ReactNode; 
     action?: React.ReactNode;
+    isEmpty?: boolean;
   }) => (
     <Card 
       sx={{ 
         border: `1px solid ${alpha(theme.palette.grey[300], 0.12)}`,
         boxShadow: 'none',
         height: '100%',
+        opacity: isEmpty ? 0.7 : 1,
       }}
     >
       <CardContent sx={{ p: 3 }}>
@@ -181,9 +257,32 @@ const Dashboard: React.FC = () => {
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             {title}
           </Typography>
-          {action}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            {action}
+            {showErrorAlert && (
+              <IconButton onClick={handleRetry} color="primary" size="small">
+                <RefreshIcon />
+              </IconButton>
+            )}
+          </Box>
         </Stack>
-        {children}
+        {isEmpty ? (
+          <Box sx={{ 
+            height: 300, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            flexDirection: 'column',
+            gap: 2
+          }}>
+            <WarningIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
+            <Typography variant="body1" color="text.secondary" textAlign="center">
+              No data available
+            </Typography>
+          </Box>
+        ) : (
+          children
+        )}
       </CardContent>
     </Card>
   );
@@ -211,6 +310,21 @@ const Dashboard: React.FC = () => {
     </Stack>
   );
 
+  // Safe data access with fallbacks
+  const safeStats = stats || {
+    summaryMetrics: { totalClosings: 0, currentMonthClosings: 0, previousMonthClosings: 0, monthlyGrowth: 0 },
+    monthlyClosingsPie: [],
+    closingsByAgentPie: [],
+    closingsByServiceBar: [],
+    serviceNames: [],
+    agentMonthlyPerformance: [],
+    agents: [],
+  };
+
+  const hasData = safeStats.summaryMetrics.totalClosings > 0 || 
+                  safeStats.monthlyClosingsPie.length > 0 || 
+                  safeStats.closingsByAgentPie.length > 0;
+
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
@@ -221,194 +335,261 @@ const Dashboard: React.FC = () => {
         <Typography variant="body1" color="text.secondary">
           Monitor business performance and analytics through data insights.
         </Typography>
+        
+        {/* Error Alert */}
+        {showErrorAlert && (
+          <Alert 
+            severity="warning" 
+            sx={{ mt: 2 }}
+            action={
+              <IconButton size="small" onClick={handleRetry} color="inherit">
+                <RefreshIcon />
+              </IconButton>
+            }
+          >
+            <Typography variant="body2">
+              <strong>Data Loading Issue:</strong> {error}
+            </Typography>
+            <Typography variant="caption" display="block">
+              Showing available data. Click refresh to retry.
+            </Typography>
+          </Alert>
+        )}
       </Box>
 
-      {/* Metrics Cards - Using Real API Data */}
+      {/* Metrics Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Total Closings"
-            value={stats.summaryMetrics.totalClosings}
+            value={safeStats.summaryMetrics.totalClosings}
             icon={<EventIcon />}
             color="primary"
             subtitle="This year's closings"
+            isError={!hasData}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Current Month"
-            value={stats.summaryMetrics.currentMonthClosings}
+            value={safeStats.summaryMetrics.currentMonthClosings}
             icon={<TrendingUpIcon />}
             color="success"
             subtitle="This month's closings"
+            isError={!hasData}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Previous Month"
-            value={stats.summaryMetrics.previousMonthClosings}
+            value={safeStats.summaryMetrics.previousMonthClosings}
             icon={<MoneyIcon />}
             color="warning"
             subtitle="Last month's closings"
+            isError={!hasData}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Monthly Growth"
-            value={`${stats.summaryMetrics.monthlyGrowth.toFixed(1)}%`}
-            change={stats.summaryMetrics.monthlyGrowth}
-            changeType={stats.summaryMetrics.monthlyGrowth >= 0 ? 'increase' : 'decrease'}
+            value={`${safeStats.summaryMetrics.monthlyGrowth.toFixed(1)}%`}
+            change={safeStats.summaryMetrics.monthlyGrowth}
+            changeType={safeStats.summaryMetrics.monthlyGrowth >= 0 ? 'increase' : 'decrease'}
             icon={<PeopleIcon />}
-            color={stats.summaryMetrics.monthlyGrowth >= 0 ? 'success' : 'error'}
+            color={safeStats.summaryMetrics.monthlyGrowth >= 0 ? 'success' : 'error'}
+            isError={!hasData}
           />
         </Grid>
       </Grid>
 
-      {/* Charts Row - Using Real API Data */}
+      {/* Charts Row */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Closings by Agent - Real Data */}
+        {/* Closings by Agent */}
         <Grid item xs={12} md={4}>
           <ChartCard 
             title="Closings per officer"
+            isEmpty={safeStats.closingsByAgentPie.length === 0}
           >
-            <Box sx={{ height: 300 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={stats.closingsByAgentPie}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    dataKey="closings"
-                    nameKey="agentFirstName"
-                  >
-                    {stats.closingsByAgentPie.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip/>
-                </PieChart>
-              </ResponsiveContainer>
-            </Box>
-            <Stack spacing={1} sx={{ mt: 2 }}>
-              {stats.closingsByAgentPie.slice(0, 4).map((agent, index) => (
-                <AgentCard 
-                  key={index}
-                  firstName ={agent.agentFirstName}
-                  lastName ={agent.agentLastName}
-                  closings={agent.closings} 
-                  color={agent.color}
-                />
-              ))}
-            </Stack>
+            {safeStats.closingsByAgentPie.length > 0 ? (
+              <>
+                <Box sx={{ height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={safeStats.closingsByAgentPie}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        dataKey="closings"
+                        nameKey="agentFirstName"
+                      >
+                        {safeStats.closingsByAgentPie.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip/>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+                <Stack spacing={1} sx={{ mt: 2 }}>
+                  {safeStats.closingsByAgentPie.slice(0, 4).map((agent, index) => (
+                    <AgentCard 
+                      key={index}
+                      firstName={agent.agentFirstName}
+                      lastName={agent.agentLastName}
+                      closings={agent.closings} 
+                      color={agent.color}
+                    />
+                  ))}
+                </Stack>
+              </>
+            ) : null}
           </ChartCard>
         </Grid>
 
-        {/* Monthly Closings Trend - Real Data */}
+        {/* Monthly Closings Trend */}
         <Grid item xs={12} md={8}>
           <ChartCard 
             title="Monthly Closings Trend"
+            isEmpty={safeStats.monthlyClosingsPie.length === 0}
             action={
-              <Box sx={{ display: 'flex', gap: 1 }}>
+              safeStats.monthlyClosingsPie.length > 0 ? (
                 <Chip 
-                  label={`${stats.summaryMetrics.monthlyGrowth >= 0 ? '(+' : '('}${stats.summaryMetrics.monthlyGrowth.toFixed(1)}%) than last month`} 
+                  label={`${safeStats.summaryMetrics.monthlyGrowth >= 0 ? '(+' : '('}${safeStats.summaryMetrics.monthlyGrowth.toFixed(1)}%) than last month`} 
                   size="small" 
-                  color={stats.summaryMetrics.monthlyGrowth >= 0 ? 'success' : 'error'} 
+                  color={safeStats.summaryMetrics.monthlyGrowth >= 0 ? 'success' : 'error'} 
                   variant="outlined" 
                 />
-              </Box>
+              ) : undefined
             }
           >
-            <Box sx={{ height: 400 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stats.monthlyClosingsPie}>
-                  <defs>
-                    <linearGradient id="colorClosings" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.grey[300], 0.5)} />
-                  <XAxis 
-                    dataKey="month" 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
-                  />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: theme.palette.background.paper,
-                      border: `1px solid ${alpha(theme.palette.grey[300], 0.12)}`,
-                      borderRadius: 8,
-                      boxShadow: theme.shadows[4],
-                    }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="closings" 
-                    stroke={theme.palette.primary.main}
-                    strokeWidth={2}
-                    fillOpacity={1} 
-                    fill="url(#colorClosings)" 
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </Box>
+            {safeStats.monthlyClosingsPie.length > 0 ? (
+              <Box sx={{ height: 400 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={safeStats.monthlyClosingsPie}>
+                    <defs>
+                      <linearGradient id="colorClosings" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.grey[300], 0.5)} />
+                    <XAxis 
+                      dataKey="month" 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                    />
+                    <YAxis 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: theme.palette.background.paper,
+                        border: `1px solid ${alpha(theme.palette.grey[300], 0.12)}`,
+                        borderRadius: 8,
+                        boxShadow: theme.shadows[4],
+                      }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="closings" 
+                      stroke={theme.palette.primary.main}
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorClosings)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : null}
           </ChartCard>
         </Grid>
       </Grid>
 
-      {/* Service Performance Bar Chart - Real Data */}
+      {/* Service Performance Bar Chart */}
       <Grid container spacing={3}>
         <Grid item xs={12}>
           <ChartCard 
             title="Team Performance Comparison (Closings by Service)"
+            isEmpty={safeStats.closingsByServiceBar.length === 0 || safeStats.serviceNames.length === 0}
           >
-            <Box sx={{ height: 400 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.closingsByServiceBar} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.grey[300], 0.5)} />
-                  <XAxis 
-                    dataKey="month" 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
-                  />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: theme.palette.background.paper,
-                      border: `1px solid ${alpha(theme.palette.grey[300], 0.12)}`,
-                      borderRadius: 8,
-                      boxShadow: theme.shadows[4],
-                    }}
-                  />
-                  <Legend />
-                  {stats.serviceNames.map((serviceId, index) => (
-                    <Bar
-                      key={serviceId}
-                      dataKey={serviceId}
-                      name={serviceId}
-                      fill={['#2e7d32', '#ffc107', '#1976d2', '#d32f2f', '#9c27b0', '#ff5722'][index % 6]}
-                      radius={[2, 2, 0, 0]}
+            {safeStats.closingsByServiceBar.length > 0 && safeStats.serviceNames.length > 0 ? (
+              <Box sx={{ height: 400 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={safeStats.closingsByServiceBar} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.grey[300], 0.5)} />
+                    <XAxis 
+                      dataKey="month" 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
                     />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
+                    <YAxis 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: theme.palette.background.paper,
+                        border: `1px solid ${alpha(theme.palette.grey[300], 0.12)}`,
+                        borderRadius: 8,
+                        boxShadow: theme.shadows[4],
+                      }}
+                    />
+                    <Legend />
+                   {safeStats.serviceNames.map((serviceName, index) => (
+                      <Bar
+                        key={serviceName}
+                        dataKey={serviceName}
+                        name={serviceName}
+                        fill={['#2e7d32', '#ffc107', '#1976d2', '#d32f2f', '#9c27b0', '#ff5722'][index % 6]}
+                        radius={[2, 2, 0, 0]}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : null}
           </ChartCard>
         </Grid>
       </Grid>
+
+      {/* Footer info when no data */}
+      {!hasData && (
+        <Box sx={{ mt: 4, textAlign: 'center' }}>
+          <Alert severity="info" sx={{ maxWidth: 600, mx: 'auto' }}>
+            <Typography variant="h6" gutterBottom>
+              No Dashboard Data Available
+            </Typography>
+            <Typography variant="body2">
+              The dashboard will populate with data once bookings and closings are recorded in the system.
+              {error && ' There may also be a temporary connectivity issue.'}
+            </Typography>
+            {error && (
+              <Box sx={{ mt: 2 }}>
+                <button 
+                  onClick={handleRetry}
+                  style={{
+                    background: theme.palette.primary.main,
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Retry Loading Data
+                </button>
+              </Box>
+            )}
+          </Alert>
+        </Box>
+      )}
     </Box>
   );
 };

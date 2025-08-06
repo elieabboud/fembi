@@ -109,8 +109,16 @@ const Bookings: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<BookingStatus[]>([]);
   const [officersFilter, setOfficersFilter] = useState<string[]>([]);
   const [serviceFilter, setServiceFilter] = useState<string>('');
-  const [dateFilter, setDateFilter] = useState<string>('');
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+ const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+ const [dateFilter, setDateFilter] = useState<string>('');
+ const [dateRangeFilter, setDateRangeFilter] = useState<{
+    startDate: Date | null;
+    endDate: Date | null;
+  }>({
+    startDate: null,
+    endDate: null
+  });
 
   const [dataFetched, setDataFetched] = useState(false);
   const [isLastOperationEdit, setIsLastOperationEdit] = useState(false);
@@ -363,13 +371,13 @@ const Bookings: React.FC = () => {
       filtered = filtered.filter(booking => booking.serviceName === serviceFilter);
     }
 
-    if (dateFilter) {
-      filtered = filtered.filter(booking => isBookingOnDate(booking, dateFilter));
+    if (dateRangeFilter.startDate || dateRangeFilter.endDate) {
+      filtered = filtered.filter(booking => isBookingInDateRange(booking, dateRangeFilter));
     }
 
     const sortedFiltered = sortBookings(filtered);
     setFilteredBookings(sortedFiltered);
-  }, [searchQuery, bookings, statusFilter, officersFilter, serviceFilter, dateFilter]);
+  }, [searchQuery, bookings, statusFilter, officersFilter, serviceFilter, dateFilter, dateRangeFilter]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -584,37 +592,77 @@ const Bookings: React.FC = () => {
           />
         </Box>
         
-        <Box id="date-filter" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box id="date-filter" sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: { xs: 0.5, sm: 1 }, 
+          flexWrap: { xs: 'wrap', sm: 'nowrap' },
+          width: { xs: '100%', sm: 'fit-content' }
+        }}>
           <DatePicker 
-            label="Filter by Date" 
-            value={selectedDate}
+            label="Start Date" 
+            value={dateRangeFilter.startDate}
             onChange={(newValue) => {
-              setSelectedDate(newValue);
-              if (newValue) {
-                const formattedDate = TimezoneService.formatDateForUser(newValue.toISOString(), 'yyyy-MM-dd');
-                setDateFilter(formattedDate);
-              } else {
-                setDateFilter('');
-              }
-            }}
-            componentsProps={{
-              actionBar: {
-                actions: ['clear'],
-              },
+              setDateRangeFilter(prev => ({
+                ...prev,
+                startDate: newValue
+              }));
             }}
             slotProps={{ 
               textField: { 
                 size: 'small',
-                placeholder: 'Select date to filter',
-              },
-              actionBar: {
-                actions: ['clear'],
-              },
-            }}
-            sx={{
-              width: '100%',
+                sx: { 
+                  width: { xs: '120px', sm: '140px' },
+                  '& .MuiInputBase-root': {
+                    height: '40px'
+                  }
+                }
+              }
             }}
           />
+          
+          <DatePicker 
+            label="End Date" 
+            value={dateRangeFilter.endDate}
+            onChange={(newValue) => {
+              setDateRangeFilter(prev => ({
+                ...prev,
+                endDate: newValue
+              }));
+            }}
+            minDate={dateRangeFilter.startDate || undefined}
+            slotProps={{ 
+              textField: { 
+                size: 'small',
+                sx: { 
+                  width: { xs: '120px', sm: '140px' },
+                  '& .MuiInputBase-root': {
+                    height: '40px'
+                  }
+                }
+              }
+            }}
+          />
+          
+          {(dateRangeFilter.startDate || dateRangeFilter.endDate) && (
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => {
+                setDateRangeFilter({
+                  startDate: null,
+                  endDate: null
+                });
+              }}
+              sx={{ 
+                height: '40px',
+                minWidth: { xs: '50px', sm: '60px' },
+                fontSize: { xs: '12px', sm: '14px' }
+              }}
+            >
+              Clear
+            </Button>
+          )}
         </Box>
 
         <Box id="filters">
@@ -900,3 +948,35 @@ const Bookings: React.FC = () => {
 };
 
 export default Bookings;
+
+
+const isBookingInDateRange = (
+  booking: calendarBooking, 
+  dateRange: { startDate: Date | null; endDate: Date | null }
+): boolean => {
+  if (!booking.start?.dateTime) return true;
+  
+  try {
+    const bookingDate = TimezoneService.convertBackendTimeToLocalReliable(booking.start.dateTime);
+    const bookingDateOnly = new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate());
+    
+    if (dateRange.startDate) {
+      const startDateOnly = new Date(dateRange.startDate.getFullYear(), dateRange.startDate.getMonth(), dateRange.startDate.getDate());
+      if (bookingDateOnly < startDateOnly) {
+        return false;
+      }
+    }
+    
+    if (dateRange.endDate) {
+      const endDateOnly = new Date(dateRange.endDate.getFullYear(), dateRange.endDate.getMonth(), dateRange.endDate.getDate());
+      if (bookingDateOnly > endDateOnly) {
+        return false;
+      }
+    }
+    
+    return true;
+  } catch (error) {
+    console.warn('Error comparing dates in range:', error);
+    return false;
+  }
+};

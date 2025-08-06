@@ -783,25 +783,17 @@ const fetchAvailableTimeSlots = useCallback(async () => {
       if(editMode === true && initialData?.followers !== null && initialData?.followers !== ""){
         setFetchedFollowers(initialData?.followers.split(','));
       } else {
-        // Keep the original logic for regular followers
-        const regularFollowersPromise = bookingService.getFollowers();
+        const [regularFollowers, globalFollowers] = await Promise.all([
+          bookingService.getFollowers(),
+          isAdmin ? bookingService.getGlobalFollowers() : Promise.resolve([])
+        ]);
         
-        const promises = [regularFollowersPromise];
-        if (isAdmin) {
-          promises.push(bookingService.getGlobalFollowers());
-        }
-        
-        const results = await Promise.all(promises);
-        
-        let allFollowers: string[] = [];
-        results.forEach(result => {
-          if (Array.isArray(result)) {
-            allFollowers = [...allFollowers, ...result];
-          }
-        });
-        
-        const uniqueFollowers = Array.from(new Set(allFollowers));
-        setFetchedFollowers(uniqueFollowers);
+        const allSystemFollowers = Array.from(new Set([
+          ...regularFollowers,
+          ...globalFollowers
+        ]));
+
+        setFetchedFollowers(allSystemFollowers);
       }
     } catch (error) {
       console.error('Failed to fetch followers', error);
@@ -810,7 +802,6 @@ const fetchAvailableTimeSlots = useCallback(async () => {
       updateLoadingState('followers', false);
     }
   }, [isAdmin, editMode, initialData]);
-
 
   const handleToggleLoanFollower = (follower: FollowerWithType) => {
   if (readOnlyMode) return;
@@ -880,53 +871,50 @@ const fetchAvailableTimeSlots = useCallback(async () => {
         setIsLoanDetailsValidated(true);
         
         setNotes(initialData.loanData?.notes || loanDetails.notes || '');
-        
-        if (loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0) {
-          const followersWithTypes = parseFollowersWithTypes(loanDetails.followers);
-          setLoanDetailsFollowers(followersWithTypes);
-          
-          if (initialData.followers) {
-            
-            const existingFollowerEmails = initialData.followers
-              .split(',')
-              .map(email => email.trim())
-              .filter(email => email.length > 0);
-            
-            
-            const selectedFromLoan = followersWithTypes.filter(lf => 
-              existingFollowerEmails.includes(lf.email)
-            );
-            
-            const customFollowers = existingFollowerEmails.filter(email => 
-              !followersWithTypes.find(lf => lf.email === email)
-            );
-            
-            setSelectedLoanFollowers(selectedFromLoan);
-            setFetchedFollowers([]);
-            setAddedFollowers(customFollowers); 
-            
-          } else {
 
-            setSelectedLoanFollowers([]);
-            setFetchedFollowers([]);
-            setAddedFollowers([]);
-          }
-        } else {
-          setLoanDetailsFollowers([]);
-          setSelectedLoanFollowers([]);
+
+        const [regularFollowers, globalFollowers, loanFollowersData] = await Promise.all([
+          bookingService.getFollowers(), 
+          bookingService.getGlobalFollowers(), 
+          loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0
+            ? Promise.resolve(parseFollowersWithTypes(loanDetails.followers))
+            : Promise.resolve([])
+        ]);
+
+        const allSystemFollowers = Array.from(new Set([
+          ...regularFollowers,
+          ...globalFollowers
+        ]));
+        
+        if(initialData.followers) {
+          const existingFollowerEmails = initialData.followers
+            .split(',')
+            .map(email => email.trim())
+            .filter(email => email.length > 0);
+
+          const systemFollowersInBooking = existingFollowerEmails.filter(email => 
+            allSystemFollowers.includes(email)
+          );
           
-          if (initialData.followers) {            
-            const existingFollowerEmails = initialData.followers
-              .split(',')
-              .map(email => email.trim())
-              .filter(email => email.length > 0);
-            
-            setFetchedFollowers(existingFollowerEmails);
-            setAddedFollowers([]);
-          } else {
-            setFetchedFollowers([]);
-            setAddedFollowers([]);
-          }
+          const loanFollowersInBooking = loanFollowersData.filter(lf => 
+            existingFollowerEmails.includes(lf.email)
+          );
+          
+          const customFollowers = existingFollowerEmails.filter(email => 
+            !allSystemFollowers.includes(email) && 
+            !loanFollowersData.find(lf => lf.email === email)
+          );
+          
+          setLoanDetailsFollowers(loanFollowersData);
+          setSelectedLoanFollowers(loanFollowersInBooking);
+          setFetchedFollowers(systemFollowersInBooking);
+          setAddedFollowers(customFollowers);
+          
+        } else {
+          setLoanDetailsFollowers(loanFollowersData);
+          setSelectedLoanFollowers([]);
+          setFetchedFollowers([]);
+          setAddedFollowers([]);
         }
         
         setBookingData((prev) => ({
@@ -1468,6 +1456,117 @@ const fetchAvailableTimeSlots = useCallback(async () => {
       {/* Time Display/Selector Section */}
       <Grid container sx={{display: 'flex', flexDirection: 'column', width: '100%', padding: '16px'}}>
         {/* For view mode (read-only), just show the time as text */}
+        {readOnlyMode ? (
+          <Box sx={{ justifySelf: 'start', py: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Appointment Time
+            </Typography>
+            
+            {initialData?.start?.dateTime && initialData?.end?.dateTime ? (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body1" sx={{ 
+                  p: 2, 
+                  bgcolor: 'grey.100', 
+                  borderRadius: 1,
+                  display: 'inline-block',
+                  fontWeight: 'medium'
+                }}>
+                  📅 {TimezoneService.formatDateForUser(initialData.start.dateTime, 'EEEE, MMMM d, yyyy')}
+                  <br />
+                  🕐 {TimezoneService.formatTimeForUser(initialData.start.dateTime, 'h:mm a')} - {TimezoneService.formatTimeForUser(initialData.end.dateTime, 'h:mm a')}
+                  <br />
+                  🌍 {TimezoneService.getUserTimezoneDisplay()}
+                </Typography>
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No time information available
+              </Typography>
+            )}
+          </Box>
+        ) : (
+          /* Regular TimeSelector for edit mode (upcoming only) or create mode */
+          (timeSlots.length > 0 || selectedSlot || (editMode && selectedDate)) && !isOverrideMode && (
+            <TimeSelector
+              timeSlots={timeSlots}
+              selectedSlot={selectedSlot}
+              onSelect={setSelectedSlot}
+              loading={loadingStates.timeSlots}
+              readOnly={false}
+              editMode={editMode}
+              originalSlot={editMode && initialData ? {
+                startTime: initialData.start?.dateTime || '',
+                endTime: initialData.end?.dateTime || '',
+                displayText: '',
+                staffMemberId: initialData.staffMemberIds?.[0] || ''
+              } : null}
+            />
+          )
+        )}
+        
+        {/* Rest of your existing content (followers, etc.) */}
+        {!readOnlyMode && <EnhancedFollowers
+          editMode={editMode || readOnlyMode}
+          regularFollowers={fetchedFollowers}              
+          loanDetailsFollowers={loanDetailsFollowers}      
+          selectedLoanFollowers={selectedLoanFollowers}    
+          addedFollowers={addedFollowers}                  
+          onToggleLoanFollower={handleToggleLoanFollower}  
+          onAddFollower={handleAddFollower}                
+          onRemoveAddedFollower={(followerToRemove) => {   
+            if (!readOnlyMode) {
+              setAddedFollowers(prev => prev.filter(f => f !== followerToRemove));
+            }
+          }}
+          loading={loadingStates.followers}
+        />}
+        
+        {error.length > 0 && !readOnlyMode && (
+          <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>
+            {error}
+          </Typography>
+        )}
+
+        {/* Buttons section remains the same */}
+        {!readOnlyMode && (
+          <Grid sx={{display: 'flex', gap: '1rem'}}>
+            <Grid item xs={6}>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={onClose}
+                disabled={loadingStates.submitting}
+                sx={{
+                  backgroundColor: '#D3323A',
+                }}
+              >
+                Cancel
+              </Button>
+            </Grid>
+            <Grid item xs={6}>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={handleSubmit}
+                disabled={isAnyLoading || (!editMode && !isLoanDetailsValidated && !isOverrideMode)}
+                onMouseDown={(e) => e.preventDefault()}
+                sx={{
+                  position: 'relative',
+                }}
+              >
+                {loadingStates.submitting ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={20} color="inherit" />
+                    {editMode ? 'Updating...' : 'Scheduling...'}
+                  </Box>
+                ) : (
+                  editMode ? 'Update' : 'Schedule'
+                )}
+              </Button>
+            </Grid>
+          </Grid>
+        )}
+
         {readOnlyMode && (
           <Grid sx={{display: 'flex', justifyContent: 'center', mt: '16px'}}>
             <Button
