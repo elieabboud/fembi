@@ -9,7 +9,7 @@ interface WeekViewProps {
   currentDate: Date;
   events: calendarBooking[];
   onDateChange: (date: Date) => void;
-  onEventClick?: (booking: calendarBooking) => void; // Add this prop
+  onEventClick?: (booking: calendarBooking) => void;
 }
 
 const WeekView: React.FC<WeekViewProps> = ({ 

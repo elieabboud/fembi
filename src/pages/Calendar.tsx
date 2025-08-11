@@ -61,38 +61,41 @@ function Calendar() {
     }
   }, []);
 
+
   const calculateDateRange = useCallback((date: Date, view: 'month' | 'week' | 'day' | 'agenda') => {
-    let start: Date, end: Date;
-    
-    switch (view) {
-      case 'month':
-        start = startOfMonth(date);
-        end = endOfMonth(date);
-        start = startOfWeek(start, { weekStartsOn: 0 });
-        end = endOfWeek(end, { weekStartsOn: 0 });
-        break;
+      let start: Date, end: Date;
       
-      case 'week':
-        start = startOfWeek(date, { weekStartsOn: 0 });
-        end = endOfWeek(date, { weekStartsOn: 0 });
-        break;
       
-      case 'day':
-        start = startOfDay(date);
-        end = endOfDay(date);
-        break;
+      switch (view) {
+        case 'month':
+          start = startOfMonth(date);
+          end = endOfMonth(date);
+          // Keep Sunday start for month view to show full calendar grid
+          start = startOfWeek(start, { weekStartsOn: 0 });
+          end = endOfWeek(end, { weekStartsOn: 0 });
+          break;
+        
+        case 'week':
+          start = startOfWeek(date, { weekStartsOn: 1 });
+          end = endOfWeek(date, { weekStartsOn: 1 });
+          break;
+        
+        case 'day':
+          start = startOfDay(date);
+          end = endOfDay(date);
+          break;
+        
+        case 'agenda':
+          start = startOfWeek(date, { weekStartsOn: 0 });
+          end = endOfWeek(date, { weekStartsOn: 0 });
+          break;
+        
+        default:
+          start = startOfMonth(date);
+          end = endOfMonth(date);
+      }
       
-      case 'agenda':
-        start = startOfWeek(date, { weekStartsOn: 0 });
-        end = endOfWeek(date, { weekStartsOn: 0 });
-        break;
-      
-      default:
-        start = startOfMonth(date);
-        end = endOfMonth(date);
-    }
-    
-    return { start, end };
+      return { start, end };
   }, []);
 
   const handleDateRangeChange = useCallback((date: Date, view: 'month' | 'week' | 'day' | 'agenda') => {
