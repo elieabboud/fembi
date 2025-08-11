@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -16,17 +16,19 @@ import image from '../assets/login.png';
 const Login: React.FC = () => {
   const { isAuthenticated, login, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation() as { state?: { returnTo?: string } };
+  const returnTo = location.state?.returnTo;
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/dashboard');
+    if (isAuthenticated && !returnTo) {
+      navigate('/dashboard', { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, returnTo, navigate]);
 
   const handleMicrosoftLogin = async () => {
     try {
       // This will redirect to Microsoft login page, no popup
-      await login();
+      await login(returnTo);
       // Note: The following code won't execute immediately due to the redirect
       // The redirect handling is now done in AuthContext useEffect
     } catch (error) {

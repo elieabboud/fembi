@@ -5,10 +5,11 @@ import { config } from "../config";
 const msalInstance = new PublicClientApplication(config.msalConfig);
 
 // Function to handle login with redirect
-export const loginRedirect = async () => {
+export const loginRedirect = async (redirectStartPage?: string) => {
   try {
     const loginRequest = {
-      scopes: config.apiConfig.scopes
+      scopes: config.apiConfig.scopes,
+      redirectStartPage: redirectStartPage || window.location.href
     };
     
     return msalInstance.loginRedirect(loginRequest);

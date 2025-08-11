@@ -597,7 +597,7 @@ const Bookings: React.FC = () => {
           alignItems: 'center', 
           gap: { xs: 0.5, sm: 1 }, 
           flexWrap: { xs: 'wrap', sm: 'nowrap' },
-          width: { xs: '100%', sm: 'fit-content' }
+          width: { xs: '100%', sm: '100%' }
         }}>
           <DatePicker 
             label="Start Date" 
@@ -612,7 +612,7 @@ const Bookings: React.FC = () => {
               textField: { 
                 size: 'small',
                 sx: { 
-                  width: { xs: '120px', sm: '140px' },
+                  width: { xs: '49%', sm: '49%' },
                   '& .MuiInputBase-root': {
                     height: '40px'
                   }
@@ -635,7 +635,7 @@ const Bookings: React.FC = () => {
               textField: { 
                 size: 'small',
                 sx: { 
-                  width: { xs: '120px', sm: '140px' },
+                  width: { xs: '49%', sm: '49%' },
                   '& .MuiInputBase-root': {
                     height: '40px'
                   }
@@ -653,11 +653,6 @@ const Bookings: React.FC = () => {
                   startDate: null,
                   endDate: null
                 });
-              }}
-              sx={{ 
-                height: '40px',
-                minWidth: { xs: '50px', sm: '60px' },
-                fontSize: { xs: '12px', sm: '14px' }
               }}
             >
               Clear

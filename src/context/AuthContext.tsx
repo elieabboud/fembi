@@ -8,7 +8,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
   isAdmin: boolean;
-  login: () => Promise<void>;
+  login: (targetUrl?: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
   refreshAuth: () => Promise<void>;
@@ -18,7 +18,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   user: null,
   isAdmin: false,
-  login: async () => {},
+  login: async (_?: string) => {}, // <-- match the signature
   logout: () => {},
   loading: true,
   refreshAuth: async () => {}
@@ -32,10 +32,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   const hasInitialized = useRef(false);
 
-  const handleLogin = useCallback(async (): Promise<void> => {
+  const handleLogin = useCallback(async (targetUrl?: string): Promise<void> => {
     try {
       setLoading(true);
-      await loginRedirect();
+      await loginRedirect(targetUrl);
     } catch (error) {
       console.error('Login failed:', error);
       setLoading(false);
