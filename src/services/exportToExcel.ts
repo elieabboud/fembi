@@ -17,7 +17,7 @@ export interface Column<T = calendarBooking> {
 export const createBookingColumns = (): Column[] => {
   const columns: Column[] = [
     { 
-      id: 'closingDate',
+      id: 'start',
       label: 'Closing Date',
       format: (value: DateTimeInfo | null | undefined, row) => {
         if (!value || !value.dateTime) return '-';
