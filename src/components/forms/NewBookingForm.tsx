@@ -582,6 +582,10 @@ const sendEmailNotifications = async (response: any) => {
          setError("Loan Id Already Used!");
          setIsLoanDetailsValidated(false);
          return;
+      }else if(loanDetails.notes === "Invalid Loan Id!"){
+         setError("Invalid Loan Id!");
+         setIsLoanDetailsValidated(false);
+         return;
       }
       setLoanDetails(loanDetails);
       setNotes(loanDetails.notes || '');
@@ -1088,7 +1092,7 @@ const fetchAvailableTimeSlots = useCallback(async () => {
                 }}
                 helperText={
                   prefilledLoanId && !editMode && !readOnlyMode
-                    ? `Loan ID "${prefilledLoanId}" loaded from URL - Press Enter to fetch details`
+                    ? "Press Enter after entering Loan ID" 
                     : !editMode && !readOnlyMode 
                       ? "Press Enter after entering Loan ID" 
                       : ""
