@@ -23,6 +23,9 @@ import {
   AttachMoney as MoneyIcon,
   Refresh as RefreshIcon,
   Warning as WarningIcon,
+  Cancel as CancelIcon,
+  Schedule as ScheduleIcon,
+  EventRepeat as RescheduleIcon,
 } from '@mui/icons-material';
 import {
   PieChart,
@@ -83,13 +86,12 @@ const Dashboard: React.FC = () => {
 
       try {
         apiResponse = await dashboardService.getDashboardData();
-        console.log('✅ Dashboard data loaded:', apiResponse);
+        console.log('Dashboard data loaded:', apiResponse);
       } catch (dashboardError) {
         console.warn('⚠️ Failed to load dashboard data:', dashboardError);
         throw new Error('Unable to load dashboard data. Please try again.');
       }
 
-      // Map the data with error handling built in
       const mappedStats = mapApiResponseToDashboardStats(apiResponse, agents, services);
       setStats(mappedStats);
       setError(null);
@@ -98,17 +100,24 @@ const Dashboard: React.FC = () => {
       console.error('❌ Dashboard fetch error:', error);
       setError(error instanceof Error ? error.message : 'An unexpected error occurred');
       
-      // Set fallback stats so the dashboard still shows something
       setStats({
         summaryMetrics: {
           totalClosings: 0,
           currentMonthClosings: 0,
           previousMonthClosings: 0,
           monthlyGrowth: 0,
+          totalCancellations: 0,
+          currentMonthCancellations: 0,
+          totalReschedules: 0,
+          currentMonthReschedules: 0,
         },
         monthlyClosingsPie: [],
+        monthlyCancellationsPie: [],
+        monthlyReschedulesPie: [],
         closingsByAgentPie: [],
         closingsByServiceBar: [],
+        cancellationsByServiceBar: [],
+        reschedulesByServiceBar: [],
         serviceNames: [],
         agentMonthlyPerformance: [],
         agents: [],
@@ -310,12 +319,24 @@ const Dashboard: React.FC = () => {
     </Stack>
   );
 
-  // Safe data access with fallbacks
   const safeStats = stats || {
-    summaryMetrics: { totalClosings: 0, currentMonthClosings: 0, previousMonthClosings: 0, monthlyGrowth: 0 },
+    summaryMetrics: { 
+      totalClosings: 0, 
+      currentMonthClosings: 0, 
+      previousMonthClosings: 0, 
+      monthlyGrowth: 0,
+      totalCancellations: 0,
+      currentMonthCancellations: 0,
+      totalReschedules: 0,
+      currentMonthReschedules: 0,
+    },
     monthlyClosingsPie: [],
+    monthlyCancellationsPie: [],
+    monthlyReschedulesPie: [],
     closingsByAgentPie: [],
     closingsByServiceBar: [],
+    cancellationsByServiceBar: [],
+    reschedulesByServiceBar: [],
     serviceNames: [],
     agentMonthlyPerformance: [],
     agents: [],
@@ -327,7 +348,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
           Dashboard
@@ -336,7 +356,6 @@ const Dashboard: React.FC = () => {
           Monitor business performance and analytics through data insights.
         </Typography>
         
-        {/* Error Alert */}
         {showErrorAlert && (
           <Alert 
             severity="warning" 
@@ -357,9 +376,9 @@ const Dashboard: React.FC = () => {
         )}
       </Box>
 
-      {/* Metrics Cards */}
+      {/* Enhanced Metrics Cards - Now with 6 cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2}>
           <MetricCard
             title="Total Closings"
             value={safeStats.summaryMetrics.totalClosings}
@@ -369,7 +388,7 @@ const Dashboard: React.FC = () => {
             isError={!hasData}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2}>
           <MetricCard
             title="Current Month"
             value={safeStats.summaryMetrics.currentMonthClosings}
@@ -379,17 +398,7 @@ const Dashboard: React.FC = () => {
             isError={!hasData}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <MetricCard
-            title="Previous Month"
-            value={safeStats.summaryMetrics.previousMonthClosings}
-            icon={<MoneyIcon />}
-            color="warning"
-            subtitle="Last month's closings"
-            isError={!hasData}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2}>
           <MetricCard
             title="Monthly Growth"
             value={`${safeStats.summaryMetrics.monthlyGrowth.toFixed(1)}%`}
@@ -400,9 +409,39 @@ const Dashboard: React.FC = () => {
             isError={!hasData}
           />
         </Grid>
+        <Grid item xs={12} sm={6} md={2}>
+          <MetricCard
+            title="Total Cancellations"
+            value={safeStats.summaryMetrics.totalCancellations}
+            icon={<CancelIcon />}
+            color="error"
+            subtitle="All-time cancellations"
+            isError={!hasData}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={2}>
+          <MetricCard
+            title="This Month Cancelled"
+            value={safeStats.summaryMetrics.currentMonthCancellations}
+            icon={<CancelIcon />}
+            color="warning"
+            subtitle="Current month cancellations"
+            isError={!hasData}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={2}>
+          <MetricCard
+            title="Total Reschedules"
+            value={safeStats.summaryMetrics.totalReschedules}
+            icon={<RescheduleIcon />}
+            color="secondary"
+            subtitle="All-time reschedules"
+            isError={!hasData}
+          />
+        </Grid>
       </Grid>
 
-      {/* Charts Row */}
+      {/* First Row of Charts */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {/* Closings by Agent */}
         <Grid item xs={12} md={4}>
@@ -510,8 +549,113 @@ const Dashboard: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* Service Performance Bar Chart */}
-      <Grid container spacing={3}>
+      {/* Second Row - New Cancellations and Reschedules Charts */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {/* Monthly Cancellations Trend */}
+        <Grid item xs={12} md={6}>
+          <ChartCard 
+            title="Monthly Cancellations Trend"
+            isEmpty={safeStats.monthlyCancellationsPie.length === 0}
+          >
+            {safeStats.monthlyCancellationsPie.length > 0 ? (
+              <Box sx={{ height: 300 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={safeStats.monthlyCancellationsPie}>
+                    <defs>
+                      <linearGradient id="colorCancellations" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={theme.palette.error.main} stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor={theme.palette.error.main} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.grey[300], 0.5)} />
+                    <XAxis 
+                      dataKey="month" 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                    />
+                    <YAxis 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: theme.palette.background.paper,
+                        border: `1px solid ${alpha(theme.palette.grey[300], 0.12)}`,
+                        borderRadius: 8,
+                        boxShadow: theme.shadows[4],
+                      }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="cancellations" 
+                      stroke={theme.palette.error.main}
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorCancellations)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : null}
+          </ChartCard>
+        </Grid>
+
+        {/* Monthly Reschedules Trend */}
+        <Grid item xs={12} md={6}>
+          <ChartCard 
+            title="Monthly Reschedules Trend"
+            isEmpty={safeStats.monthlyReschedulesPie.length === 0}
+          >
+            {safeStats.monthlyReschedulesPie.length > 0 ? (
+              <Box sx={{ height: 300 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={safeStats.monthlyReschedulesPie}>
+                    <defs>
+                      <linearGradient id="colorReschedules" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={theme.palette.secondary.main} stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor={theme.palette.secondary.main} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.grey[300], 0.5)} />
+                    <XAxis 
+                      dataKey="month" 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                    />
+                    <YAxis 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: theme.palette.background.paper,
+                        border: `1px solid ${alpha(theme.palette.grey[300], 0.12)}`,
+                        borderRadius: 8,
+                        boxShadow: theme.shadows[4],
+                      }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="reschedules" 
+                      stroke={theme.palette.secondary.main}
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorReschedules)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : null}
+          </ChartCard>
+        </Grid>
+      </Grid>
+
+      {/* Third Row - Service Performance Charts */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12}>
           <ChartCard 
             title="Team Performance Comparison (Closings by Service)"
@@ -548,6 +692,103 @@ const Dashboard: React.FC = () => {
                         dataKey={serviceName}
                         name={serviceName}
                         fill={['#2e7d32', '#ffc107', '#1976d2', '#d32f2f', '#9c27b0', '#ff5722'][index % 6]}
+                        radius={[2, 2, 0, 0]}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : null}
+          </ChartCard>
+        </Grid>
+      </Grid>
+
+      {/* Fourth Row - Cancellations and Reschedules by Service */}
+      <Grid container spacing={3}>
+        {/* Cancellations by Service */}
+        <Grid item xs={12} md={6}>
+          <ChartCard 
+            title="Cancellations by Service"
+            isEmpty={safeStats.cancellationsByServiceBar.length === 0 || safeStats.serviceNames.length === 0}
+          >
+            {safeStats.cancellationsByServiceBar.length > 0 && safeStats.serviceNames.length > 0 ? (
+              <Box sx={{ height: 400 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={safeStats.cancellationsByServiceBar} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.grey[300], 0.5)} />
+                    <XAxis 
+                      dataKey="month" 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                    />
+                    <YAxis 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: theme.palette.background.paper,
+                        border: `1px solid ${alpha(theme.palette.grey[300], 0.12)}`,
+                        borderRadius: 8,
+                        boxShadow: theme.shadows[4],
+                      }}
+                    />
+                    <Legend />
+                   {safeStats.serviceNames.map((serviceName, index) => (
+                      <Bar
+                        key={serviceName}
+                        dataKey={serviceName}
+                        name={serviceName}
+                        fill={['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3'][index % 6]}
+                        radius={[2, 2, 0, 0]}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : null}
+          </ChartCard>
+        </Grid>
+
+        {/* Reschedules by Service */}
+        <Grid item xs={12} md={6}>
+          <ChartCard 
+            title="Reschedules by Service"
+            isEmpty={safeStats.reschedulesByServiceBar.length === 0 || safeStats.serviceNames.length === 0}
+          >
+            {safeStats.reschedulesByServiceBar.length > 0 && safeStats.serviceNames.length > 0 ? (
+              <Box sx={{ height: 400 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={safeStats.reschedulesByServiceBar} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.grey[300], 0.5)} />
+                    <XAxis 
+                      dataKey="month" 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                    />
+                    <YAxis 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: theme.palette.background.paper,
+                        border: `1px solid ${alpha(theme.palette.grey[300], 0.12)}`,
+                        borderRadius: 8,
+                        boxShadow: theme.shadows[4],
+                      }}
+                    />
+                    <Legend />
+                   {safeStats.serviceNames.map((serviceName, index) => (
+                      <Bar
+                        key={serviceName}
+                        dataKey={serviceName}
+                        name={serviceName}
+                        fill={['#ff9800', '#ff5722', '#795548', '#607d8b', '#009688', '#4caf50'][index % 6]}
                         radius={[2, 2, 0, 0]}
                       />
                     ))}

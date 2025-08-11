@@ -4,6 +4,11 @@ export interface dashboardStats {
     currentMonthClosings: number;
     previousMonthClosings: number;
     monthlyGrowth: number;
+    // New summary metrics
+    totalCancellations: number;
+    currentMonthCancellations: number;
+    totalReschedules: number;
+    currentMonthReschedules: number;
   };
 
   monthlyClosingsPie: Array<{
@@ -24,12 +29,32 @@ export interface dashboardStats {
     [serviceId: string]: number | string;
   }>;
 
-  serviceNames: string[];
+  monthlyCancellationsPie: Array<{
+    month: string;
+    cancellations: number;
+    color: string;
+  }>;
 
+  cancellationsByServiceBar: Array<{
+    month: string;
+    [serviceId: string]: number | string;
+  }>;
+
+  monthlyReschedulesPie: Array<{
+    month: string;
+    reschedules: number;
+    color: string;
+  }>;
+
+  reschedulesByServiceBar: Array<{
+    month: string;
+    [serviceId: string]: number | string;
+  }>;
+
+  serviceNames: string[];
   agentMonthlyPerformance: Array<{
     month: string;
     [agent: string]: number | string;
   }>;
-
   agents: string[];
 }
