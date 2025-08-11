@@ -38,6 +38,15 @@ import { TableSortLabel } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import { CreateAppointmentRequest } from '../../types/CreateAppointmentRequest';
 
+interface PaginationInfo {
+  currentPage: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
 interface AppTableProps {
   columns: Column<calendarBooking>[];
   rows: any[];
@@ -49,6 +58,11 @@ interface AppTableProps {
   showActions?: boolean;
   onActionClick?: (row: any) => void;
   onEditSuccess?: (bookingData: CreateAppointmentRequest, response: any) => void;
+  pagination?: PaginationInfo;
+  onPageChange?: (newPage: number) => void;
+  onPageSizeChange?: (newPageSize: number) => void;
+  onSortChange?: (sortBy: string, sortDirection: 'asc' | 'desc') => void;
+  loading?: boolean;
 }
 
 const AppTable: React.FC<AppTableProps> = ({
@@ -61,21 +75,34 @@ const AppTable: React.FC<AppTableProps> = ({
   onSelectionChange,
   showActions = false,
   onActionClick,
-  onEditSuccess
+  onEditSuccess,
+  pagination,
+  onPageChange,
+  onPageSizeChange,
+  onSortChange,
+  loading = false
 }) => {
-  const [page, setPage] = React.useState(0);
-  const [rowsPerPage, setRowsPerPage] = React.useState(5);
-  const [selected, setSelected] = React.useState<string[]>([]);
+  // Local pagination state (fallback for non-paginated usage)
+  const [localPage, setLocalPage] = useState(0);
+  const [localRowsPerPage, setLocalRowsPerPage] = useState(10);
+  
+  const [selected, setSelected] = useState<string[]>([]);
   const [selectedRow, setSelectedRow] = useState<calendarBooking>();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [showEditBooking, setShowEditBooking] = useState(false);
   const [showViewBooking, setShowViewBooking] = useState(false);
   const [dialogMode, setDialogMode] = useState<'edit' | 'view'>('edit');
-  const [confirmDelete, setConfirmDelete] = React.useState(false);
-  const [loadingDelete, setLoadingDelete] = React.useState(false);
-  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
-  const [orderBy, setOrderBy] = useState<keyof calendarBooking | string>('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [loadingDelete, setLoadingDelete] = useState(false);
+  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
+  const [orderBy, setOrderBy] = useState<keyof calendarBooking | string>('start');
+
+  const isBackendPaginated = Boolean(pagination && onPageChange && onPageSizeChange);
+  
+  const currentPage = isBackendPaginated ? pagination!.currentPage - 1 : localPage; // Backend is 1-based, MUI is 0-based
+  const currentPageSize = isBackendPaginated ? pagination!.pageSize : localRowsPerPage;
+  const totalItems = isBackendPaginated ? pagination!.totalItems : rows.length;
 
   const getComparator = (
     order: 'asc' | 'desc',
@@ -109,8 +136,15 @@ const AppTable: React.FC<AppTableProps> = ({
 
   const handleRequestSort = (event: React.MouseEvent<unknown>, property: keyof calendarBooking | string) => {
     const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
+    const newOrder = isAsc ? 'desc' : 'asc';
+    
+    setOrder(newOrder);
     setOrderBy(property);
+    
+    // If backend pagination is enabled, notify parent component
+    if (isBackendPaginated && onSortChange) {
+      onSortChange(property as string, newOrder);
+    }
   };
 
   const createSortHandler = (property: keyof calendarBooking | string) => (event: React.MouseEvent<unknown>) => {
@@ -123,29 +157,50 @@ const AppTable: React.FC<AppTableProps> = ({
 
   const isBasicSortableColumn = (columnId: string): boolean => {
     const basicSortableColumns = [
-      'serviceName', 
-      'customerName', 
-      'price',
-      'bookingId'
-    ];
+    'serviceName', 
+    'customerName', 
+    'price',
+    'bookingId',
+    'closingDate',
+    'closingTime',
+    'status',
+    'LoanCloser',
+    'LoanOfficer',
+    'LoanPurpose',
+    'dpa'
+  ];
     return basicSortableColumns.includes(columnId);
   };
 
   const sortedRows = React.useMemo(() => {
+    if (isBackendPaginated) {
+      return rows;
+    }
+    
     if (!orderBy) {
       return rows;
     }
     
     return [...rows].sort(getComparator(order, orderBy, columns));
-  }, [rows, order, orderBy, columns]);
+  }, [rows, order, orderBy, columns, isBackendPaginated]);
   
-  const handleChangePage = (_: unknown, newPage: number) => {
-    setPage(newPage);
+  const handleChangePage = (event: unknown, newPage: number) => {
+    if (isBackendPaginated && onPageChange) {
+      onPageChange(newPage + 1); // Convert back to 1-based for backend
+    } else {
+      setLocalPage(newPage);
+    }
   };
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(+event.target.value);
-    setPage(0);
+    const newPageSize = parseInt(event.target.value, 10);
+    
+    if (isBackendPaginated && onPageSizeChange) {
+      onPageSizeChange(newPageSize);
+    } else {
+      setLocalRowsPerPage(newPageSize);
+      setLocalPage(0);
+    }
   };
 
   const handleEditClick = (row: any) => {
@@ -167,31 +222,28 @@ const AppTable: React.FC<AppTableProps> = ({
     setConfirmDelete(true);
   };
 
-    const handleConfirmDelete = async () => {
-  if (!selectedRow) return;
-  setLoadingDelete(true);
-  
-  try {
+  const handleConfirmDelete = async () => {
+    if (!selectedRow) return;
+    setLoadingDelete(true);
     
-    try { // TODO: Must send Cancellation email after we delete the booking
-      await bookingService.sendCancellationEmail(selectedRow.bookingId, selectedRow);
-    } catch (emailError) {
-      console.error('❌ Failed to send cancellation email:', emailError);
-    }
-    
-    // Delete the booking
-    await bookingService.deleteBooking(selectedRow.bookingId);
+    try {
+      try {
+        await bookingService.sendCancellationEmail(selectedRow.bookingId, selectedRow);
+      } catch (emailError) {
+        console.error('❌ Failed to send cancellation email:', emailError);
+      }
+      
+      await bookingService.deleteBooking(selectedRow.bookingId);
 
-    
-  } catch (error) {
-    console.error('❌ Delete operation failed:', error);
-  } finally {
-    setLoadingDelete(false);
-    setConfirmDelete(false);
-    setSelectedRow(undefined);
-    window.location.reload(); 
-  }
-};
+    } catch (error) {
+      console.error('❌ Delete operation failed:', error);
+    } finally {
+      setLoadingDelete(false);
+      setConfirmDelete(false);
+      setSelectedRow(undefined);
+      window.location.reload(); 
+    }
+  };
 
   const handleCloseModal = () => {
     setShowEditBooking(false);
@@ -238,7 +290,6 @@ const AppTable: React.FC<AppTableProps> = ({
 
   const isSelected = (id: string) => selected.includes(id);
 
-  // For mobile, prioritize columns to display
   const prioritizedColumns = React.useMemo(() => {
     const columnsWithPriority = columns.map((col, index) => ({
       ...col,
@@ -249,117 +300,140 @@ const AppTable: React.FC<AppTableProps> = ({
       .filter(col => !col.hideOnMobile);
   }, [columns]);
 
+  const displayedRows = isBackendPaginated 
+    ? sortedRows
+    : sortedRows.slice(localPage * localRowsPerPage, localPage * localRowsPerPage + localRowsPerPage);
+
   // Mobile view
   const renderMobileView = () => {
     return (
       <Box sx={{ width: '100%' }}>
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+            <CircularProgress />
+          </Box>
+        )}
+        
         <Stack spacing={2}>
-          {sortedRows
-            .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-            .map((row) => {
-              const isItemSelected = isSelected(row.bookingId);
-              const canModify = isUpcoming(row);
-              
-              return (
-                <Card 
-                  key={row.bookingId}
-                  elevation={1}
-                  sx={{ 
-                    cursor: onRowClick ? 'pointer' : 'default',
-                    bgcolor: isItemSelected ? 'rgba(25, 118, 210, 0.08)' : 'white',
-                    '&:hover': {
-                      bgcolor: 'rgba(0, 0, 0, 0.04)'
-                    }
-                  }}
-                  onClick={() => handleViewClick(row)}
-                >
-                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                      {selectable && (
-                        <Checkbox
-                          checked={isItemSelected}
-                          onClick={(event) => handleSelectClick(event, row.bookingId)}
-                        />
+          {displayedRows.map((row) => {
+            const isItemSelected = isSelected(row.bookingId);
+            const canModify = isUpcoming(row);
+            
+            return (
+              <Card 
+                key={row.bookingId}
+                elevation={1}
+                sx={{ 
+                  cursor: onRowClick ? 'pointer' : 'default',
+                  bgcolor: isItemSelected ? 'rgba(25, 118, 210, 0.08)' : 'white',
+                  opacity: loading ? 0.6 : 1,
+                  '&:hover': {
+                    bgcolor: 'rgba(0, 0, 0, 0.04)'
+                  }
+                }}
+                onClick={() => handleViewClick(row)}
+              >
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                    {selectable && (
+                      <Checkbox
+                        checked={isItemSelected}
+                        onClick={(event) => handleSelectClick(event, row.bookingId)}
+                        disabled={loading}
+                      />
+                    )}
+                    <Box>
+                      <Tooltip title="View">
+                        <IconButton
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewClick(row);
+                          }}
+                          size="small"
+                          disabled={loading}
+                        >
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      {canModify && (
+                        <>
+                          <Tooltip title="Edit">
+                            <IconButton
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditClick(row);
+                              }}
+                              size="small"
+                              disabled={loading}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete">
+                            <IconButton
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteClick(row);
+                              }}
+                              size="small"
+                              disabled={loading}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </>
                       )}
-                      <Box>
-                        <Tooltip title="View">
-                          <IconButton
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleViewClick(row);
-                            }}
-                            size="small"
-                          >
-                            <VisibilityIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        {canModify && (
-                          <>
-                            <Tooltip title="Edit">
-                              <IconButton
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEditClick(row);
-                                }}
-                                size="small"
-                              >
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Delete">
-                              <IconButton
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteClick(row);
-                                }}
-                                size="small"
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </>
-                        )}
-                      </Box>
                     </Box>
-                    
-                    <Stack spacing={1.5}>
-                      {prioritizedColumns.map((column, i) => {
-                        const value = (row as any)[column.id];
-                        const displayValue = column.format ? column.format(value, row) : value;
-                        
-                        return (
-                          <Box key={`${row.bookingId}-${column.id as string}`} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
-                              {column.label}:
-                            </Typography>
-                            <Box sx={{ textAlign: column.align || 'left', maxWidth: '60%' }}>
-                              {column.id === 'status' ? (
-                                <StatusBadge status={row.status} />
-                              ) : typeof displayValue === 'string' || typeof displayValue === 'number' ? (
-                                <Typography variant="body1" component="span">
-                                  {displayValue}
-                                </Typography>
-                              ) : (
-                                displayValue
-                              )}
-                            </Box>
+                  </Box>
+                  
+                  <Stack spacing={1.5}>
+                    {prioritizedColumns.map((column, i) => {
+                      const value = (row as any)[column.id];
+                      const displayValue = column.format ? column.format(value, row) : value;
+                      
+                      return (
+                        <Box key={`${row.bookingId}-${column.id as string}`} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
+                            {column.label}:
+                          </Typography>
+                          <Box sx={{ textAlign: column.align || 'left', maxWidth: '60%' }}>
+                            {column.id === 'status' ? (
+                              <StatusBadge status={row.status} />
+                            ) : typeof displayValue === 'string' || typeof displayValue === 'number' ? (
+                              <Typography variant="body1" component="span">
+                                {displayValue}
+                              </Typography>
+                            ) : (
+                              displayValue
+                            )}
                           </Box>
-                        );
-                      })}
-                    </Stack>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+                </CardContent>
+              </Card>
+            );
+          })}
+          
+          {!loading && displayedRows.length === 0 && (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body1" color="text.secondary">
+                No bookings found
+              </Typography>
+            </Box>
+          )}
         </Stack>
+        
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
+          rowsPerPageOptions={[5, 10, 25, 50]}
           component="div"
-          count={sortedRows.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
+          count={totalItems}
+          rowsPerPage={currentPageSize}
+          page={currentPage}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
+          disabled={loading}
         />
       </Box>
     );
@@ -372,6 +446,7 @@ const AppTable: React.FC<AppTableProps> = ({
         sx={{
           maxHeight: 'calc(100vh - 200px)',
           overflowY: 'auto',
+          opacity: loading ? 0.6 : 1,
         }}
       >
         <Table stickyHeader aria-label="data table"   
@@ -388,6 +463,7 @@ const AppTable: React.FC<AppTableProps> = ({
                     indeterminate={selected.length > 0 && selected.length < rows.length}
                     checked={rows.length > 0 && selected.length === rows.length}
                     onChange={handleSelectAllClick}
+                    disabled={loading}
                   />
                 </TableCell>
               )}
@@ -406,6 +482,7 @@ const AppTable: React.FC<AppTableProps> = ({
                         active={orderBy === column.id}
                         direction={orderBy === column.id ? order : 'asc'}
                         onClick={createSortHandler(column.id)}
+                        disabled={loading}
                         sx={{
                           '&.MuiTableSortLabel-root': {
                             color: 'inherit',
@@ -434,9 +511,25 @@ const AppTable: React.FC<AppTableProps> = ({
             </TableRow>
           </TableHead>
           <TableBody>
-            {sortedRows
-              .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-              .map((row) => {
+            {loading && displayedRows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columns.length + 2} align="center" sx={{ py: 4 }}>
+                  <CircularProgress />
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Loading bookings...
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : displayedRows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columns.length + 2} align="center" sx={{ py: 4 }}>
+                  <Typography variant="body1" color="text.secondary">
+                    No bookings found
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : (
+              displayedRows.map((row) => {
                 const isItemSelected = isSelected(row.bookingId);
                 const canModify = isUpcoming(row);
 
@@ -450,13 +543,18 @@ const AppTable: React.FC<AppTableProps> = ({
                     tabIndex={-1}
                     key={row.bookingId}
                     selected={isItemSelected}
-                    sx={{ cursor: 'default', '&:hover': { cursor: 'pointer' } }}
+                    sx={{ 
+                      cursor: 'default', 
+                      '&:hover': { cursor: 'pointer' },
+                      opacity: loading ? 0.6 : 1 
+                    }}
                   >
                     {selectable && (
                       <TableCell padding="checkbox">
                         <Checkbox
                           checked={isItemSelected}
                           onClick={(event) => handleSelectClick(event, row.bookingId)}
+                          disabled={loading}
                         />
                       </TableCell>
                     )}
@@ -483,6 +581,7 @@ const AppTable: React.FC<AppTableProps> = ({
                               handleViewClick(row);
                             }}
                             size="small"
+                            disabled={loading}
                           >
                             <VisibilityIcon fontSize="small" />
                           </IconButton>
@@ -496,6 +595,7 @@ const AppTable: React.FC<AppTableProps> = ({
                                   handleEditClick(row);
                                 }}
                                 size="small"
+                                disabled={loading}
                               >
                                 <EditIcon fontSize="small" />
                               </IconButton>
@@ -508,6 +608,7 @@ const AppTable: React.FC<AppTableProps> = ({
                                 }}
                                 size="small"
                                 color="error"
+                                disabled={loading}
                               >
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
@@ -518,7 +619,8 @@ const AppTable: React.FC<AppTableProps> = ({
                     </TableCell>
                   </TableRow>
                 );
-              })}
+              })
+            )}
           </TableBody>
         </Table>
       </TableContainer>
@@ -531,13 +633,16 @@ const AppTable: React.FC<AppTableProps> = ({
       
       {!isMobile && (
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
+          rowsPerPageOptions={[5, 10, 25, 50]}
           component="div"
-          count={sortedRows.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
+          count={totalItems}
+          rowsPerPage={currentPageSize}
+          page={currentPage}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
+          disabled={loading}
+          showFirstButton={isBackendPaginated}
+          showLastButton={isBackendPaginated}
         />
       )}
 
@@ -579,7 +684,7 @@ const AppTable: React.FC<AppTableProps> = ({
         </Dialog>
       )}
 
-      <Dialog open={confirmDelete} onClose={() => !confirmDelete && setConfirmDelete(false)}>
+      <Dialog open={confirmDelete} onClose={() => !loadingDelete && setConfirmDelete(false)}>
         <DialogTitle>Confirm Deletion</DialogTitle>
         <DialogContent>
           Are you sure you want to delete this booking?

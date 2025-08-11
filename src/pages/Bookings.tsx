@@ -32,7 +32,7 @@ import {
 import AppTable from '../components/common/AppTable';
 import SearchBar from '../components/common/SearchBar';
 import { Booking } from '../types/booking';
-import { bookingService } from '../services/bookingService';
+import { bookingService, PaginationRequest, PaginatedResponse } from '../services/bookingService';
 import { BookingStatus, calendarBooking } from '../types/calendarBooking';
 import { addStatusToBookings, determineBookingStatus } from '../services/bookingsUtils';
 import { Column, createBookingColumns, exportBookingsToExcel } from '../services/exportToExcel';
@@ -50,7 +50,6 @@ import { ClearIcon, DatePicker, LocalizationProvider } from '@mui/x-date-pickers
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { useUrlQueryParams } from '../hooks/useUrlQueryParams';
 
-// Custom sorting function for bookings
 const sortBookings = (bookings: calendarBooking[]): calendarBooking[] => {
   return [...bookings].sort((a, b) => {
     const getStatusPriority = (status: BookingStatus | undefined) => {
@@ -89,30 +88,34 @@ const Bookings: React.FC = () => {
   
   const { queryParams, clearQueryParams, hasLoanId } = useUrlQueryParams();
   
-  const [dateRange, setDateRange] = useState({
-    start: startOfYear(new Date()),
-    end: endOfYear(new Date()),
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    pageSize: 10,
+    totalItems: 0,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: false,
   });
+
+  // Data state
   const [bookings, setBookings] = useState<calendarBooking[]>([]);
   const [services, setServices] = useState<BookingService[]>([]);
   const [followers, setFollowers] = useState<string[]>([]);
-  const [filteredBookings, setFilteredBookings] = useState<calendarBooking[]>([]);
   const [selectedBookings, setSelectedBookings] = useState<calendarBooking[]>([]);
   const [newBooking, setNewBooking] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [submittedData, setSubmittedData] = useState<CreateAppointmentRequest | null>(null);
   const [loanDetails, setLoanDetails] = useState<LoanDetails>();
 
+  // Loading and UI state
   const [loading, setLoading] = useState(true);
   const [loadingPostResponse, setLoadingPostResponse] = useState(false);
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<BookingStatus[]>([]);
   const [officersFilter, setOfficersFilter] = useState<string[]>([]);
   const [serviceFilter, setServiceFilter] = useState<string>('');
-
- const [selectedDate, setSelectedDate] = useState<Date | null>(null);
- const [dateFilter, setDateFilter] = useState<string>('');
- const [dateRangeFilter, setDateRangeFilter] = useState<{
+  const [dateRangeFilter, setDateRangeFilter] = useState<{
     startDate: Date | null;
     endDate: Date | null;
   }>({
@@ -120,7 +123,10 @@ const Bookings: React.FC = () => {
     endDate: null
   });
 
-  const [dataFetched, setDataFetched] = useState(false);
+  // Sorting state
+  const [sortBy, setSortBy] = useState<string>('start');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
   const [isLastOperationEdit, setIsLastOperationEdit] = useState(false);
 
   // Email functionality state
@@ -128,19 +134,20 @@ const Bookings: React.FC = () => {
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [recipientEmails, setRecipientEmails] = useState<string[]>([]);
   const [emailInputValue, setEmailInputValue] = useState('');
-
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
-  const columns = createBookingColumns();
+  // Options for filters
+  const [loanOfficersOptions, setLoanOfficersOptions] = useState<{id: string, label: string}[]>([]);
+  const [serviceOptions, setServiceOptions] = useState<{ id: string, label: string }[]>([]);
   
   const statusOptions = [
     { id: 'upcoming', label: 'Upcoming' },
     { id: 'inProgress', label: 'In Progress' },
     { id: 'completed', label: 'Completed' },
   ];
-  const [loanOfficersOptions, setLoanOfficersOptions] = useState<{id: string, label: string}[]>([]);
-  const [serviceOptions, setServiceOptions] = useState<{ id: string, label: string }[]>([]);
+
+  const columns = createBookingColumns();
 
   useEffect(() => {
     if (hasLoanId && !newBooking) {
@@ -172,212 +179,118 @@ const Bookings: React.FC = () => {
     setSelectedBookings(selectedRows);
   };
 
-  const fetchBookingsData = useCallback(async () => {
+  // Updated fetch function with pagination
+  const fetchBookingsData = useCallback(async (
+    page: number = 1,
+    resetPagination: boolean = false
+  ) => {
     try {
-      const formattedStart = formatDateForApi(dateRange.start);
-      const formattedEnd = formatDateForApi(dateRange.end);
-      
-      const response = await bookingService.getCalendarData(formattedStart, formattedEnd);
-      
-      const bookingsWithStatus = addStatusToBookings(response);
-      const filteredBookings = bookingsWithStatus.filter(booking => booking.bookingId !== null);
-      
-      const sortedBookings = sortBookings(filteredBookings);
+      setLoading(true);
 
-      setBookings(sortedBookings);
-      setFilteredBookings(sortedBookings);
+      // Build pagination request
+      const paginationRequest: PaginationRequest = {
+        page: resetPagination ? 1 : page,
+        pageSize: pagination.pageSize,
+        sortBy,
+        sortDirection,
+        searchQuery: searchQuery.trim() || undefined,
+        filters: {
+          status: statusFilter.length > 0 ? statusFilter : undefined,
+          serviceLocation: serviceFilter || undefined,
+          loanOfficers: officersFilter.length > 0 ? officersFilter : undefined,
+          dateRange: (dateRangeFilter.startDate || dateRangeFilter.endDate) ? {
+            startDate: dateRangeFilter.startDate ? formatDateForApi(dateRangeFilter.startDate) : undefined,
+            endDate: dateRangeFilter.endDate ? formatDateForApi(dateRangeFilter.endDate) : undefined,
+          } : undefined
+        }
+      };
 
-      const uniqueServices = Array.from(new Set(sortedBookings.map(booking => booking.serviceName)))
+      const response: PaginatedResponse<calendarBooking> = await bookingService.getPaginatedBookings(paginationRequest);
+      
+      const bookingsWithStatus = addStatusToBookings(response.data);
+      
+      setBookings(bookingsWithStatus);
+      setPagination({
+        currentPage: response.pagination.currentPage,
+        pageSize: response.pagination.pageSize,
+        totalItems: response.pagination.totalItems,
+        totalPages: response.pagination.totalPages,
+        hasNextPage: response.pagination.hasNextPage,
+        hasPreviousPage: response.pagination.hasPreviousPage,
+      });
+
+      // Update filter options based on current data
+      const uniqueServices = Array.from(new Set(bookingsWithStatus.map(booking => booking.serviceName)))
+        .filter(service => service)
         .map(service => ({ id: service, label: service }));
       setServiceOptions(uniqueServices);
       
-      const loanOfficers = Array.from(new Set(sortedBookings.map(booking => booking.loanData.loanOfficer)))
+      const loanOfficers = Array.from(new Set(bookingsWithStatus.map(booking => booking.loanData?.loanOfficer || booking.LoanOfficer)))
+        .filter(officer => officer)
         .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
       setLoanOfficersOptions(loanOfficers);
 
     } catch (error) {
-      console.error('Error fetching calendar data:', error);
+      console.error('Error fetching paginated bookings:', error);
+      setBookings([]);
+      setPagination({
+        currentPage: 1,
+        pageSize: 10,
+        totalItems: 0,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      });
+    } finally {
+      setLoading(false);
     }
+  }, [
+    pagination.pageSize,
+    sortBy,
+    sortDirection,
+    searchQuery,
+    statusFilter,
+    officersFilter,
+    serviceFilter,
+    dateRangeFilter
+  ]);
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchBookingsData(1, true);
   }, []);
-  
+
+  // Debounced search effect
   useEffect(() => {
-    const fetchAllData = async () => {
-      if (dataFetched) return;
-      try {
-        setLoading(true);
-        await fetchBookingsData();
-        setDataFetched(true);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
+    const delayedSearch = setTimeout(() => {
+      if (searchQuery !== undefined) {
+        fetchBookingsData(1, true);
       }
-    };
+    }, 500);
 
-    fetchAllData();
-  }, [dataFetched, fetchBookingsData]);
-  
+    return () => clearTimeout(delayedSearch);
+  }, [searchQuery]);
+
+  // Filter change effects
   useEffect(() => {
-    let filtered = [...bookings];
-    
-    const searchInBooking = (booking: calendarBooking, query: string): boolean => {
-      const lowercaseQuery = query.toLowerCase();
-      
-      const getNestedValue = (obj: any, path: string): string => {
-        return path.split('.').reduce((current, key) => current?.[key], obj) || '';
-      };
-      
-      const extractSearchableText = (value: any): string => {
-        if (value === null || value === undefined) return '';
-        if (typeof value === 'string') return value;
-        if (typeof value === 'number') return value.toString();
-        if (typeof value === 'boolean') return value.toString();
-        if (typeof value === 'object') {
-          return JSON.stringify(value);
-        }
-        return String(value);
-      };
-      
-      const getFormattedDateTimeValues = (booking: calendarBooking): string[] => {
-        const values: string[] = [];
-        
-        if (booking.start?.dateTime) {
-          try {
-            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy'));
-            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMM d, yyyy'));
-            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MM/dd/yyyy'));
-            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'yyyy-MM-dd'));
-            
-            values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a'));
-            values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'HH:mm'));
-            values.push(TimezoneService.formatTimeForUser(booking.start.dateTime, 'h a'));
-            
-            values.push(TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy') + ' ' + 
-                      TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a'));
-          } catch (error) {
-            console.warn('Error formatting date/time for search:', error);
-          }
-        }
-        
-        return values;
-      };
-      
-      const searchableFields = [
-        'bookingId',
-        'customerName',
-        'serviceName',
-        'customerEmailAddress',
-        'customerPhone',
-        'status',
-        'encompassLoanId',
-        'LoanCloser',
-        'LoanOfficer',
-        'dpa',
-        
-        'loanData.borrowerFirstName',
-        'loanData.borrowerLastName',
-        'loanData.borrowerEmail',
-        'loanData.borrowerPhone',
-        'loanData.borrowerAddress',
-        'loanData.borrowerCity',
-        'loanData.borrowerState',
-        'loanData.borrowerZipCode',
-        'loanData.loanNumber',
-        'loanData.loanType',
-        'loanData.loanAmount',
-        'loanData.loanOfficer',
-        'loanData.loanCloser',
-        'loanData.dpa',
-        'loanData.notes',
-        'loanData.loanPurpose',
-        
-        'serviceLocation.displayName',
-        'serviceLocation.address.street',
-        'serviceLocation.address.city',
-        'serviceLocation.address.state',
-        'serviceLocation.address.postalCode',
-        
-        'customers.0.name',
-        'customers.0.emailAddress',
-        'customers.0.phone'
-      ];
-      
-      const specificLoanPurposeChecks = [
-        booking.loanData?.loanPurpose,
-        booking.loanData?.loanType,
-      ].filter(Boolean).map(value => extractSearchableText(value).toLowerCase());
-      
-      const fieldMatches = searchableFields.some(fieldPath => {
-        const value = getNestedValue(booking, fieldPath);
-        const searchableText = extractSearchableText(value).toLowerCase();
-        return searchableText.includes(lowercaseQuery);
-      });
-      
-      const loanPurposeMatches = specificLoanPurposeChecks.some(text => 
-        text.includes(lowercaseQuery)
-      );
-      
-      const formattedDateTimeValues = getFormattedDateTimeValues(booking);
-      const dateTimeMatches = formattedDateTimeValues.some(dateTimeValue => 
-        dateTimeValue.toLowerCase().includes(lowercaseQuery)
-      );
-      
-      const formattedStatus = booking.status ? (() => {
-        switch (booking.status) {
-          case 'upcoming': return 'Upcoming';
-          case 'inProgress': return 'In Progress';
-          case 'completed': return 'Completed';
-          case 'canceled': return 'Canceled';
-          default: return booking.status;
-        }
-      })() : '';
-      const statusMatches = formattedStatus.toLowerCase().includes(lowercaseQuery);
-      
-      const borrowerNameMatches = (() => {
-        if (booking.loanData) {
-          const fullName = `${booking.loanData.borrowerFirstName || ''} ${booking.loanData.borrowerLastName || ''}`.trim().toLowerCase();
-          return fullName.includes(lowercaseQuery);
-        }
-        return false;
-      })();
-      
-      return fieldMatches || 
-             loanPurposeMatches || 
-             dateTimeMatches || 
-             statusMatches || 
-             borrowerNameMatches;
-    };
-    
-    if (searchQuery.trim()) {
-      filtered = filtered.filter(booking => searchInBooking(booking, searchQuery));
-    }
-    
-    if (statusFilter.length > 0) {
-      filtered = filtered.filter(booking => {
-        if(!booking.status) return false;
-        return statusFilter.includes(booking.status);
-      });
-    }
+    fetchBookingsData(1, true);
+  }, [statusFilter, officersFilter, serviceFilter, dateRangeFilter, sortBy, sortDirection]);
 
-    if (officersFilter.length > 0) {
-      filtered = filtered.filter(booking => {
-        if (!booking.loanData) return false;
-        const officer = booking.loanData.loanOfficer || booking.LoanOfficer;
-        return officer && officersFilter.includes(officer);
-      });
-    }
-    
-    if (serviceFilter) {
-      filtered = filtered.filter(booking => booking.serviceName === serviceFilter);
-    }
+  // Pagination handlers
+  const handlePageChange = (newPage: number) => {
+    fetchBookingsData(newPage);
+  };
 
-    if (dateRangeFilter.startDate || dateRangeFilter.endDate) {
-      filtered = filtered.filter(booking => isBookingInDateRange(booking, dateRangeFilter));
-    }
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPagination(prev => ({ ...prev, pageSize: newPageSize }));
+    fetchBookingsData(1, true);
+  };
 
-    const sortedFiltered = sortBookings(filtered);
-    setFilteredBookings(sortedFiltered);
-  }, [searchQuery, bookings, statusFilter, officersFilter, serviceFilter, dateFilter, dateRangeFilter]);
+  // Sort handlers
+  const handleSortChange = (newSortBy: string, newSortDirection: 'asc' | 'desc') => {
+    setSortBy(newSortBy);
+    setSortDirection(newSortDirection);
+  };
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -395,18 +308,6 @@ const Bookings: React.FC = () => {
     setServiceFilter(value as string);
   };
 
-  const isBookingOnDate = (booking: calendarBooking, selectedDate: string): boolean => {
-    if (!booking.start?.dateTime || !selectedDate) return true;
-    
-    try {
-      const bookingDateId = TimezoneService.formatDateForUser(booking.start.dateTime, 'yyyy-MM-dd');
-      return bookingDateId === selectedDate;
-    } catch (error) {
-      console.warn('Error comparing dates:', error);
-      return false;
-    }
-  };
-
   // Email functionality handlers
   const handleEmailMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setEmailMenuAnchor(event.currentTarget);
@@ -417,7 +318,7 @@ const Bookings: React.FC = () => {
   };
 
   const handleEmailOption = (option: 'eml' | 'mailto' | 'copy') => {
-    const dataToEmail = selectedBookings.length > 0 ? selectedBookings : filteredBookings;
+    const dataToEmail = selectedBookings.length > 0 ? selectedBookings : bookings;
     
     switch (option) {
       case 'eml':
@@ -455,7 +356,7 @@ const Bookings: React.FC = () => {
     }
 
     setIsSending(true);
-    const dataToEmail = selectedBookings.length > 0 ? selectedBookings : filteredBookings;
+    const dataToEmail = selectedBookings.length > 0 ? selectedBookings : bookings;
     
     try {
       await EmailService.sendEmailWithRecipient(dataToEmail, columns, recipientEmails);
@@ -491,21 +392,13 @@ const Bookings: React.FC = () => {
   };
 
   const handleExport = () => {
-    const dataToExport = selectedBookings.length > 0 ? selectedBookings : filteredBookings;
+    const dataToExport = selectedBookings.length > 0 ? selectedBookings : bookings;
     const filename = selectedBookings.length > 0 
       ? `bookings_selected_${selectedBookings.length}_items.xlsx`
-      : 'bookings_export.xlsx';
+      : `bookings_export_page_${pagination.currentPage}.xlsx`;
     
     exportBookingsToExcel(dataToExport, columns, filename);
   };
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
 
   const handleBookingSuccess = async (bookingData: CreateAppointmentRequest, response: any) => {
     try {
@@ -523,7 +416,8 @@ const Bookings: React.FC = () => {
       
       setShowSuccessMessage(true);
       
-      await fetchBookingsData();
+      // Refresh current page data
+      await fetchBookingsData(pagination.currentPage);
     } catch (error) {
       console.error('Error fetching Loan Details:', error);
       setShowSuccessMessage(true);
@@ -544,7 +438,8 @@ const Bookings: React.FC = () => {
       
       setShowSuccessMessage(true);
       
-      await fetchBookingsData();
+      // Refresh current page data
+      await fetchBookingsData(pagination.currentPage);
     } catch (error) {
       console.error('Error fetching Loan Details:', error);
       setShowSuccessMessage(true);
@@ -552,6 +447,14 @@ const Bookings: React.FC = () => {
       setLoadingPostResponse(false);
     }
   };
+
+  if (loading && bookings.length === 0) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -703,7 +606,7 @@ const Bookings: React.FC = () => {
           >
             {selectedBookings.length > 0 
               ? `Export Selected (${selectedBookings.length})` 
-              : 'Export All'
+              : `Export Current Page (${bookings.length})`
             }
           </Button>
   
@@ -716,6 +619,19 @@ const Bookings: React.FC = () => {
             Email to
           </Button>
         </Box>
+      </Box>
+
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="body2" color="text.secondary">
+          Showing {bookings.length} of {pagination.totalItems} total bookings
+          {pagination.totalPages > 1 && ` (Page ${pagination.currentPage} of ${pagination.totalPages})`}
+        </Typography>
+        {loading && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CircularProgress size={16} />
+            <Typography variant="body2" color="text.secondary">Loading...</Typography>
+          </Box>
+        )}
       </Box>
 
       {/* Email Menu */}
@@ -807,7 +723,10 @@ const Bookings: React.FC = () => {
                 <br />
               </>
             )}
-            {selectedBookings.length > 0 && `Including ${selectedBookings.length} selected bookings.`}
+            {selectedBookings.length > 0 ? 
+              `Including ${selectedBookings.length} selected bookings.` : 
+              `Including all ${bookings.length} bookings from current page.`
+            }
           </Typography>
 
           {recipientEmails.length > 0 && (
@@ -847,12 +766,6 @@ const Bookings: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {loading && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', height: 'auto' }}>
-          <CircularProgress size={30} thickness={4} sx={{ my: 1 }} />
-        </Box>
-      )}
 
       <Dialog
         open={newBooking}
@@ -926,9 +839,14 @@ const Bookings: React.FC = () => {
         columns={columns}
         availableServices={services}
         followers={followers}
-        rows={filteredBookings}
+        rows={bookings}
         onSelectionChange={handleSelectionChange}
         onEditSuccess={handleEditSuccess}
+        pagination={pagination}
+        onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
+        onSortChange={handleSortChange}
+        loading={loading}
       />
     </Box>
     <Snackbar
@@ -938,40 +856,7 @@ const Bookings: React.FC = () => {
       message="Email sent successfully to all recipients"
     />
     </LocalizationProvider>
-    
   );
 };
 
 export default Bookings;
-
-
-const isBookingInDateRange = (
-  booking: calendarBooking, 
-  dateRange: { startDate: Date | null; endDate: Date | null }
-): boolean => {
-  if (!booking.start?.dateTime) return true;
-  
-  try {
-    const bookingDate = TimezoneService.convertBackendTimeToLocalReliable(booking.start.dateTime);
-    const bookingDateOnly = new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate());
-    
-    if (dateRange.startDate) {
-      const startDateOnly = new Date(dateRange.startDate.getFullYear(), dateRange.startDate.getMonth(), dateRange.startDate.getDate());
-      if (bookingDateOnly < startDateOnly) {
-        return false;
-      }
-    }
-    
-    if (dateRange.endDate) {
-      const endDateOnly = new Date(dateRange.endDate.getFullYear(), dateRange.endDate.getMonth(), dateRange.endDate.getDate());
-      if (bookingDateOnly > endDateOnly) {
-        return false;
-      }
-    }
-    
-    return true;
-  } catch (error) {
-    console.warn('Error comparing dates in range:', error);
-    return false;
-  }
-};
