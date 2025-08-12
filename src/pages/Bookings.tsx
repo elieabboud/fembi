@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -88,6 +88,8 @@ const Bookings: React.FC = () => {
   
   const { queryParams, clearQueryParams, hasLoanId } = useUrlQueryParams();
   
+  const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
   const [pagination, setPagination] = useState({
     currentPage: 1,
     pageSize: 10,
@@ -97,7 +99,6 @@ const Bookings: React.FC = () => {
     hasPreviousPage: false,
   });
 
-  // Data state
   const [bookings, setBookings] = useState<calendarBooking[]>([]);
   const [services, setServices] = useState<BookingService[]>([]);
   const [followers, setFollowers] = useState<string[]>([]);
@@ -107,7 +108,6 @@ const Bookings: React.FC = () => {
   const [submittedData, setSubmittedData] = useState<CreateAppointmentRequest | null>(null);
   const [loanDetails, setLoanDetails] = useState<LoanDetails>();
 
-  // Loading and UI state
   const [loading, setLoading] = useState(true);
   const [loadingPostResponse, setLoadingPostResponse] = useState(false);
   
@@ -179,7 +179,22 @@ const Bookings: React.FC = () => {
     setSelectedBookings(selectedRows);
   };
 
-  // Updated fetch function with pagination
+  const debouncedFetchBookings = useCallback((
+    page: number = 1,
+    resetPagination: boolean = false,
+    immediate: boolean = false
+  ) => {
+    if (fetchTimerRef.current) {
+      clearTimeout(fetchTimerRef.current);
+    }
+
+    const delay = immediate ? 0 : 300;
+
+    fetchTimerRef.current = setTimeout(() => {
+      fetchBookingsData(page, resetPagination);
+    }, delay);
+  }, []);
+
   const fetchBookingsData = useCallback(async (
     page: number = 1,
     resetPagination: boolean = false
@@ -187,7 +202,7 @@ const Bookings: React.FC = () => {
     try {
       setLoading(true);
 
-      // Build pagination request
+      debugger;
       const paginationRequest: PaginationRequest = {
         page: resetPagination ? 1 : page,
         pageSize: pagination.pageSize,
@@ -195,15 +210,16 @@ const Bookings: React.FC = () => {
         sortDirection,
         searchQuery: searchQuery.trim() || undefined,
         filters: {
-          status: statusFilter.length > 0 ? statusFilter : undefined,
-          serviceLocation: serviceFilter || undefined,
-          loanOfficers: officersFilter.length > 0 ? officersFilter : undefined,
+          status: statusFilter && statusFilter.length > 0 ? statusFilter : undefined,
+          serviceLocation: serviceFilter && serviceFilter.trim() !== "" ? serviceFilter : undefined,
+          loanOfficers: officersFilter && officersFilter.length > 0 ? officersFilter : undefined,
           dateRange: (dateRangeFilter.startDate || dateRangeFilter.endDate) ? {
             startDate: dateRangeFilter.startDate ? formatDateForApi(dateRangeFilter.startDate) : undefined,
             endDate: dateRangeFilter.endDate ? formatDateForApi(dateRangeFilter.endDate) : undefined,
           } : undefined
         }
       };
+
 
       const response: PaginatedResponse<calendarBooking> = await bookingService.getPaginatedBookings(paginationRequest);
       
@@ -219,11 +235,6 @@ const Bookings: React.FC = () => {
         hasPreviousPage: response.pagination.hasPreviousPage,
       });
 
-      // Update filter options based on current data
-      const uniqueServices = Array.from(new Set(bookingsWithStatus.map(booking => booking.serviceName)))
-        .filter(service => service)
-        .map(service => ({ id: service, label: service }));
-      setServiceOptions(uniqueServices);
       
       const loanOfficers = Array.from(new Set(bookingsWithStatus.map(booking => booking.loanData?.loanOfficer || booking.LoanOfficer)))
         .filter(officer => officer)
@@ -255,38 +266,66 @@ const Bookings: React.FC = () => {
     dateRangeFilter
   ]);
 
-  // Initial data fetch
-  useEffect(() => {
-    fetchBookingsData(1, true);
+  const fetchServicesData = useCallback(async () => {
+    try {
+      const servicesResponse = await bookingService.getAvailableServices();
+      setServices(servicesResponse);
+      
+      // Update service options for filter dropdown
+      const serviceOptionsFromAPI = servicesResponse.map(service => ({
+        id: service.displayName,
+        label: service.displayName
+      }));
+      setServiceOptions(serviceOptionsFromAPI);
+      
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      setServices([]);
+    }
   }, []);
 
-  // Debounced search effect
   useEffect(() => {
-    const delayedSearch = setTimeout(() => {
-      if (searchQuery !== undefined) {
-        fetchBookingsData(1, true);
+    fetchServicesData();
+    debouncedFetchBookings(1, true, true);
+  }, []);
+
+  useEffect(() => {
+    if (searchQuery !== undefined) {
+      debouncedFetchBookings(1, true, false);
+    }
+  }, [searchQuery, debouncedFetchBookings]);
+
+  useEffect(() => {
+    debouncedFetchBookings(1, true, false);
+  }, [statusFilter, officersFilter, serviceFilter, debouncedFetchBookings]);
+
+
+  useEffect(() => {
+    debouncedFetchBookings(1, true, false);
+  }, [dateRangeFilter, debouncedFetchBookings]);
+
+  useEffect(() => {
+    debouncedFetchBookings(1, true, false);
+  }, [sortBy, sortDirection, debouncedFetchBookings]);
+
+  useEffect(() => {
+    return () => {
+      if (fetchTimerRef.current) {
+        clearTimeout(fetchTimerRef.current);
       }
-    }, 500);
-
-    return () => clearTimeout(delayedSearch);
-  }, [searchQuery]);
-
-  // Filter change effects
-  useEffect(() => {
-    fetchBookingsData(1, true);
-  }, [statusFilter, officersFilter, serviceFilter, dateRangeFilter, sortBy, sortDirection]);
+    };
+  }, []);
 
   // Pagination handlers
   const handlePageChange = (newPage: number) => {
-    fetchBookingsData(newPage);
+    debouncedFetchBookings(newPage, false, true);
   };
 
   const handlePageSizeChange = (newPageSize: number) => {
     setPagination(prev => ({ ...prev, pageSize: newPageSize }));
-    fetchBookingsData(1, true);
+    debouncedFetchBookings(1, true, true);
   };
 
-  // Sort handlers
   const handleSortChange = (newSortBy: string, newSortDirection: 'asc' | 'desc') => {
     setSortBy(newSortBy);
     setSortDirection(newSortDirection);
@@ -297,6 +336,7 @@ const Bookings: React.FC = () => {
   };
 
   const handleStatusFilterChange = (value: string | string[]) => {
+    debugger;
     setStatusFilter(value as BookingStatus[]);
   };
 
@@ -417,7 +457,7 @@ const Bookings: React.FC = () => {
       setShowSuccessMessage(true);
       
       // Refresh current page data
-      await fetchBookingsData(pagination.currentPage);
+      await debouncedFetchBookings(pagination.currentPage, false, true);
     } catch (error) {
       console.error('Error fetching Loan Details:', error);
       setShowSuccessMessage(true);
@@ -439,7 +479,7 @@ const Bookings: React.FC = () => {
       setShowSuccessMessage(true);
       
       // Refresh current page data
-      await fetchBookingsData(pagination.currentPage);
+      await debouncedFetchBookings(pagination.currentPage, false, true);
     } catch (error) {
       console.error('Error fetching Loan Details:', error);
       setShowSuccessMessage(true);

@@ -64,8 +64,28 @@ export const bookingService = {
   },
 
   async getPaginatedBookings(paginationRequest: PaginationRequest): Promise<PaginatedResponse<calendarBooking>> {
-    const response = await api.post('/api/Application/v1/GetPaginatedBookings', paginationRequest);
+    const mapStatusToBackend = (frontendStatus: string): string => {
+      switch (frontendStatus) {
+        case 'upcoming': return 'upcoming';
+        case 'inProgress': return 'inProgress'; 
+        case 'completed': return 'completed';
+        case 'canceled': return 'canceled';
+        default: return frontendStatus;
+      }
+    };
+
+    const processedRequest = {
+      ...paginationRequest,
+      filters: paginationRequest.filters ? {
+        ...paginationRequest.filters,
+        status: paginationRequest.filters.status?.map(mapStatusToBackend)
+      } : undefined
+    };
+
     
+    const response = await api.post('/api/Application/v1/GetPaginatedBookings', processedRequest);
+    
+
     return {
       data: response.data.data || [],
       pagination: {
@@ -163,9 +183,38 @@ export const bookingService = {
   },
 
   async getAvailableServices(): Promise<BookingService[]> {
-    const response = await api.get('/api/Application/v1/GetAvailableServices');
-    const services = response.data.value;
-    return services || [];
+    try {
+      const response = await api.get('/api/Application/v1/GetAvailableServices');
+      
+      
+      // Handle different possible response structures
+      let services: BookingService[] = [];
+      
+      if (response.data) {
+        if (Array.isArray(response.data)) {
+          // Direct array response
+          services = response.data;
+        } else if (response.data.value && Array.isArray(response.data.value)) {
+          // Wrapped in 'value' property
+          services = response.data.value;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          // Wrapped in 'data' property
+          services = response.data.data;
+        } else if (response.data.result && Array.isArray(response.data.result)) {
+          // Wrapped in 'result' property
+          services = response.data.result;
+        } else {
+          console.warn('⚠️ Unexpected services response structure:', response.data);
+          services = [];
+        }
+      }
+
+
+      return services || [];
+    } catch (error) {
+      console.error('❌ Error fetching available services:', error);
+      return [];
+    }
   },
   
   async postBooking(appointmentData: CreateAppointmentRequest): Promise<void> {
