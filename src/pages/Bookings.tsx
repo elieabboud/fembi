@@ -197,11 +197,18 @@ const Bookings: React.FC = () => {
 
   const fetchBookingsData = useCallback(async (
     page: number = 1,
-    resetPagination: boolean = false
+    resetPagination: boolean = false,
+    filterOverrides?: {
+      statusFilter?: BookingStatus[];
+      officersFilter?: string[];
+      serviceFilter?: string;
+    }
   ) => {
     try {
       setLoading(true);
-
+      const currentStatusFilter = filterOverrides?.statusFilter ?? statusFilter;
+      const currentOfficersFilter = filterOverrides?.officersFilter ?? officersFilter;
+      const currentServiceFilter = filterOverrides?.serviceFilter ?? serviceFilter;
       debugger;
       const paginationRequest: PaginationRequest = {
         page: resetPagination ? 1 : page,
@@ -210,9 +217,9 @@ const Bookings: React.FC = () => {
         sortDirection,
         searchQuery: searchQuery.trim() || undefined,
         filters: {
-          status: statusFilter && statusFilter.length > 0 ? statusFilter : undefined,
-          serviceLocation: serviceFilter && serviceFilter.trim() !== "" ? serviceFilter : undefined,
-          loanOfficers: officersFilter && officersFilter.length > 0 ? officersFilter : undefined,
+          status: currentStatusFilter && currentStatusFilter.length > 0 ? currentStatusFilter : undefined,
+          serviceLocation: currentServiceFilter && currentServiceFilter.trim() !== "" ? currentServiceFilter : undefined,
+          loanOfficers: currentOfficersFilter && currentOfficersFilter.length > 0 ? currentOfficersFilter : undefined,
           dateRange: (dateRangeFilter.startDate || dateRangeFilter.endDate) ? {
             startDate: dateRangeFilter.startDate ? formatDateForApi(dateRangeFilter.startDate) : undefined,
             endDate: dateRangeFilter.endDate ? formatDateForApi(dateRangeFilter.endDate) : undefined,
@@ -290,10 +297,8 @@ const Bookings: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (searchQuery !== undefined) {
-      debouncedFetchBookings(1, true, false);
-    }
-  }, [searchQuery, debouncedFetchBookings]);
+    debouncedFetchBookings(1, true, false);
+  }, [statusFilter, officersFilter, serviceFilter, dateRangeFilter, debouncedFetchBookings]);
 
   useEffect(() => {
     debouncedFetchBookings(1, true, false);
@@ -335,18 +340,62 @@ const Bookings: React.FC = () => {
     setSearchQuery(e.target.value);
   };
 
-  const handleStatusFilterChange = (value: string | string[]) => {
-    debugger;
-    setStatusFilter(value as BookingStatus[]);
+  const handleStatusFilterChange = (value: string | string[]) => {    
+    if (Array.isArray(value)) {
+      const newStatusFilter = value as BookingStatus[];
+      
+      setStatusFilter(newStatusFilter);
+      fetchBookingsData(1, true, {
+        statusFilter: newStatusFilter,
+        officersFilter: officersFilter,
+        serviceFilter: serviceFilter
+      });
+    } else {
+      const newStatusFilter: BookingStatus[] = [];
+      setStatusFilter(newStatusFilter);
+      fetchBookingsData(1, true, {
+        statusFilter: newStatusFilter,
+        officersFilter: officersFilter,
+        serviceFilter: serviceFilter
+      });
+    }
   };
 
-  const handleOfficersFilterChange = (value: string | string[]) => {
-    setOfficersFilter(value as string[]);
+  const handleOfficersFilterChange = (value: string | string[]) => {    
+    if (Array.isArray(value)) {
+      const newOfficersFilter = value;
+      setOfficersFilter(newOfficersFilter);
+      
+      fetchBookingsData(1, true, {
+        statusFilter: statusFilter,
+        officersFilter: newOfficersFilter,
+        serviceFilter: serviceFilter
+      });
+    } else {
+      const newOfficersFilter: string[] = [];
+      setOfficersFilter(newOfficersFilter);
+      
+      fetchBookingsData(1, true, {
+        statusFilter: statusFilter,
+        officersFilter: newOfficersFilter,
+        serviceFilter: serviceFilter
+      });
+    }
   };
 
-  const handleServiceFilterChange = (value: string | string[]) => {
-    setServiceFilter(value as string);
-  };
+  const handleServiceFilterChange = (value: string | string[]) => {      
+      const newServiceFilter = Array.isArray(value) 
+        ? (value.length > 0 ? value[0] : '') 
+        : (value || '');
+        
+      setServiceFilter(newServiceFilter);
+      
+      fetchBookingsData(1, true, {
+        statusFilter: statusFilter,
+        officersFilter: officersFilter,
+        serviceFilter: newServiceFilter
+      });
+    };
 
   // Email functionality handlers
   const handleEmailMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -610,22 +659,25 @@ const Bookings: React.FC = () => {
             options={statusOptions}
             value={statusFilter}
             onChange={handleStatusFilterChange}
+            multiSelect={true}
           />
-          
+
           <FilterDropdown
             id="officers-filter"
             label="Loan Officers"
             options={loanOfficersOptions}
             value={officersFilter}
             onChange={handleOfficersFilterChange}
+            multiSelect={true}
           />
-          
+
           <FilterDropdown
             id="service-filter"
             label="Service"
             options={serviceOptions}
             value={serviceFilter}
             onChange={handleServiceFilterChange}
+            multiSelect={false}
           />
         </Box>
         

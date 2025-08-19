@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   FormControl,
   InputLabel,
@@ -34,8 +34,37 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
   value,
   onChange
 }) => {
-  const handleChange = (event: SelectChangeEvent<typeof value>) => {
+  
+  const getDisplayValue = () => {
+    if (multiSelect) {
+      if (Array.isArray(value)) {
+        return value;
+      } else if (value && value !== '') {
+        return [value];
+      } else {
+        return [];
+      }
+    } else {
+      if (Array.isArray(value)) {
+        return value.length > 0 ? value[0] : '';
+      } else {
+        return value || '';
+      }
+    }
+  };
+
+  const displayValue = getDisplayValue();
+
+  const handleChange = (event: SelectChangeEvent<string | string[]>) => {
     const newValue = event.target.value;
+    
+    console.log(`🎯 FilterDropdown (${label}) change:`, {
+      newValue,
+      multiSelect,
+      typeof: typeof newValue,
+      isArray: Array.isArray(newValue)
+    });
+
     onChange(newValue);
   };
 
@@ -57,14 +86,17 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
       }}
       size="small"
     >
-      <InputLabel id={`${id}-label`} sx={{ fontSize: {sm: 12, md: 14} }}>{label}</InputLabel>
+      <InputLabel id={`${id}-label`} sx={{ fontSize: {sm: 12, md: 14} }}>
+        {label}
+      </InputLabel>
+      
       {multiSelect ? (
         <Select
           variant='outlined'
           labelId={`${id}-label`}
           id={id}
           multiple
-          value={value as string[]}
+          value={displayValue as string[]}
           sx={{ 
             fontSize: 14, 
             height: 40,
@@ -97,7 +129,9 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
         >
           {options.map((option) => (
             <MenuItem key={option.id} value={option.id.toString()}>
-              <Checkbox checked={(value as string[]).indexOf(option.id.toString()) > -1} />
+              <Checkbox 
+                checked={(displayValue as string[]).includes(option.id.toString())} 
+              />
               <ListItemText primary={option.label} />
             </MenuItem>
           ))}
@@ -106,8 +140,8 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
         <Select
           labelId={`${id}-label`}
           id={id}
-          value={value as string}
-          sx={{ fontSize: 14, height: 40, }}
+          value={displayValue as string}
+          sx={{ fontSize: 14, height: 40 }}
           onChange={handleChange}
           label={label}
           MenuProps={menuProps}
