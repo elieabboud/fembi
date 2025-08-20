@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   FormControl,
   InputLabel,
@@ -55,18 +55,29 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
 
   const displayValue = getDisplayValue();
 
-  const handleChange = (event: SelectChangeEvent<string | string[]>) => {
-    const newValue = event.target.value;
+  const handleChange = useCallback((event: SelectChangeEvent<string | string[]>) => {
+    event.preventDefault();
+    event.stopPropagation();
     
-    console.log(`🎯 FilterDropdown (${label}) change:`, {
-      newValue,
-      multiSelect,
-      typeof: typeof newValue,
-      isArray: Array.isArray(newValue)
-    });
+    const newValue = event.target.value;
 
-    onChange(newValue);
-  };
+
+    if (multiSelect) {
+      const currentArray = Array.isArray(value) ? value : (value ? [value] : []);
+      const newArray = Array.isArray(newValue) ? newValue : (newValue ? [newValue] : []);
+      
+      if (JSON.stringify(currentArray.sort()) !== JSON.stringify(newArray.sort())) {
+        onChange(newArray);
+      }
+    } else {
+      const currentSingle = Array.isArray(value) ? (value.length > 0 ? value[0] : '') : (value || '');
+      const newSingle = Array.isArray(newValue) ? (newValue.length > 0 ? newValue[0] : '') : (newValue || '');
+      
+      if (currentSingle !== newSingle) {
+        onChange(newSingle);
+      }
+    }
+  }, [value, onChange, multiSelect, label]);
 
   const menuProps = {
     PaperProps: {
@@ -76,6 +87,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
       },
     },
     disableScrollLock: true,
+    autoFocus: false,
   };
 
   return (
@@ -112,6 +124,9 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
           onChange={handleChange}
           input={<OutlinedInput label={label} />}
           MenuProps={menuProps}
+          onClose={(event) => {
+            event?.stopPropagation?.();
+          }}
           renderValue={(selected) => (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
               {(selected as string[]).map((selectedId) => {
@@ -128,7 +143,11 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
           )}
         >
           {options.map((option) => (
-            <MenuItem key={option.id} value={option.id.toString()}>
+            <MenuItem 
+              key={option.id} 
+              value={option.id.toString()}
+              onClick={(e) => e.stopPropagation()}
+            >
               <Checkbox 
                 checked={(displayValue as string[]).includes(option.id.toString())} 
               />
@@ -145,12 +164,20 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
           onChange={handleChange}
           label={label}
           MenuProps={menuProps}
+          onClose={(event) => {
+            event?.stopPropagation?.();
+          }}
         >
           <MenuItem value="">
             <em>All</em>
           </MenuItem>
           {options.map((option) => (
-            <MenuItem key={option.id} value={option.id.toString()}>
+            <MenuItem 
+              key={option.id} 
+              value={option.id.toString()}
+              // FIXED: Prevent double clicks
+              onClick={(e) => e.stopPropagation()}
+            >
               {option.label}
             </MenuItem>
           ))}

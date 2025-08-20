@@ -86,7 +86,6 @@ const Dashboard: React.FC = () => {
 
       try {
         apiResponse = await dashboardService.getDashboardData();
-        console.log('Dashboard data loaded:', apiResponse);
       } catch (dashboardError) {
         console.warn('⚠️ Failed to load dashboard data:', dashboardError);
         throw new Error('Unable to load dashboard data. Please try again.');

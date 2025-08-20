@@ -89,6 +89,8 @@ const Bookings: React.FC = () => {
   const { queryParams, clearQueryParams, hasLoanId } = useUrlQueryParams();
   
   const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const lastRequestIdRef = useRef<string | null>(null);
   
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -109,10 +111,12 @@ const Bookings: React.FC = () => {
   const [loanDetails, setLoanDetails] = useState<LoanDetails>();
 
   const [loading, setLoading] = useState(true);
+  const [fetchingData, setFetchingData] = useState(false);
   const [loadingPostResponse, setLoadingPostResponse] = useState(false);
+  const [isRequestInProgress, setIsRequestInProgress] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<BookingStatus[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [officersFilter, setOfficersFilter] = useState<string[]>([]);
   const [serviceFilter, setServiceFilter] = useState<string>('');
   const [dateRangeFilter, setDateRangeFilter] = useState<{
@@ -123,13 +127,11 @@ const Bookings: React.FC = () => {
     endDate: null
   });
 
-  // Sorting state
   const [sortBy, setSortBy] = useState<string>('start');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const [isLastOperationEdit, setIsLastOperationEdit] = useState(false);
 
-  // Email functionality state
   const [emailMenuAnchor, setEmailMenuAnchor] = useState<null | HTMLElement>(null);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [recipientEmails, setRecipientEmails] = useState<string[]>([]);
@@ -137,7 +139,6 @@ const Bookings: React.FC = () => {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
-  // Options for filters
   const [loanOfficersOptions, setLoanOfficersOptions] = useState<{id: string, label: string}[]>([]);
   const [serviceOptions, setServiceOptions] = useState<{ id: string, label: string }[]>([]);
   
@@ -155,7 +156,6 @@ const Bookings: React.FC = () => {
     }
   }, [hasLoanId, queryParams.loanId, newBooking]);
 
-  // Email validation helper
   const isValidEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email.trim());
@@ -179,37 +179,32 @@ const Bookings: React.FC = () => {
     setSelectedBookings(selectedRows);
   };
 
+  const generateRequestId = () => {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  };
+
   const debouncedFetchBookings = useCallback((
     page: number = 1,
     resetPagination: boolean = false,
-    immediate: boolean = false
+    immediate: boolean = false,
+    isInitialLoad: boolean = false
   ) => {
     if (fetchTimerRef.current) {
       clearTimeout(fetchTimerRef.current);
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
     const delay = immediate ? 0 : 300;
 
-    fetchTimerRef.current = setTimeout(() => {
-      fetchBookingsData(page, resetPagination);
-    }, delay);
-  }, []);
+    fetchTimerRef.current = setTimeout(async () => {
+      const requestId = generateRequestId();
+      lastRequestIdRef.current = requestId;
 
-  const fetchBookingsData = useCallback(async (
-    page: number = 1,
-    resetPagination: boolean = false,
-    filterOverrides?: {
-      statusFilter?: BookingStatus[];
-      officersFilter?: string[];
-      serviceFilter?: string;
-    }
-  ) => {
-    try {
-      setLoading(true);
-      const currentStatusFilter = filterOverrides?.statusFilter ?? statusFilter;
-      const currentOfficersFilter = filterOverrides?.officersFilter ?? officersFilter;
-      const currentServiceFilter = filterOverrides?.serviceFilter ?? serviceFilter;
-      debugger;
+      abortControllerRef.current = new AbortController();
+
       const paginationRequest: PaginationRequest = {
         page: resetPagination ? 1 : page,
         pageSize: pagination.pageSize,
@@ -217,9 +212,9 @@ const Bookings: React.FC = () => {
         sortDirection,
         searchQuery: searchQuery.trim() || undefined,
         filters: {
-          status: currentStatusFilter && currentStatusFilter.length > 0 ? currentStatusFilter : undefined,
-          serviceLocation: currentServiceFilter && currentServiceFilter.trim() !== "" ? currentServiceFilter : undefined,
-          loanOfficers: currentOfficersFilter && currentOfficersFilter.length > 0 ? currentOfficersFilter : undefined,
+          status: statusFilter && statusFilter.length > 0 ? statusFilter as BookingStatus[] : undefined,
+          serviceLocation: serviceFilter && serviceFilter.trim() !== "" ? serviceFilter : undefined,
+          loanOfficers: officersFilter && officersFilter.length > 0 ? officersFilter : undefined,
           dateRange: (dateRangeFilter.startDate || dateRangeFilter.endDate) ? {
             startDate: dateRangeFilter.startDate ? formatDateForApi(dateRangeFilter.startDate) : undefined,
             endDate: dateRangeFilter.endDate ? formatDateForApi(dateRangeFilter.endDate) : undefined,
@@ -227,8 +222,63 @@ const Bookings: React.FC = () => {
         }
       };
 
+      await fetchBookingsData(
+        paginationRequest, 
+        resetPagination ? 1 : page, 
+        isInitialLoad,
+        abortControllerRef.current.signal,
+        requestId
+      );
+    }, delay);
+  }, [
+    pagination.pageSize,
+    sortBy,
+    sortDirection,
+    searchQuery,
+    statusFilter,
+    officersFilter,
+    serviceFilter,
+    dateRangeFilter
+  ]);
 
+  const fetchBookingsData = async (
+    paginationRequest: PaginationRequest,
+    targetPage: number,
+    isInitialLoad: boolean = false,
+    signal?: AbortSignal,
+    requestId?: string
+  ) => {
+    try {
+      if (isRequestInProgress && !isInitialLoad) {
+        console.log('Request already in progress, aborting new request');
+        return;
+      }
+
+      setIsRequestInProgress(true);
+      
+      if (isInitialLoad) {
+        setLoading(true);
+        setFetchingData(false);
+      } else {
+        setFetchingData(true);
+        setLoading(false);
+      }
+      
+      console.log(`🚀 Starting API call (${requestId})...`, { isInitialLoad, page: targetPage });
+      
       const response: PaginatedResponse<calendarBooking> = await bookingService.getPaginatedBookings(paginationRequest);
+      
+      if (signal?.aborted) {
+        console.log(`Request ${requestId} was aborted`);
+        return;
+      }
+
+      if (requestId !== lastRequestIdRef.current) {
+        console.log(`Request ${requestId} is outdated, ignoring response`);
+        return;
+      }
+      
+      console.log(`✅ API call completed successfully (${requestId})`);
       
       const bookingsWithStatus = addStatusToBookings(response.data);
       
@@ -242,14 +292,18 @@ const Bookings: React.FC = () => {
         hasPreviousPage: response.pagination.hasPreviousPage,
       });
 
-      
       const loanOfficers = Array.from(new Set(bookingsWithStatus.map(booking => booking.loanData?.loanOfficer || booking.LoanOfficer)))
         .filter(officer => officer)
         .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
       setLoanOfficersOptions(loanOfficers);
 
     } catch (error) {
-      console.error('Error fetching paginated bookings:', error);
+      if (signal?.aborted || (error as any)?.name === 'AbortError') {
+        console.log(`Request ${requestId} was aborted`);
+        return;
+      }
+      
+      console.error(`❌ Error fetching paginated bookings (${requestId}):`, error);
       setBookings([]);
       setPagination({
         currentPage: 1,
@@ -260,25 +314,20 @@ const Bookings: React.FC = () => {
         hasPreviousPage: false,
       });
     } finally {
-      setLoading(false);
+      if (!signal?.aborted && requestId === lastRequestIdRef.current) {
+        console.log(`🏁 Clearing loading states (${requestId})`);
+        setIsRequestInProgress(false);
+        setLoading(false);
+        setFetchingData(false);
+      }
     }
-  }, [
-    pagination.pageSize,
-    sortBy,
-    sortDirection,
-    searchQuery,
-    statusFilter,
-    officersFilter,
-    serviceFilter,
-    dateRangeFilter
-  ]);
+  };
 
   const fetchServicesData = useCallback(async () => {
     try {
       const servicesResponse = await bookingService.getAvailableServices();
       setServices(servicesResponse);
       
-      // Update service options for filter dropdown
       const serviceOptionsFromAPI = servicesResponse.map(service => ({
         id: service.displayName,
         label: service.displayName
@@ -291,44 +340,70 @@ const Bookings: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchServicesData();
-    debouncedFetchBookings(1, true, true);
+  const handleStatusFilterChange = useCallback((value: string | string[]) => {
+    console.log('🎯 Status filter change received:', value);
+    const newStatusFilter = Array.isArray(value) ? value : [];
+    setStatusFilter(newStatusFilter);
+  }, []);
+
+  const handleOfficersFilterChange = useCallback((value: string | string[]) => {
+    console.log('🎯 Officers filter change received:', value);
+    const newOfficersFilter = Array.isArray(value) ? value : [];
+    setOfficersFilter(newOfficersFilter);
+  }, []);
+
+  const handleServiceFilterChange = useCallback((value: string | string[]) => {
+    console.log('🎯 Service filter change received:', value);
+    const newServiceFilter = Array.isArray(value) 
+      ? (value.length > 0 ? value[0] : '') 
+      : (value || '');
+    setServiceFilter(newServiceFilter);
+  }, []);
+
+  const handleDateRangeChange = useCallback((newDateRange: { startDate: Date | null; endDate: Date | null }) => {
+    console.log('🎯 Date range change received:', newDateRange);
+    setDateRangeFilter(newDateRange);
   }, []);
 
   useEffect(() => {
-    debouncedFetchBookings(1, true, false);
-  }, [statusFilter, officersFilter, serviceFilter, dateRangeFilter, debouncedFetchBookings]);
+    console.log('🔄 Filter dependency changed, triggering fetch');
+    debouncedFetchBookings(1, true, false, false);
+  }, [statusFilter, officersFilter, serviceFilter, dateRangeFilter]);
 
   useEffect(() => {
-    debouncedFetchBookings(1, true, false);
-  }, [statusFilter, officersFilter, serviceFilter, debouncedFetchBookings]);
-
-
-  useEffect(() => {
-    debouncedFetchBookings(1, true, false);
-  }, [dateRangeFilter, debouncedFetchBookings]);
+    console.log('🏁 Initial load effect triggered');
+    fetchServicesData();
+    debouncedFetchBookings(1, true, true, true);
+  }, []);
 
   useEffect(() => {
-    debouncedFetchBookings(1, true, false);
-  }, [sortBy, sortDirection, debouncedFetchBookings]);
+    console.log('🔍 Search changed, triggering fetch');
+    debouncedFetchBookings(1, true, false, false);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    console.log('📊 Sort changed, triggering fetch');
+    debouncedFetchBookings(1, true, true, false);
+  }, [sortBy, sortDirection]);
 
   useEffect(() => {
     return () => {
       if (fetchTimerRef.current) {
         clearTimeout(fetchTimerRef.current);
       }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     };
   }, []);
 
-  // Pagination handlers
   const handlePageChange = (newPage: number) => {
-    debouncedFetchBookings(newPage, false, true);
+    debouncedFetchBookings(newPage, false, true, false);
   };
 
   const handlePageSizeChange = (newPageSize: number) => {
     setPagination(prev => ({ ...prev, pageSize: newPageSize }));
-    debouncedFetchBookings(1, true, true);
+    debouncedFetchBookings(1, true, true, false);
   };
 
   const handleSortChange = (newSortBy: string, newSortDirection: 'asc' | 'desc') => {
@@ -340,64 +415,6 @@ const Bookings: React.FC = () => {
     setSearchQuery(e.target.value);
   };
 
-  const handleStatusFilterChange = (value: string | string[]) => {    
-    if (Array.isArray(value)) {
-      const newStatusFilter = value as BookingStatus[];
-      
-      setStatusFilter(newStatusFilter);
-      fetchBookingsData(1, true, {
-        statusFilter: newStatusFilter,
-        officersFilter: officersFilter,
-        serviceFilter: serviceFilter
-      });
-    } else {
-      const newStatusFilter: BookingStatus[] = [];
-      setStatusFilter(newStatusFilter);
-      fetchBookingsData(1, true, {
-        statusFilter: newStatusFilter,
-        officersFilter: officersFilter,
-        serviceFilter: serviceFilter
-      });
-    }
-  };
-
-  const handleOfficersFilterChange = (value: string | string[]) => {    
-    if (Array.isArray(value)) {
-      const newOfficersFilter = value;
-      setOfficersFilter(newOfficersFilter);
-      
-      fetchBookingsData(1, true, {
-        statusFilter: statusFilter,
-        officersFilter: newOfficersFilter,
-        serviceFilter: serviceFilter
-      });
-    } else {
-      const newOfficersFilter: string[] = [];
-      setOfficersFilter(newOfficersFilter);
-      
-      fetchBookingsData(1, true, {
-        statusFilter: statusFilter,
-        officersFilter: newOfficersFilter,
-        serviceFilter: serviceFilter
-      });
-    }
-  };
-
-  const handleServiceFilterChange = (value: string | string[]) => {      
-      const newServiceFilter = Array.isArray(value) 
-        ? (value.length > 0 ? value[0] : '') 
-        : (value || '');
-        
-      setServiceFilter(newServiceFilter);
-      
-      fetchBookingsData(1, true, {
-        statusFilter: statusFilter,
-        officersFilter: officersFilter,
-        serviceFilter: newServiceFilter
-      });
-    };
-
-  // Email functionality handlers
   const handleEmailMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setEmailMenuAnchor(event.currentTarget);
   };
@@ -505,8 +522,7 @@ const Bookings: React.FC = () => {
       
       setShowSuccessMessage(true);
       
-      // Refresh current page data
-      await debouncedFetchBookings(pagination.currentPage, false, true);
+      await debouncedFetchBookings(pagination.currentPage, false, true, false);
     } catch (error) {
       console.error('Error fetching Loan Details:', error);
       setShowSuccessMessage(true);
@@ -527,8 +543,7 @@ const Bookings: React.FC = () => {
       
       setShowSuccessMessage(true);
       
-      // Refresh current page data
-      await debouncedFetchBookings(pagination.currentPage, false, true);
+      await debouncedFetchBookings(pagination.currentPage, false, true, false);
     } catch (error) {
       console.error('Error fetching Loan Details:', error);
       setShowSuccessMessage(true);
@@ -595,10 +610,10 @@ const Bookings: React.FC = () => {
             label="Start Date" 
             value={dateRangeFilter.startDate}
             onChange={(newValue) => {
-              setDateRangeFilter(prev => ({
-                ...prev,
+              handleDateRangeChange({
+                ...dateRangeFilter,
                 startDate: newValue
-              }));
+              });
             }}
             slotProps={{ 
               textField: { 
@@ -617,10 +632,10 @@ const Bookings: React.FC = () => {
             label="End Date" 
             value={dateRangeFilter.endDate}
             onChange={(newValue) => {
-              setDateRangeFilter(prev => ({
-                ...prev,
+              handleDateRangeChange({
+                ...dateRangeFilter,
                 endDate: newValue
-              }));
+              });
             }}
             minDate={dateRangeFilter.startDate || undefined}
             slotProps={{ 
@@ -641,7 +656,7 @@ const Bookings: React.FC = () => {
               variant="outlined"
               size="small"
               onClick={() => {
-                setDateRangeFilter({
+                handleDateRangeChange({
                   startDate: null,
                   endDate: null
                 });
@@ -718,7 +733,7 @@ const Bookings: React.FC = () => {
           Showing {bookings.length} of {pagination.totalItems} total bookings
           {pagination.totalPages > 1 && ` (Page ${pagination.currentPage} of ${pagination.totalPages})`}
         </Typography>
-        {loading && (
+        {(fetchingData || isRequestInProgress) && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CircularProgress size={16} />
             <Typography variant="body2" color="text.secondary">Loading...</Typography>
@@ -726,7 +741,6 @@ const Bookings: React.FC = () => {
         )}
       </Box>
 
-      {/* Email Menu */}
       <Menu
         anchorEl={emailMenuAnchor}
         open={Boolean(emailMenuAnchor)}
@@ -938,7 +952,7 @@ const Bookings: React.FC = () => {
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}
         onSortChange={handleSortChange}
-        loading={loading}
+        loading={fetchingData || isRequestInProgress}
       />
     </Box>
     <Snackbar
