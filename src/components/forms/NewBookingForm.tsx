@@ -76,6 +76,8 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
     initializing: false,
     sendingEmail: false
   });
+
+  const [selectedBorrowerEmails, setSelectedBorrowerEmails] = useState<string[]>([]);
   
   const [availabilitySettings, setAvailabilitySettings] = useState<AvailabilitySettings | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | null>(null);
@@ -560,11 +562,9 @@ const sendEmailNotifications = async (response: any) => {
     }
   };
 
-  // UPDATED: Modified fetchLoanDetails to work with prefilledLoanId
   const fetchLoanDetails = async () => {
     if (loadingStates.submitting || readOnlyMode) return;
 
-    // Use prefilledLoanId if the form field is empty
     const loanIdToUse = bookingData.EncompassDetails.EncompassLoanId || prefilledLoanId;
 
     if (!loanIdToUse?.trim()) {
@@ -578,25 +578,56 @@ const sendEmailNotifications = async (response: any) => {
     try{
       const loanDetails = await bookingService.getLoanDetails(loanIdToUse, true);
 
+      console.log('📊 Full loan details response:', loanDetails);
+    console.log('📋 Borrowers array:', loanDetails.borrowers);
+    console.log('📋 Borrowers type:', typeof loanDetails.borrowers);
+    console.log('📋 Is array?', Array.isArray(loanDetails.borrowers));
+    
+    if (loanDetails.borrowers) {
+      console.log('📋 Borrowers length:', loanDetails.borrowers.length);
+      loanDetails.borrowers.forEach((borrowerGroup, index) => {
+        console.log(`📋 Borrower group ${index}:`, borrowerGroup);
+        console.log(`📋 Primary borrower:`, borrowerGroup.borrower);
+        console.log(`📋 Co-borrower:`, borrowerGroup.coBorrower);
+      });
+    }
       if(loanDetails.notes === "Loan Id Already Used"){
-         setError("Loan Id Already Used!");
-         setIsLoanDetailsValidated(false);
-         return;
+        setError("Loan Id Already Used!");
+        setIsLoanDetailsValidated(false);
+        return;
       }else if(loanDetails.notes === "Invalid Loan Id!"){
-         setError("Invalid Loan Id!");
-         setIsLoanDetailsValidated(false);
-         return;
+        setError("Invalid Loan Id!");
+        setIsLoanDetailsValidated(false);
+        return;
       }
+      
       setLoanDetails(loanDetails);
       setNotes(loanDetails.notes || '');
       
       if (loanDetails.followers && Array.isArray(loanDetails.followers) && loanDetails.followers.length > 0) {
         const followersWithTypes = parseFollowersWithTypes(loanDetails.followers);
         setLoanDetailsFollowers(followersWithTypes);
-        setSelectedLoanFollowers(followersWithTypes); // Select all by default
+        setSelectedLoanFollowers(followersWithTypes);
       } else {
         setLoanDetailsFollowers([]);
         setSelectedLoanFollowers([]);
+      }
+
+      if (loanDetails.borrowers && Array.isArray(loanDetails.borrowers)) {
+        const borrowerEmails: string[] = [];
+        
+        loanDetails.borrowers.forEach(borrowerGroup => {
+          if (borrowerGroup.borrower?.email) {
+            borrowerEmails.push(borrowerGroup.borrower.email);
+          }
+          if (borrowerGroup.coBorrower?.email) {
+            borrowerEmails.push(borrowerGroup.coBorrower.email);
+          }
+        });
+        
+        setSelectedBorrowerEmails(borrowerEmails);
+      } else {
+        setSelectedBorrowerEmails([]);
       }
       
       setBookingData((prev) => ({
@@ -641,6 +672,9 @@ const sendEmailNotifications = async (response: any) => {
       fetchLoanDetails();
     }
   };
+  const handleBorrowerSelectionChange = useCallback((newSelectedEmails: string[]) => {
+    setSelectedBorrowerEmails(newSelectedEmails);
+  }, []);
 
   const fetchAvailableServicesData = useCallback(async () => {
     updateLoadingState('services', true);
@@ -861,7 +895,7 @@ const fetchAvailableTimeSlots = useCallback(async () => {
     }
   }, [prefilledLoanId, editMode, readOnlyMode, bookingData.EncompassDetails.EncompassLoanId]);
 
- useEffect(() => {
+useEffect(() => {
   const initializeEditMode = async () => {
     if (editMode && initialData) {
       updateLoadingState('initializing', true);
@@ -876,7 +910,6 @@ const fetchAvailableTimeSlots = useCallback(async () => {
         
         setNotes(initialData.loanData?.notes || loanDetails.notes || '');
 
-
         const [regularFollowers, globalFollowers, loanFollowersData] = await Promise.all([
           bookingService.getFollowers(), 
           bookingService.getGlobalFollowers(), 
@@ -889,6 +922,18 @@ const fetchAvailableTimeSlots = useCallback(async () => {
           ...regularFollowers,
           ...globalFollowers
         ]));
+        
+        let borrowerEmailsFromLoan: string[] = [];
+        if (loanDetails.borrowers && Array.isArray(loanDetails.borrowers)) {
+          loanDetails.borrowers.forEach(borrowerGroup => {
+            if (borrowerGroup.borrower?.email) {
+              borrowerEmailsFromLoan.push(borrowerGroup.borrower.email);
+            }
+            if (borrowerGroup.coBorrower?.email) {
+              borrowerEmailsFromLoan.push(borrowerGroup.coBorrower.email);
+            }
+          });
+        }
         
         if(initialData.followers) {
           const existingFollowerEmails = initialData.followers
@@ -904,20 +949,27 @@ const fetchAvailableTimeSlots = useCallback(async () => {
             existingFollowerEmails.includes(lf.email)
           );
           
+          const borrowerEmailsInBooking = existingFollowerEmails.filter(email =>
+            borrowerEmailsFromLoan.includes(email)
+          );
+          
           const customFollowers = existingFollowerEmails.filter(email => 
             !allSystemFollowers.includes(email) && 
-            !loanFollowersData.find(lf => lf.email === email)
+            !loanFollowersData.find(lf => lf.email === email) &&
+            !borrowerEmailsFromLoan.includes(email) 
           );
           
           setLoanDetailsFollowers(loanFollowersData);
           setSelectedLoanFollowers(loanFollowersInBooking);
           setFetchedFollowers(systemFollowersInBooking);
+          setSelectedBorrowerEmails(borrowerEmailsInBooking);
           setAddedFollowers(customFollowers);
           
         } else {
           setLoanDetailsFollowers(loanFollowersData);
           setSelectedLoanFollowers([]);
           setFetchedFollowers([]);
+          setSelectedBorrowerEmails([]); 
           setAddedFollowers([]);
         }
         
@@ -994,12 +1046,12 @@ const fetchAvailableTimeSlots = useCallback(async () => {
     }
   }, [loanDetails, editMode, fetchAllFollowers]);
 
- useEffect(() => {
-    // Combine all types: regular (read-only) + selected loan followers + manually added
+useEffect(() => {
     const allFollowers = [
-      ...fetchedFollowers,                                    // Regular system followers (read-only)
-      ...selectedLoanFollowers.map(slf => slf.email),       // Selected loan details followers (extract emails)
-      ...addedFollowers                                       // Manually added followers
+      ...fetchedFollowers,
+      ...selectedLoanFollowers.map(slf => slf.email), 
+      ...selectedBorrowerEmails,                            
+      ...addedFollowers 
     ];
     
     const uniqueFollowers = Array.from(new Set(allFollowers));
@@ -1010,7 +1062,7 @@ const fetchAvailableTimeSlots = useCallback(async () => {
       Followers: followersString,
     }));
     
-  }, [fetchedFollowers, selectedLoanFollowers, addedFollowers]);
+  }, [fetchedFollowers, selectedLoanFollowers, selectedBorrowerEmails, addedFollowers]);
 
   useEffect(() => {
     if (selectedDate && bookingData.ServiceId && !isOverrideMode) {
@@ -1508,22 +1560,24 @@ const fetchAvailableTimeSlots = useCallback(async () => {
           )
         )}
         
-        {/* Rest of your existing content (followers, etc.) */}
         {!readOnlyMode && <EnhancedFollowers
-          editMode={editMode || readOnlyMode}
-          regularFollowers={fetchedFollowers}              
-          loanDetailsFollowers={loanDetailsFollowers}      
-          selectedLoanFollowers={selectedLoanFollowers}    
-          addedFollowers={addedFollowers}                  
-          onToggleLoanFollower={handleToggleLoanFollower}  
-          onAddFollower={handleAddFollower}                
-          onRemoveAddedFollower={(followerToRemove) => {   
-            if (!readOnlyMode) {
-              setAddedFollowers(prev => prev.filter(f => f !== followerToRemove));
-            }
-          }}
-          loading={loadingStates.followers}
-        />}
+            editMode={editMode || readOnlyMode}
+            regularFollowers={fetchedFollowers}              
+            loanDetailsFollowers={loanDetailsFollowers}      
+            selectedLoanFollowers={selectedLoanFollowers}    
+            addedFollowers={addedFollowers}                  
+            borrowers={loanDetails?.borrowers || []} 
+            selectedBorrowerEmails={selectedBorrowerEmails}
+            onToggleLoanFollower={handleToggleLoanFollower}  
+            onAddFollower={handleAddFollower}                
+            onRemoveAddedFollower={(followerToRemove) => {   
+              if (!readOnlyMode) {
+                setAddedFollowers(prev => prev.filter(f => f !== followerToRemove));
+              }
+            }}
+            onBorrowerSelectionChange={handleBorrowerSelectionChange}
+            loading={loadingStates.followers}
+          />}
         
         {error.length > 0 && !readOnlyMode && (
           <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>

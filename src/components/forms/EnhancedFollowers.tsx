@@ -1,3 +1,4 @@
+// src/components/forms/EnhancedFollowers.tsx - Updated with borrower selection
 import React, { useState } from 'react';
 import { 
   Box, 
@@ -15,8 +16,9 @@ import {
   AccordionDetails
 } from '@mui/material';
 import { Add as AddIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
+import BorrowerSelection from './BorrowerSelection';
+import { BorrowersDTO } from '../../types/loanDetails';
 
-// New interface for followers with types
 interface FollowerWithType {
   email: string;
   type: string;
@@ -24,17 +26,19 @@ interface FollowerWithType {
 
 type EnhancedFollowersProps = {
   editMode?: boolean;
-  regularFollowers: string[];        // Read-only system followers (grey, no delete)
-  loanDetailsFollowers: FollowerWithType[];    // Available loan details followers with types
-  selectedLoanFollowers: FollowerWithType[];   // Selected loan details followers with types
-  addedFollowers: string[];          // User-added followers (removable)
+  regularFollowers: string[]; 
+  loanDetailsFollowers: FollowerWithType[];
+  selectedLoanFollowers: FollowerWithType[]; 
+  addedFollowers: string[]; 
+  borrowers?: BorrowersDTO[];  
+  selectedBorrowerEmails: string[]; 
   onToggleLoanFollower: (follower: FollowerWithType) => void;
   onAddFollower: (follower: string) => void;
   onRemoveAddedFollower: (follower: string) => void;
+  onBorrowerSelectionChange: (selectedEmails: string[]) => void; // New callback
   loading?: boolean;
 }
 
-// Function to group followers by type with smart grouping
 const groupFollowersByTypeWithSmartGrouping = (followers: FollowerWithType[]): { [key: string]: FollowerWithType[] } => {
   const grouped = followers.reduce((acc, follower) => {
     let groupKey = follower.type || 'Other';
@@ -49,7 +53,6 @@ const groupFollowersByTypeWithSmartGrouping = (followers: FollowerWithType[]): {
   return grouped;
 };
 
-// Color mapping for different follower types
 const getTypeColor = (type: string): string => {
   const colorMap: { [key: string]: string } = {
     'SELLERS': '#2196F3',             
@@ -63,7 +66,8 @@ const getTypeColor = (type: string): string => {
     'PROCESSORS': '#2196F3',        
     'MANAGEMENT': '#2196F3',          
     'UNDERWRITERS': '#2196F3',       
-    'ASSISTANTS': '#2196F3', 
+    'ASSISTANTS': '#2196F3',
+    'BORROWERS': '#4CAF50',
     'default': '#2196F3'     
   };
   
@@ -75,9 +79,12 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
   loanDetailsFollowers,
   selectedLoanFollowers,
   addedFollowers,
+  borrowers = [],
+  selectedBorrowerEmails,
   onToggleLoanFollower,
   onAddFollower,
   onRemoveAddedFollower,
+  onBorrowerSelectionChange,
   editMode = false,
   loading = false
 }) => {
@@ -87,10 +94,15 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  // 🔥 FIXED: Create unified followers list properly
+  const borrowerFollowers: FollowerWithType[] = selectedBorrowerEmails.map(email => ({
+    email,
+    type: 'BORROWERS'
+  }));
+
   const allFollowers = [
     ...regularFollowers.map((email): FollowerWithType => ({ email, type: 'System' })),
     ...selectedLoanFollowers,
+    ...borrowerFollowers,
     ...addedFollowers.map((email): FollowerWithType => ({ email, type: 'Custom' }))
   ];
 
@@ -99,6 +111,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
       const allExisting = [
         ...regularFollowers,
         ...selectedLoanFollowers.map(f => f.email),
+        ...selectedBorrowerEmails,
         ...addedFollowers
       ];
       const email = inputValue.trim();
@@ -113,12 +126,13 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
     }
   };
 
- const renderUnifiedChip = (follower: FollowerWithType) => {
+  const renderUnifiedChip = (follower: FollowerWithType) => {
     const { email, type } = follower;
     const color = getTypeColor(type);
 
     const isCustom = type === 'Custom';
     const isSystem = type === 'System';
+    const isBorrower = type === 'BORROWERS';
     const canDelete = !isSystem;
 
     function toTitleCase(str: string) {
@@ -181,12 +195,16 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
         </Box>
 
         {/* Delete Icon */}
-        {canDelete? (
+        {canDelete ? (
           <IconButton
             size="small"
             onClick={() => {
               if (isCustom) {
                 onRemoveAddedFollower(email);
+              } else if (isBorrower) {
+                // Remove from borrower selection
+                const newSelection = selectedBorrowerEmails.filter(e => e !== email);
+                onBorrowerSelectionChange(newSelection);
               } else {
                 onToggleLoanFollower(follower);
               }
@@ -232,7 +250,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
     );
   };
 
-  // 🔥 FIXED: Calculate available followers correctly
+  // Calculate available followers correctly
   const getAvailableFollowersByType = () => {
     return Object.entries(groupFollowersByTypeWithSmartGrouping(loanDetailsFollowers)).map(([type, followers]) => {
       const available = followers.filter(
@@ -254,7 +272,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
         <CircularProgress size={20} sx={{ my: 2 }} />
       ) : (
         <>
-          {/* 🔥 FIXED: Always show followers if any exist */}
+          {/* Always show followers if any exist */}
           {allFollowers.length > 0 && (
             <>
               <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', fontSize: '0.8rem' }}>
@@ -264,6 +282,20 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
                 {allFollowers.map((follower) => renderUnifiedChip(follower))}
               </Box>
             </>
+          )}
+
+          {/* Borrower Selection Component */}
+          {borrowers && borrowers.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', fontSize: '0.8rem' }}>
+                Borrowers from Loan Details
+              </Typography>
+              <BorrowerSelection
+                borrowers={borrowers}
+                selectedBorrowerEmails={selectedBorrowerEmails}
+                onSelectionChange={onBorrowerSelectionChange}
+              />
+            </Box>
           )}
 
           {/* Available Followers by Group */}
@@ -371,6 +403,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
             Total followers: {allFollowers.length}
             {regularFollowers.length > 0 && ` (${regularFollowers.length} system)`}
             {selectedLoanFollowers.length > 0 && ` (${selectedLoanFollowers.length} from loan)`}
+            {selectedBorrowerEmails.length > 0 && ` (${selectedBorrowerEmails.length} borrowers)`}
             {addedFollowers.length > 0 && ` (${addedFollowers.length} custom)`}
           </Typography>
         </>

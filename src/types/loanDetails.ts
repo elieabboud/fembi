@@ -1,3 +1,14 @@
+export interface BorrowerDataDTO {
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+export interface BorrowersDTO {
+  borrower: BorrowerDataDTO;
+  coBorrower: BorrowerDataDTO;
+}
+
 export interface LoanDetails {
   loanId: string;
   borrowerFirstName: string;
@@ -19,6 +30,7 @@ export interface LoanDetails {
   dpa: string;
   followers: string[];
   loanPurpose: string;
+  borrowers?: BorrowersDTO[];
 }
 
 export interface FollowerWithType {
