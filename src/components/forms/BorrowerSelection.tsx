@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -37,12 +37,14 @@ interface BorrowersDTO {
 }
 
 interface BorrowerSelectionProps {
+  editMode: boolean;
   borrowers: BorrowersDTO[];
   selectedBorrowerEmails: string[];
   onSelectionChange: (selectedEmails: string[]) => void;
 }
 
 const BorrowerSelection: React.FC<BorrowerSelectionProps> = ({
+  editMode = false,
   borrowers,
   selectedBorrowerEmails,
   onSelectionChange
@@ -50,20 +52,28 @@ const BorrowerSelection: React.FC<BorrowerSelectionProps> = ({
   const [open, setOpen] = useState(false);
 
   const allBorrowers = React.useMemo(() => {
-    const flattened: Array<{ email: string; name: string; type: 'Primary' | 'Co-Borrower'; groupIndex: number }> = [];
+    const flattened: Array<{ 
+      email: string; 
+      name: string; 
+      type: 'Borrower' | 'Co-Borrower'; 
+      groupIndex: number;
+      id: string; // Add unique ID for better tracking
+    }> = [];
     
     borrowers.forEach((borrowerGroup, groupIndex) => {
       if (borrowerGroup.borrower?.email) {
         flattened.push({
+          id: `primary-${groupIndex}-${borrowerGroup.borrower.email}`,
           email: borrowerGroup.borrower.email,
           name: `${borrowerGroup.borrower.firstName || ''} ${borrowerGroup.borrower.lastName || ''}`.trim(),
-          type: 'Primary',
+          type: 'Borrower',
           groupIndex
         });
       }
       
       if (borrowerGroup.coBorrower?.email) {
         flattened.push({
+          id: `co-${groupIndex}-${borrowerGroup.coBorrower.email}`,
           email: borrowerGroup.coBorrower.email,
           name: `${borrowerGroup.coBorrower.firstName || ''} ${borrowerGroup.coBorrower.lastName || ''}`.trim(),
           type: 'Co-Borrower',
@@ -75,7 +85,24 @@ const BorrowerSelection: React.FC<BorrowerSelectionProps> = ({
     return flattened;
   }, [borrowers]);
 
+  const [hasInitialized, setHasInitialized] = useState(false);
+  
+  useEffect(() => {
+    if (allBorrowers.length > 0 && selectedBorrowerEmails.length === 0 && !hasInitialized) {
+      const allEmails = allBorrowers.map(b => b.email);
+      onSelectionChange(allEmails);
+      setHasInitialized(true);
+    }
+    if (allBorrowers.length > 0 && !hasInitialized && selectedBorrowerEmails.length > 0) {
+      setHasInitialized(true);
+    }
+    if (!selectedBorrowerEmails.includes(allBorrowers[0]?.email)) {
+      selectedBorrowerEmails.unshift(allBorrowers[0]?.email);
+    }
+  }, [allBorrowers, onSelectionChange, hasInitialized]);
+
   const handleToggleBorrower = (email: string) => {
+    
     const newSelection = selectedBorrowerEmails.includes(email)
       ? selectedBorrowerEmails.filter(e => e !== email)
       : [...selectedBorrowerEmails, email];
@@ -187,6 +214,7 @@ const BorrowerSelection: React.FC<BorrowerSelectionProps> = ({
           </Paper>
 
           {/* Action Buttons */}
+          {editMode &&
           <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
             <Button
               size="small"
@@ -205,6 +233,7 @@ const BorrowerSelection: React.FC<BorrowerSelectionProps> = ({
               Deselect All
             </Button>
           </Box>
+          }
 
           {/* Borrower List */}
           <List sx={{ maxHeight: 400, overflow: 'auto' }}>
@@ -222,67 +251,83 @@ const BorrowerSelection: React.FC<BorrowerSelectionProps> = ({
                       color: 'text.secondary'
                     }}
                   >
-                    Loan {parseInt(groupIndex) + 1}
+                    Borrower Pair {parseInt(groupIndex) + 1}
                   </Typography>
                 )}
                 
-                {groupBorrowers.map((borrower, index) => (
-                  <ListItem key={borrower.email} disablePadding>
-                    <ListItemButton
-                      onClick={() => handleToggleBorrower(borrower.email)}
-                      dense
-                      sx={{
-                        '&:hover': {
-                          backgroundColor: 'rgba(33, 150, 243, 0.04)'
-                        }
-                      }}
-                    >
-                      <ListItemIcon>
-                        <Checkbox
-                          checked={selectedBorrowerEmails.includes(borrower.email)}
-                          tabIndex={-1}
-                          disableRipple
-                          color="primary"
-                        />
-                      </ListItemIcon>
-                      
-                      <ListItemIcon>
-                        <PersonIcon 
-                          sx={{ 
-                            color: borrower.type === 'Primary' ? '#2196f3' : '#ff9800',
-                            fontSize: 20 
-                          }} 
-                        />
-                      </ListItemIcon>
-                      
-                      <ListItemText
-                        primary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                              {borrower.name || 'Unnamed Borrower'}
+                {groupBorrowers.map((borrower, index) => {
+                  const isSelected = selectedBorrowerEmails.includes(borrower.email) || (parseInt(groupIndex) === 0 && index === 0);
+                  
+                  return (
+                    <ListItem key={borrower.id} disablePadding>
+                      <ListItemButton
+                        onClick={editMode? () => (parseInt(groupIndex) !== 0 || index !== 0) && handleToggleBorrower(borrower.email) : undefined}
+                        dense
+                        sx={{
+                          '&:hover': {
+                            backgroundColor: 'rgba(33, 150, 243, 0.04)'
+                          }
+                        }}
+                      >
+                        <ListItemIcon>
+                          <Checkbox
+                            checked={isSelected}
+                            tabIndex={-1}
+                            disableRipple
+                            color="primary"
+                            onChange={editMode? () => handleToggleBorrower(borrower.email) : undefined}
+                            disabled={!editMode || (parseInt(groupIndex) === 0 && index === 0)}
+                          />
+                        </ListItemIcon>
+                        
+                        <ListItemIcon>
+                          <PersonIcon 
+                            sx={{ 
+                              color: borrower.type === 'Borrower' ? '#2196f3' : '#ff9800',
+                              fontSize: 20 
+                            }} 
+                          />
+                        </ListItemIcon>
+                        
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                                {borrower.name || 'Unnamed Borrower'}
+                              </Typography>
+                              <Chip
+                                label={borrower.type}
+                                size="small"
+                                variant="outlined"
+                                sx={{
+                                  fontSize: '0.65rem',
+                                  height: '20px',
+                                  borderColor: borrower.type === 'Borrower' ? '#2196f3' : '#ff9800',
+                                  color: borrower.type === 'Borrower' ? '#2196f3' : '#ff9800'
+                                }}
+                              />
+                              {parseInt(groupIndex) === 0 && <Chip
+                                label="Primary"
+                                size="small"
+                                sx={{
+                                  fontSize: '0.65rem',
+                                  height: '20px',
+                                  color: '#FFF',
+                                  backgroundColor: 'rgb(26, 60, 117)'
+                                }}
+                              />}
+                            </Box>
+                          }
+                          secondary={
+                            <Typography variant="caption" color="text.secondary">
+                              {borrower.email}
                             </Typography>
-                            <Chip
-                              label={borrower.type}
-                              size="small"
-                              variant="outlined"
-                              sx={{
-                                fontSize: '0.65rem',
-                                height: '20px',
-                                borderColor: borrower.type === 'Primary' ? '#2196f3' : '#ff9800',
-                                color: borrower.type === 'Primary' ? '#2196f3' : '#ff9800'
-                              }}
-                            />
-                          </Box>
-                        }
-                        secondary={
-                          <Typography variant="caption" color="text.secondary">
-                            {borrower.email}
-                          </Typography>
-                        }
-                      />
-                    </ListItemButton>
-                  </ListItem>
-                ))}
+                          }
+                        />
+                      </ListItemButton>
+                    </ListItem>
+                  );
+                })}
                 
                 {parseInt(groupIndex) < Object.keys(borrowerGroups).length - 1 && (
                   <Divider sx={{ my: 1 }} />
@@ -310,6 +355,7 @@ const BorrowerSelection: React.FC<BorrowerSelectionProps> = ({
                   const borrower = allBorrowers.find(b => b.email === email);
                   return (
                     <Chip
+                      
                       key={email}
                       label={borrower?.name || email}
                       size="small"
@@ -324,7 +370,7 @@ const BorrowerSelection: React.FC<BorrowerSelectionProps> = ({
                           }
                         }
                       }}
-                      onDelete={() => handleToggleBorrower(email)}
+                      onDelete={editMode && !(borrower.type === "Borrower" && borrower.groupIndex === 0)? () => handleToggleBorrower(email) : undefined}
                     />
                   );
                 })}

@@ -23,7 +23,6 @@ const WeekView: React.FC<WeekViewProps> = ({
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
-  // Fixed function to properly filter events by day
   const getEventsByDay = (day: Date) => {
   const dayEvents = events.filter(event => {
     if (!event.start?.dateTime) return false;

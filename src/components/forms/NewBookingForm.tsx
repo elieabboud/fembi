@@ -105,6 +105,8 @@ const CreateBookingForm: React.FC<BookingFormProps> = ({
   const [isLoanDetailsValidated, setIsLoanDetailsValidated] = useState<boolean>(false);
 
   const [initialSelectedDate, setInitialSelectedDate] = useState<Date | null>(null);
+
+  const [borrowersInitialized, setBorrowersInitialized] = useState(false);
   
   const [bookingData, setBookingData] = useState<CreateAppointmentRequest>(
   {
@@ -578,19 +580,6 @@ const sendEmailNotifications = async (response: any) => {
     try{
       const loanDetails = await bookingService.getLoanDetails(loanIdToUse, true);
 
-      console.log('📊 Full loan details response:', loanDetails);
-    console.log('📋 Borrowers array:', loanDetails.borrowers);
-    console.log('📋 Borrowers type:', typeof loanDetails.borrowers);
-    console.log('📋 Is array?', Array.isArray(loanDetails.borrowers));
-    
-    if (loanDetails.borrowers) {
-      console.log('📋 Borrowers length:', loanDetails.borrowers.length);
-      loanDetails.borrowers.forEach((borrowerGroup, index) => {
-        console.log(`📋 Borrower group ${index}:`, borrowerGroup);
-        console.log(`📋 Primary borrower:`, borrowerGroup.borrower);
-        console.log(`📋 Co-borrower:`, borrowerGroup.coBorrower);
-      });
-    }
       if(loanDetails.notes === "Loan Id Already Used"){
         setError("Loan Id Already Used!");
         setIsLoanDetailsValidated(false);
@@ -613,7 +602,7 @@ const sendEmailNotifications = async (response: any) => {
         setSelectedLoanFollowers([]);
       }
 
-      if (loanDetails.borrowers && Array.isArray(loanDetails.borrowers)) {
+      if (loanDetails.borrowers && Array.isArray(loanDetails.borrowers) && !borrowersInitialized) {
         const borrowerEmails: string[] = [];
         
         loanDetails.borrowers.forEach(borrowerGroup => {
@@ -626,7 +615,8 @@ const sendEmailNotifications = async (response: any) => {
         });
         
         setSelectedBorrowerEmails(borrowerEmails);
-      } else {
+        setBorrowersInitialized(true); 
+      } else if (!loanDetails.borrowers || !Array.isArray(loanDetails.borrowers)) {
         setSelectedBorrowerEmails([]);
       }
       
@@ -969,7 +959,7 @@ useEffect(() => {
           setLoanDetailsFollowers(loanFollowersData);
           setSelectedLoanFollowers([]);
           setFetchedFollowers([]);
-          setSelectedBorrowerEmails([]); 
+          setSelectedBorrowerEmails(borrowerEmailsFromLoan);
           setAddedFollowers([]);
         }
         
@@ -1015,7 +1005,6 @@ useEffect(() => {
         
         // On error, still try to set basic followers if available
         if (initialData.followers) {
-          
           const followerArray = initialData.followers
             .split(',')
             .map(email => email.trim())
@@ -1056,6 +1045,7 @@ useEffect(() => {
     
     const uniqueFollowers = Array.from(new Set(allFollowers));
     const followersString = uniqueFollowers.join(',');
+    
     
     setBookingData(prev => ({
       ...prev,
@@ -1560,8 +1550,8 @@ useEffect(() => {
           )
         )}
         
-        {!readOnlyMode && <EnhancedFollowers
-            editMode={editMode || readOnlyMode}
+        <EnhancedFollowers
+            editMode={!readOnlyMode}
             regularFollowers={fetchedFollowers}              
             loanDetailsFollowers={loanDetailsFollowers}      
             selectedLoanFollowers={selectedLoanFollowers}    
@@ -1577,7 +1567,7 @@ useEffect(() => {
             }}
             onBorrowerSelectionChange={handleBorrowerSelectionChange}
             loading={loadingStates.followers}
-          />}
+          />
         
         {error.length > 0 && !readOnlyMode && (
           <Typography color="error" variant="caption" sx={{ margin: 2, display: 'block' }}>

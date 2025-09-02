@@ -175,7 +175,6 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
             <MenuItem 
               key={option.id} 
               value={option.id.toString()}
-              // FIXED: Prevent double clicks
               onClick={(e) => e.stopPropagation()}
             >
               {option.label}

@@ -1,29 +1,93 @@
 stages:
-  - deploy
+  - connectivity
 
-variables:
-  ENVIRONMENT: "dev" # default, can be overridden by pipeline
-  FORCE_BUILD: "false" # default, can be set to true to force pipeline run
-
-
-deploy_backend:
-  stage: deploy
-  tags:
-    - tac-micro-1
+check-ssh-to-dev-via-bastion:
+  stage: connectivity
+  tags: [fembi, frontend, dev]
+  image: alpine:3.20
   before_script:
-    - ssh ubuntu@tac-compute-4 -p 1069 "rm -rf /tmp/tacresearch_gitlab/fembi/bookingfrontend &&
-      git clone git@pandora-sshbox.tacresearch.com:tac-research/solutions/clients/fembi/bookingfrontend.git /tmp/tacresearch_gitlab/fembi/bookingfrontend"
-  script:
-    - echo 'ENVIRONMENT' $ENVIRONMENT
-    - echo 'FORCE_BUILD' $FORCE_BUILD
-    - echo 'CI_COMMIT_BRANCH' $CI_COMMIT_BRANCH
-    - ssh ubuntu@tac-compute-4 -p 1069 "export ENVIRONMENT=$ENVIRONMENT; cd /tmp/tacresearch_gitlab/fembi/bookingfrontend &&
-      echo 'ENVIRONMENT IN TC4 ' $ENVIRONMENT &&
-      git checkout $CI_COMMIT_BRANCH && if [ \"$ENVIRONMENT\" = \"prd\" ]; then cp .env_prd .env; else cp .env_sandbox .env; fi &&
-      docker compose down && docker rmi fbc-backend-$ENVIRONMENT:1.0.0 || true &&
-      docker compose build --build-arg ENVIRONMENT=$ENVIRONMENT && ENVIRONMENT=$ENVIRONMENT docker compose up -d --build"
+    - 'set euo pipefail'
+    - 'mkdir -p ~/.ssh && chmod 700 ~/.ssh'
+    # --- sanity: ensure variables exist (or fail with a clear message) ---
+    - '[[ -n "${SSH_HOST_BASTION:-}" ]] || { echo "Missing SSH_HOST_BASTION"; exit 1; }'
+    - '[[ -n "${SSH_USER_BASTION:-}" ]] || { echo "Missing SSH_USER_BASTION"; exit 1; }'
+    - '[[ -n "${SSH_HOST_DEV:-}" ]]     || { echo "Missing SSH_HOST_DEV"; exit 1; }'
+    - '[[ -n "${SSH_USER_DEV:-}" ]]     || { echo "Missing SSH_USER_DEV"; exit 1; }'
+    # --- Default SSH ports to 22 if unset ---
+    - '[[ -n "${SSH_PORT_BASTION:-}" ]] || { echo "Missing SSH_PORT_BASTION"; SSH_PORT_BASTION=${SSH_PORT_BASTION:-22}; }'
+    - '[[ -n "${SSH_PORT_DEV:-}" ]]     || { echo "Missing SSH_PORT_DEV"; SSH_PORT_DEV=${SSH_PORT_DEV:-22}; }'
+    # --- keys are FILE variables: copy the files (do NOT echo the paths) ---
+    - '[[ -n "${SSH_KEY_BASTION:-}" && -f "${SSH_KEY_BASTION}" ]] || { echo "SSH_KEY_BASTION must be a File variable"; exit 1; }'
+    - '[[ -n "${SSH_KEY_DEV:-}" && -f "${SSH_KEY_DEV}" ]]         || { echo "SSH_KEY_DEV must be a File variable"; exit 1; }'
+    - 'cp "${SSH_KEY_BASTION}" ~/.ssh/id_rsa_bastion'
+    - 'cp "${SSH_KEY_DEV}"     ~/.ssh/id_rsa_target'
+    # --- normalize line endings just in case, and set strict perms ---
+    - 'sed -i "s/\r$//" ~/.ssh/id_rsa_bastion ~/.ssh/id_rsa_target || true'
+    - 'chmod 600 ~/.ssh/id_rsa_bastion ~/.ssh/id_rsa_target'
+    # --- quick key sanity (fails fast if wrong format/passphrase) ---
+    - 'ssh-keygen -lf ~/.ssh/id_rsa_bastion >/dev/null || { echo "Bastion key invalid format"; exit 1; }'
+    - 'ssh-keygen -lf ~/.ssh/id_rsa_target  >/dev/null || { echo "Target key invalid format"; exit 1; }'
+    # SSH config with ProxyJump (bastion -> target)
+    - |
+      cat > ~/.ssh/config <<EOF
+      Host bastion
+        HostName ${SSH_HOST_BASTION}
+        Port ${SSH_PORT_BASTION}
+        User ${SSH_USER_BASTION}
+        IdentityFile ~/.ssh/id_rsa_bastion
+        ServerAliveInterval 30
+        ServerAliveCountMax 3
+        StrictHostKeyChecking no
+
+      Host target
+        HostName ${SSH_HOST_DEV}
+        Port ${SSH_PORT_DEV}
+        User ${SSH_USER_DEV}
+        IdentityFile ~/.ssh/id_rsa_target
+        ProxyJump bastion
+        ServerAliveInterval 30
+        ServerAliveCountMax 3
+        StrictHostKeyChecking no
+      EOF
+    - chmod 600 ~/.ssh/config
+  script: |
+    set -eup pipefail
+    echo "Testing jump: ${SSH_USER_BASTION}@${SSH_HOST_BASTION}:${SSH_PORT_BASTION} -> ${SSH_USER_DEV}@${SSH_HOST_DEV}:${SSH_PORT_DEV}"
+    ssh -F ~/.ssh/config target 'echo "OK: $(whoami) on $(hostname)"; uname -a'
+    ssh -F ~/.ssh/config target 'docker --version || echo "note: docker not found (optional check)"'
   rules:
-    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" && $CI_MERGE_REQUEST_APPROVED == "true"'
-      when: always
-    - if: '$FORCE_BUILD == "true"'
-      when: always
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" &&
+            $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" &&
+            $CI_MERGE_REQUEST_APPROVED == "true"'
+      when: on_success
+    - when: never
+
+#stages:
+#  - deploy
+
+#variables:
+#  ENVIRONMENT: "dev" # default, can be overridden by pipeline
+#  FORCE_BUILD: "false" # default, can be set to true to force pipeline run
+
+
+#deploy_backend:
+#  stage: deploy
+#  tags:
+#    - tac-micro-1
+#  before_script:
+#    - ssh ubuntu@tac-compute-4 -p 1069 "rm -rf /tmp/tacresearch_gitlab/fembi/bookingfrontend &&
+#      git clone git@pandora-sshbox.tacresearch.com:tac-research/solutions/clients/fembi/bookingfrontend.git /tmp/tacresearch_gitlab/fembi/bookingfrontend"
+#  script:
+#    - echo 'ENVIRONMENT' $ENVIRONMENT
+#    - echo 'FORCE_BUILD' $FORCE_BUILD
+#    - echo 'CI_COMMIT_BRANCH' $CI_COMMIT_BRANCH
+#    - ssh ubuntu@tac-compute-4 -p 1069 "export ENVIRONMENT=$ENVIRONMENT; cd /tmp/tacresearch_gitlab/fembi/bookingfrontend &&
+#      echo 'ENVIRONMENT IN TC4 ' $ENVIRONMENT &&
+#      git checkout $CI_COMMIT_BRANCH && if [ \"$ENVIRONMENT\" = \"prd\" ]; then cp .env_prd .env; else cp .env_sandbox .env; fi &&
+#      docker compose down && docker rmi fbc-backend-$ENVIRONMENT:1.0.0 || true &&
+#      docker compose build --build-arg ENVIRONMENT=$ENVIRONMENT && ENVIRONMENT=$ENVIRONMENT docker compose up -d --build"
+#  rules:
+#    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" && $CI_MERGE_REQUEST_APPROVED == "true"'
+#      when: always
+#    - if: '$FORCE_BUILD == "true"'
+#      when: always

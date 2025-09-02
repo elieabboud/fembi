@@ -1,5 +1,5 @@
-// src/components/forms/EnhancedFollowers.tsx - Updated with borrower selection
-import React, { useState } from 'react';
+// src/components/forms/EnhancedFollowers.tsx - Fixed version
+import React, { useState, useCallback } from 'react';
 import { 
   Box, 
   Typography, 
@@ -13,7 +13,8 @@ import {
   IconButton,
   Accordion,
   AccordionSummary,
-  AccordionDetails
+  AccordionDetails,
+  Button
 } from '@mui/material';
 import { Add as AddIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 import BorrowerSelection from './BorrowerSelection';
@@ -35,7 +36,7 @@ type EnhancedFollowersProps = {
   onToggleLoanFollower: (follower: FollowerWithType) => void;
   onAddFollower: (follower: string) => void;
   onRemoveAddedFollower: (follower: string) => void;
-  onBorrowerSelectionChange: (selectedEmails: string[]) => void; // New callback
+  onBorrowerSelectionChange: (selectedEmails: string[]) => void;
   loading?: boolean;
 }
 
@@ -68,6 +69,8 @@ const getTypeColor = (type: string): string => {
     'UNDERWRITERS': '#2196F3',       
     'ASSISTANTS': '#2196F3',
     'BORROWERS': '#4CAF50',
+    'System': '#2196F3',
+    'Custom': '#FF5722',
     'default': '#2196F3'     
   };
   
@@ -94,6 +97,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+  // Create borrower followers from selected emails
   const borrowerFollowers: FollowerWithType[] = selectedBorrowerEmails.map(email => ({
     email,
     type: 'BORROWERS'
@@ -126,6 +130,22 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
     }
   };
 
+  const handleBorrowerSelectionChange = useCallback((newSelectedEmails: string[]) => {
+    onBorrowerSelectionChange(newSelectedEmails);
+  }, [selectedBorrowerEmails, onBorrowerSelectionChange]);
+
+  const handleRemoveFollower = useCallback((follower: FollowerWithType) => {
+    
+    if (follower.type === 'Custom') {
+      onRemoveAddedFollower(follower.email);
+    } else if (follower.type === 'BORROWERS') {
+      const newSelection = selectedBorrowerEmails.filter(email => email !== follower.email);
+      onBorrowerSelectionChange(newSelection);
+    } else {
+      onToggleLoanFollower(follower);
+    }
+  }, [selectedBorrowerEmails, onBorrowerSelectionChange, onRemoveAddedFollower, onToggleLoanFollower]);
+
   const renderUnifiedChip = (follower: FollowerWithType) => {
     const { email, type } = follower;
     const color = getTypeColor(type);
@@ -142,6 +162,44 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
       );
     }
 
+    // For borrowers, only show the button without the green bars
+    if (isBorrower) {
+      return <></>
+      // return (
+      //   <Box
+      //     key={email}
+      //     sx={{
+      //       display: 'inline-flex',
+      //       alignItems: 'center',
+      //       mr: 0.5,
+      //       mb: 0.5,
+      //     }}
+      //   >
+      //     {/* Just show the button for borrowers */}
+      //     <Button
+      //       variant="outlined"
+      //       size="small"
+      //       onClick={() => handleRemoveFollower(follower)}
+      //       sx={{
+      //         borderColor: '#4CAF50',
+      //         color: '#4CAF50',
+      //         fontSize: '0.7rem',
+      //         height: '28px',
+      //         textTransform: 'none',
+      //         '&:hover': {
+      //           borderColor: '#388E3C',
+      //           backgroundColor: 'rgba(76, 175, 80, 0.04)',
+      //         },
+      //       }}
+      //       endIcon={<span style={{ fontSize: '12px' }}>✕</span>}
+      //     >
+      //       {email}
+      //     </Button>
+      //   </Box>
+      // );
+    }
+
+    // For other followers, keep the original design
     return (
       <Box
         key={email}
@@ -198,37 +256,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
         {canDelete ? (
           <IconButton
             size="small"
-            onClick={() => {
-              if (isCustom) {
-                onRemoveAddedFollower(email);
-              } else if (isBorrower) {
-                // Remove from borrower selection
-                const newSelection = selectedBorrowerEmails.filter(e => e !== email);
-                onBorrowerSelectionChange(newSelection);
-              } else {
-                onToggleLoanFollower(follower);
-              }
-            }}
-            sx={{
-              backgroundColor: color,
-              color: 'white',
-              height: 28,
-              minWidth: '100%',
-              maxWidth: '100%',
-              borderRadius: 0,
-              fontSize: '15px',
-              '&:hover': {
-                backgroundColor: '#1565c0',
-              },
-              alignItems: 'flex-start',
-              justifyContent: 'left',
-            }}
-          >
-            ✕
-          </IconButton>
-        ) : (
-          <IconButton
-            size="small"
+            onClick={() => handleRemoveFollower(follower)}
             sx={{
               backgroundColor: color,
               color: 'white',
@@ -237,14 +265,32 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
               maxWidth: '5%',
               borderRadius: 0,
               fontSize: '15px',
-              cursor: 'default',
               '&:hover': {
-                backgroundColor: color,
+                backgroundColor: '#1565c0',
               },
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            
+            ✕
           </IconButton>
+        ) : (
+          <Box
+            sx={{
+              backgroundColor: color,
+              color: 'white',
+              height: 28,
+              minWidth: '5%',
+              maxWidth: '5%',
+              borderRadius: 0,
+              fontSize: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            🔒
+          </Box>
         )}
       </Box>
     );
@@ -278,7 +324,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
               <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', fontSize: '0.8rem' }}>
                 Selected Followers
               </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2, justifyContent: 'space-evenly' }}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
                 {allFollowers.map((follower) => renderUnifiedChip(follower))}
               </Box>
             </>
@@ -288,12 +334,13 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
           {borrowers && borrowers.length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', fontSize: '0.8rem' }}>
-                Borrowers from Loan Details
+                Borrowers List
               </Typography>
               <BorrowerSelection
+                editMode={editMode}
                 borrowers={borrowers}
                 selectedBorrowerEmails={selectedBorrowerEmails}
-                onSelectionChange={onBorrowerSelectionChange}
+                onSelectionChange={handleBorrowerSelectionChange}
               />
             </Box>
           )}
@@ -302,7 +349,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
           {availableFollowerGroups.length > 0 && (
             <>
               <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', fontSize: '0.8rem' }}>
-                Available Team Members
+                Available Followers
               </Typography>
 
               {availableFollowerGroups.map(({ type, available }) => (
@@ -346,7 +393,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
           )}
 
           {/* Add Custom Follower */}
-          <Box sx={{ my: 2 }}>
+          {editMode && <Box sx={{ my: 2 }}>
             {!showAddInput ? (
               <Paper
                 onClick={() => setShowAddInput(true)}
@@ -396,7 +443,7 @@ const EnhancedFollowers: React.FC<EnhancedFollowersProps> = ({
                 </IconButton>
               </Box>
             )}
-          </Box>
+          </Box>}
 
           {/* Summary */}
           <Typography variant="caption" color="text.secondary">

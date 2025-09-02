@@ -44,7 +44,7 @@ import CreateBookingForm from '../components/forms/NewBookingForm';
 import { CreateAppointmentRequest } from '../types/CreateAppointmentRequest';
 import { LoanDetails } from '../types/loanDetails';
 import Confirmation from '../components/forms/Confirmation';
-import { EmailService } from '../services/emailService'; 
+import { EmailService } from '../services/emailService';
 import { TimezoneService } from '../services/timezoneUtils';
 import { ClearIcon, DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -85,13 +85,13 @@ const Bookings: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
-  
+
   const { queryParams, clearQueryParams, hasLoanId } = useUrlQueryParams();
-  
+
   const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastRequestIdRef = useRef<string | null>(null);
-  
+
   const [pagination, setPagination] = useState({
     currentPage: 1,
     pageSize: 10,
@@ -114,7 +114,7 @@ const Bookings: React.FC = () => {
   const [fetchingData, setFetchingData] = useState(false);
   const [loadingPostResponse, setLoadingPostResponse] = useState(false);
   const [isRequestInProgress, setIsRequestInProgress] = useState(false);
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [officersFilter, setOfficersFilter] = useState<string[]>([]);
@@ -141,7 +141,7 @@ const Bookings: React.FC = () => {
 
   const [loanOfficersOptions, setLoanOfficersOptions] = useState<{id: string, label: string}[]>([]);
   const [serviceOptions, setServiceOptions] = useState<{ id: string, label: string }[]>([]);
-  
+
   const statusOptions = [
     { id: 'upcoming', label: 'Upcoming' },
     { id: 'inProgress', label: 'In Progress' },
@@ -183,11 +183,12 @@ const Bookings: React.FC = () => {
     return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   };
 
-  const debouncedFetchBookings = useCallback((
+const debouncedFetchBookings = useCallback((
     page: number = 1,
     resetPagination: boolean = false,
     immediate: boolean = false,
-    isInitialLoad: boolean = false
+    isInitialLoad: boolean = false,
+    customPageSize?: number
   ) => {
     if (fetchTimerRef.current) {
       clearTimeout(fetchTimerRef.current);
@@ -205,9 +206,24 @@ const Bookings: React.FC = () => {
 
       abortControllerRef.current = new AbortController();
 
+      // Process date range to ensure end date includes full day
+      let processedDateRange = undefined;
+      if (dateRangeFilter.startDate || dateRangeFilter.endDate) {
+        processedDateRange = {
+          startDate: dateRangeFilter.startDate ? formatDateForApi(dateRangeFilter.startDate) : undefined,
+          endDate: dateRangeFilter.endDate ? 
+            formatDateForApi(new Date(
+              dateRangeFilter.endDate.getFullYear(), 
+              dateRangeFilter.endDate.getMonth(), 
+              dateRangeFilter.endDate.getDate(), 
+              23, 59, 59, 999
+            )) : undefined,
+        };
+      }
+
       const paginationRequest: PaginationRequest = {
         page: resetPagination ? 1 : page,
-        pageSize: pagination.pageSize,
+        pageSize: customPageSize || pagination.pageSize,
         sortBy,
         sortDirection,
         searchQuery: searchQuery.trim() || undefined,
@@ -215,16 +231,13 @@ const Bookings: React.FC = () => {
           status: statusFilter && statusFilter.length > 0 ? statusFilter as BookingStatus[] : undefined,
           serviceLocation: serviceFilter && serviceFilter.trim() !== "" ? serviceFilter : undefined,
           loanOfficers: officersFilter && officersFilter.length > 0 ? officersFilter : undefined,
-          dateRange: (dateRangeFilter.startDate || dateRangeFilter.endDate) ? {
-            startDate: dateRangeFilter.startDate ? formatDateForApi(dateRangeFilter.startDate) : undefined,
-            endDate: dateRangeFilter.endDate ? formatDateForApi(dateRangeFilter.endDate) : undefined,
-          } : undefined
+          dateRange: processedDateRange
         }
       };
 
       await fetchBookingsData(
-        paginationRequest, 
-        resetPagination ? 1 : page, 
+        paginationRequest,
+        resetPagination ? 1 : page,
         isInitialLoad,
         abortControllerRef.current.signal,
         requestId
@@ -250,12 +263,11 @@ const Bookings: React.FC = () => {
   ) => {
     try {
       if (isRequestInProgress && !isInitialLoad) {
-        console.log('Request already in progress, aborting new request');
         return;
       }
 
       setIsRequestInProgress(true);
-      
+
       if (isInitialLoad) {
         setLoading(true);
         setFetchingData(false);
@@ -263,25 +275,19 @@ const Bookings: React.FC = () => {
         setFetchingData(true);
         setLoading(false);
       }
-      
-      console.log(`🚀 Starting API call (${requestId})...`, { isInitialLoad, page: targetPage });
-      
+
       const response: PaginatedResponse<calendarBooking> = await bookingService.getPaginatedBookings(paginationRequest);
-      
+
       if (signal?.aborted) {
-        console.log(`Request ${requestId} was aborted`);
         return;
       }
 
       if (requestId !== lastRequestIdRef.current) {
-        console.log(`Request ${requestId} is outdated, ignoring response`);
         return;
       }
-      
-      console.log(`✅ API call completed successfully (${requestId})`);
-      
+
       const bookingsWithStatus = addStatusToBookings(response.data);
-      
+
       setBookings(bookingsWithStatus);
       setPagination({
         currentPage: response.pagination.currentPage,
@@ -299,11 +305,9 @@ const Bookings: React.FC = () => {
 
     } catch (error) {
       if (signal?.aborted || (error as any)?.name === 'AbortError') {
-        console.log(`Request ${requestId} was aborted`);
         return;
       }
-      
-      console.error(`❌ Error fetching paginated bookings (${requestId}):`, error);
+
       setBookings([]);
       setPagination({
         currentPage: 1,
@@ -315,7 +319,6 @@ const Bookings: React.FC = () => {
       });
     } finally {
       if (!signal?.aborted && requestId === lastRequestIdRef.current) {
-        console.log(`🏁 Clearing loading states (${requestId})`);
         setIsRequestInProgress(false);
         setLoading(false);
         setFetchingData(false);
@@ -327,13 +330,13 @@ const Bookings: React.FC = () => {
     try {
       const servicesResponse = await bookingService.getAvailableServices();
       setServices(servicesResponse);
-      
+
       const serviceOptionsFromAPI = servicesResponse.map(service => ({
         id: service.displayName,
         label: service.displayName
       }));
       setServiceOptions(serviceOptionsFromAPI);
-      
+
     } catch (error) {
       console.error('Error fetching services:', error);
       setServices([]);
@@ -341,48 +344,40 @@ const Bookings: React.FC = () => {
   }, []);
 
   const handleStatusFilterChange = useCallback((value: string | string[]) => {
-    console.log('🎯 Status filter change received:', value);
     const newStatusFilter = Array.isArray(value) ? value : [];
     setStatusFilter(newStatusFilter);
   }, []);
 
   const handleOfficersFilterChange = useCallback((value: string | string[]) => {
-    console.log('🎯 Officers filter change received:', value);
     const newOfficersFilter = Array.isArray(value) ? value : [];
     setOfficersFilter(newOfficersFilter);
   }, []);
 
   const handleServiceFilterChange = useCallback((value: string | string[]) => {
-    console.log('🎯 Service filter change received:', value);
-    const newServiceFilter = Array.isArray(value) 
-      ? (value.length > 0 ? value[0] : '') 
+    const newServiceFilter = Array.isArray(value)
+      ? (value.length > 0 ? value[0] : '')
       : (value || '');
     setServiceFilter(newServiceFilter);
   }, []);
 
   const handleDateRangeChange = useCallback((newDateRange: { startDate: Date | null; endDate: Date | null }) => {
-    console.log('🎯 Date range change received:', newDateRange);
     setDateRangeFilter(newDateRange);
   }, []);
 
   useEffect(() => {
-    console.log('🔄 Filter dependency changed, triggering fetch');
     debouncedFetchBookings(1, true, false, false);
   }, [statusFilter, officersFilter, serviceFilter, dateRangeFilter]);
 
   useEffect(() => {
-    console.log('🏁 Initial load effect triggered');
     fetchServicesData();
     debouncedFetchBookings(1, true, true, true);
   }, []);
 
   useEffect(() => {
-    console.log('🔍 Search changed, triggering fetch');
     debouncedFetchBookings(1, true, false, false);
   }, [searchQuery]);
 
   useEffect(() => {
-    console.log('📊 Sort changed, triggering fetch');
     debouncedFetchBookings(1, true, true, false);
   }, [sortBy, sortDirection]);
 
@@ -403,7 +398,7 @@ const Bookings: React.FC = () => {
 
   const handlePageSizeChange = (newPageSize: number) => {
     setPagination(prev => ({ ...prev, pageSize: newPageSize }));
-    debouncedFetchBookings(1, true, true, false);
+    debouncedFetchBookings(1, true, true, false, newPageSize);
   };
 
   const handleSortChange = (newSortBy: string, newSortDirection: 'asc' | 'desc') => {
@@ -425,7 +420,7 @@ const Bookings: React.FC = () => {
 
   const handleEmailOption = (option: 'eml' | 'mailto' | 'copy') => {
     const dataToEmail = selectedBookings.length > 0 ? selectedBookings : bookings;
-    
+
     switch (option) {
       case 'eml':
         EmailService.createEMLFile(dataToEmail, columns, recipientEmails.join(', '));
@@ -446,7 +441,7 @@ const Bookings: React.FC = () => {
         });
         break;
     }
-    
+
     handleEmailMenuClose();
   };
 
@@ -463,7 +458,7 @@ const Bookings: React.FC = () => {
 
     setIsSending(true);
     const dataToEmail = selectedBookings.length > 0 ? selectedBookings : bookings;
-    
+
     try {
       await EmailService.sendEmailWithRecipient(dataToEmail, columns, recipientEmails);
       setEmailDialogOpen(false);
@@ -479,7 +474,7 @@ const Bookings: React.FC = () => {
   };
 
   const handleEmailRecipientsChange = (event: any, newValue: string[]) => {
-    const validEmails = newValue.filter((email, index, self) => 
+    const validEmails = newValue.filter((email, index, self) =>
       isValidEmail(email) && self.indexOf(email) === index
     );
     setRecipientEmails(validEmails);
@@ -489,7 +484,7 @@ const Bookings: React.FC = () => {
     if (event.key === 'Enter' && emailInputValue.trim()) {
       event.preventDefault();
       const email = emailInputValue.trim();
-      
+
       if (isValidEmail(email) && !recipientEmails.includes(email)) {
         setRecipientEmails([...recipientEmails, email]);
         setEmailInputValue('');
@@ -499,10 +494,10 @@ const Bookings: React.FC = () => {
 
   const handleExport = () => {
     const dataToExport = selectedBookings.length > 0 ? selectedBookings : bookings;
-    const filename = selectedBookings.length > 0 
+    const filename = selectedBookings.length > 0
       ? `bookings_selected_${selectedBookings.length}_items.xlsx`
       : `bookings_export_page_${pagination.currentPage}.xlsx`;
-    
+
     exportBookingsToExcel(dataToExport, columns, filename);
   };
 
@@ -514,14 +509,14 @@ const Bookings: React.FC = () => {
       }
       setLoadingPostResponse(true);
       setSubmittedData(bookingData);
-      
+
       setIsLastOperationEdit(false);
-      
+
       const realLoanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
       setLoanDetails(realLoanDetails);
-      
+
       setShowSuccessMessage(true);
-      
+
       await debouncedFetchBookings(pagination.currentPage, false, true, false);
     } catch (error) {
       console.error('Error fetching Loan Details:', error);
@@ -535,14 +530,14 @@ const Bookings: React.FC = () => {
     try {
       setLoadingPostResponse(true);
       setSubmittedData(bookingData);
-      
+
       setIsLastOperationEdit(true);
-      
+
       const realLoanDetails = await bookingService.getLoanDetails(bookingData.EncompassDetails.EncompassLoanId);
       setLoanDetails(realLoanDetails);
-      
+
       setShowSuccessMessage(true);
-      
+
       await debouncedFetchBookings(pagination.currentPage, false, true, false);
     } catch (error) {
       console.error('Error fetching Loan Details:', error);
@@ -563,17 +558,17 @@ const Bookings: React.FC = () => {
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
     <Box>
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           mb: 3,
         }}
       >
-        <Typography variant="h4" component="h1" 
-          sx={{ 
-            fontWeight: 'bold', 
+        <Typography variant="h4" component="h1"
+          sx={{
+            fontWeight: 'bold',
             fontSize: 36,
           }}
         >
@@ -598,16 +593,16 @@ const Bookings: React.FC = () => {
             onChange={handleSearch}
           />
         </Box>
-        
-        <Box id="date-filter" sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: { xs: 0.5, sm: 1 }, 
+
+        <Box id="date-filter" sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: { xs: 0.5, sm: 1 },
           flexWrap: { xs: 'wrap', sm: 'nowrap' },
           width: { xs: '100%', sm: '100%' }
         }}>
-          <DatePicker 
-            label="Start Date" 
+          <DatePicker
+            label="Start Date"
             value={dateRangeFilter.startDate}
             onChange={(newValue) => {
               handleDateRangeChange({
@@ -615,10 +610,10 @@ const Bookings: React.FC = () => {
                 startDate: newValue
               });
             }}
-            slotProps={{ 
-              textField: { 
+            slotProps={{
+              textField: {
                 size: 'small',
-                sx: { 
+                sx: {
                   width: { xs: '49%', sm: '49%' },
                   '& .MuiInputBase-root': {
                     height: '40px'
@@ -627,9 +622,9 @@ const Bookings: React.FC = () => {
               }
             }}
           />
-          
-          <DatePicker 
-            label="End Date" 
+
+          <DatePicker
+            label="End Date"
             value={dateRangeFilter.endDate}
             onChange={(newValue) => {
               handleDateRangeChange({
@@ -638,10 +633,10 @@ const Bookings: React.FC = () => {
               });
             }}
             minDate={dateRangeFilter.startDate || undefined}
-            slotProps={{ 
-              textField: { 
+            slotProps={{
+              textField: {
                 size: 'small',
-                sx: { 
+                sx: {
                   width: { xs: '49%', sm: '49%' },
                   '& .MuiInputBase-root': {
                     height: '40px'
@@ -650,7 +645,7 @@ const Bookings: React.FC = () => {
               }
             }}
           />
-          
+
           {(dateRangeFilter.startDate || dateRangeFilter.endDate) && (
             <Button
               variant="outlined"
@@ -695,7 +690,7 @@ const Bookings: React.FC = () => {
             multiSelect={false}
           />
         </Box>
-        
+
         <Box id="actions">
           <Box id="new-booking-desktop">
             <Button
@@ -711,12 +706,12 @@ const Bookings: React.FC = () => {
             variant={isSmall ? 'contained' : 'outlined'}
             onClick={handleExport}
           >
-            {selectedBookings.length > 0 
-              ? `Export Selected (${selectedBookings.length})` 
+            {selectedBookings.length > 0
+              ? `Export Selected (${selectedBookings.length})`
               : `Export Current Page (${bookings.length})`
             }
           </Button>
-  
+
           <Button
             id='button'
             variant={isSmall ? 'contained' : 'outlined'}
@@ -751,23 +746,23 @@ const Bookings: React.FC = () => {
             width: '250px',
           },
         }}
-      >        
+      >
         <MenuItem onClick={() => handleEmailOption('copy')}>
           <ListItemIcon>
             <CopyIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText 
-            primary="Copy to Clipboard" 
+          <ListItemText
+            primary="Copy to Clipboard"
             secondary="Paste in any email"
           />
         </MenuItem>
-        
+
         <MenuItem onClick={handleEmailWithRecipient}>
           <ListItemIcon>
             <EmailIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText 
-            primary="Send to Recipients" 
+          <ListItemText
+            primary="Send to Recipients"
             secondary="Specify email addresses"
           />
         </MenuItem>
@@ -821,7 +816,7 @@ const Bookings: React.FC = () => {
               sx={{ mb: 2 }}
             />
           </Box>
-          
+
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {recipientEmails.length > 0 && (
               <>
@@ -829,8 +824,8 @@ const Bookings: React.FC = () => {
                 <br />
               </>
             )}
-            {selectedBookings.length > 0 ? 
-              `Including ${selectedBookings.length} selected bookings.` : 
+            {selectedBookings.length > 0 ?
+              `Including ${selectedBookings.length} selected bookings.` :
               `Including all ${bookings.length} bookings from current page.`
             }
           </Typography>
@@ -862,9 +857,9 @@ const Bookings: React.FC = () => {
           }}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleSendEmailWithRecipients} 
-            variant="contained" 
+          <Button
+            onClick={handleSendEmailWithRecipients}
+            variant="contained"
             disabled={isSending || recipientEmails.length === 0}
             startIcon={isSending ? <CircularProgress size={16} /> : <EmailIcon />}
           >
@@ -902,12 +897,12 @@ const Bookings: React.FC = () => {
             }
           }}
         >
-          <Box 
-            sx={{ 
-              display: 'flex', 
+          <Box
+            sx={{
+              display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'center', 
-              alignItems: 'center', 
+              justifyContent: 'center',
+              alignItems: 'center',
               p: 3,
               backgroundColor: 'rgba(255, 255, 255, 0.8)',
               borderRadius: 2
