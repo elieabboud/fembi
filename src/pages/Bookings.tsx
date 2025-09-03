@@ -298,9 +298,19 @@ const debouncedFetchBookings = useCallback((
         hasPreviousPage: response.pagination.hasPreviousPage,
       });
 
-      const loanOfficers = Array.from(new Set(bookingsWithStatus.map(booking => booking.loanData?.loanOfficer || booking.LoanOfficer)))
-        .filter(officer => officer)
-        .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
+      var loanOfficers = null
+      
+
+      if(response.data[0].loanOfficers != null || response.data[0].loanOfficers.length > 0){
+
+        loanOfficers = Array.from(new Set(response.data[0].loanOfficers))
+          .filter(officer => officer)
+          .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
+      }else{
+        loanOfficers = Array.from(new Set(bookingsWithStatus.map(booking => booking.loanData?.loanOfficer || booking.LoanOfficer)))
+          .filter(officer => officer)
+          .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
+      }  
       setLoanOfficersOptions(loanOfficers);
 
     } catch (error) {

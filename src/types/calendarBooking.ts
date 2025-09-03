@@ -44,6 +44,7 @@ export interface calendarBooking {
   status?: BookingStatus;
   color?: string;
   followers?: string;
+  loanOfficers?: string[];
 }
 
 export interface BookingReminderRequest {

@@ -1,5 +1,7 @@
 stages:
   - connectivity
+  - build
+  - push
 
 check-ssh-to-dev-via-bastion:
   stage: connectivity
@@ -62,8 +64,38 @@ check-ssh-to-dev-via-bastion:
       when: on_success
     - when: never
 
-#stages:
-#  - deploy
+#Login
+#docker login [JFrogPlatformURL] example https://artifactory.tacresearch.com/
+#$ curl -u<USERNAME>:<PASSWORD> "https://[JFrogPlatformURL]/artifactory/api/docker/<REPO_NAME>/<V1|V2>/auth"
+# curl -utac-automation:Sg4dX9t6cXiBGAQ "https://artifactory.tacresearch.com/artifactory/api/docker/fbc-frontend/V2/auth"
+
+
+services:
+  - docker:dind
+
+before_script:
+  - ssh -F ~/.ssh/config target 
+  - echo "$(whoami) on $(hostname)"; uname -a
+  - echo "$JFROG_PASSWORD" | docker login -u "$JFROG_USERNAME" --password-stdin $JFROG_REGISTRY
+
+build_image:
+  stage: build
+  tags: [fembi, frontend, dev]
+  image: docker:24.0
+  script:
+    - docker build -t $JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME:$CI_COMMIT_SHA .
+  artifacts:
+    paths:
+      - docker-image.tar
+    expire_in: 1h
+
+push_image:
+  stage: push
+  tags: [fembi, frontend, dev]
+  image: docker:24.0
+  script:
+    - docker push $JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME:$CI_COMMIT_SHA
+
 
 #variables:
 #  ENVIRONMENT: "dev" # default, can be overridden by pipeline
