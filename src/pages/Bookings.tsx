@@ -88,9 +88,13 @@ const Bookings: React.FC = () => {
 
   const { queryParams, clearQueryParams, hasLoanId } = useUrlQueryParams();
 
-  const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const lastRequestIdRef = useRef<string | null>(null);
+  const activeRequestRef = useRef<{
+    controller: AbortController;
+    requestId: string;
+    timestamp: number;
+  } | null>(null);
+
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -113,7 +117,6 @@ const Bookings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [fetchingData, setFetchingData] = useState(false);
   const [loadingPostResponse, setLoadingPostResponse] = useState(false);
-  const [isRequestInProgress, setIsRequestInProgress] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -142,6 +145,8 @@ const Bookings: React.FC = () => {
   const [loanOfficersOptions, setLoanOfficersOptions] = useState<{id: string, label: string}[]>([]);
   const [serviceOptions, setServiceOptions] = useState<{ id: string, label: string }[]>([]);
 
+  const [isFiltering, setIsFiltering] = useState(false);
+
   const statusOptions = [
     { id: 'upcoming', label: 'Upcoming' },
     { id: 'inProgress', label: 'In Progress' },
@@ -149,6 +154,26 @@ const Bookings: React.FC = () => {
   ];
 
   const columns = createBookingColumns();
+
+
+  const cancelActiveRequest = useCallback(() => {
+    if (activeRequestRef.current) {
+      console.log('🚫 Cancelling previous request:', activeRequestRef.current.requestId);
+      activeRequestRef.current.controller.abort();
+      activeRequestRef.current = null;
+    }
+  }, []);
+
+  const generateRequestId = useCallback(() => {
+    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }, []);
+
+  const clearDebounceTimer = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (hasLoanId && !newBooking) {
@@ -179,34 +204,33 @@ const Bookings: React.FC = () => {
     setSelectedBookings(selectedRows);
   };
 
-  const generateRequestId = () => {
-    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  };
 
-const debouncedFetchBookings = useCallback((
+  const debouncedFetchBookings = useCallback((
     page: number = 1,
     resetPagination: boolean = false,
     immediate: boolean = false,
     isInitialLoad: boolean = false,
     customPageSize?: number
   ) => {
-    if (fetchTimerRef.current) {
-      clearTimeout(fetchTimerRef.current);
-    }
-
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    cancelActiveRequest();
+    clearDebounceTimer();
 
     const delay = immediate ? 0 : 300;
 
-    fetchTimerRef.current = setTimeout(async () => {
+    if (!immediate && !isInitialLoad) {
+      setIsFiltering(true);
+    }
+
+    debounceTimerRef.current = setTimeout(async () => {
       const requestId = generateRequestId();
-      lastRequestIdRef.current = requestId;
+      const controller = new AbortController();
+      
+      activeRequestRef.current = {
+        controller,
+        requestId,
+        timestamp: Date.now()
+      };
 
-      abortControllerRef.current = new AbortController();
-
-      // Process date range to ensure end date includes full day
       let processedDateRange = undefined;
       if (dateRangeFilter.startDate || dateRangeFilter.endDate) {
         processedDateRange = {
@@ -239,7 +263,7 @@ const debouncedFetchBookings = useCallback((
         paginationRequest,
         resetPagination ? 1 : page,
         isInitialLoad,
-        abortControllerRef.current.signal,
+        controller.signal,
         requestId
       );
     }, delay);
@@ -251,10 +275,13 @@ const debouncedFetchBookings = useCallback((
     statusFilter,
     officersFilter,
     serviceFilter,
-    dateRangeFilter
+    dateRangeFilter,
+    cancelActiveRequest,
+    clearDebounceTimer,
+    generateRequestId
   ]);
 
-  const fetchBookingsData = async (
+    const fetchBookingsData = async (
     paginationRequest: PaginationRequest,
     targetPage: number,
     isInitialLoad: boolean = false,
@@ -262,12 +289,19 @@ const debouncedFetchBookings = useCallback((
     requestId?: string
   ) => {
     try {
-      if (isRequestInProgress && !isInitialLoad) {
+      // Check if this request was already cancelled
+      if (signal?.aborted) {
         return;
       }
 
-      setIsRequestInProgress(true);
+      // Verify this is still the active request
+      if (!activeRequestRef.current || activeRequestRef.current.requestId !== requestId) {
+        setIsFiltering(false);
+        return;
+      }
+      
 
+      // Set loading states
       if (isInitialLoad) {
         setLoading(true);
         setFetchingData(false);
@@ -275,14 +309,16 @@ const debouncedFetchBookings = useCallback((
         setFetchingData(true);
         setLoading(false);
       }
-
+      setIsFiltering(false);
       const response: PaginatedResponse<calendarBooking> = await bookingService.getPaginatedBookings(paginationRequest);
 
+      // Check again if request was cancelled during the API call
       if (signal?.aborted) {
         return;
       }
 
-      if (requestId !== lastRequestIdRef.current) {
+      // Verify this is still the active request after API call
+      if (!activeRequestRef.current || activeRequestRef.current.requestId !== requestId) {
         return;
       }
 
@@ -298,43 +334,54 @@ const debouncedFetchBookings = useCallback((
         hasPreviousPage: response.pagination.hasPreviousPage,
       });
 
-      var loanOfficers = null
-      
+      var loanOfficers = null;
 
-      if(response.data[0].loanOfficers != null || response.data[0].loanOfficers.length > 0){
-
-        loanOfficers = Array.from(new Set(response.data[0].loanOfficers))
+      if(response.loanOfficers.length > 0){
+        loanOfficers = Array.from(new Set(response.loanOfficers))
           .filter(officer => officer)
           .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
-      }else{
+      } else {
         loanOfficers = Array.from(new Set(bookingsWithStatus.map(booking => booking.loanData?.loanOfficer || booking.LoanOfficer)))
           .filter(officer => officer)
           .map(loanOfficer => ({ id: loanOfficer, label: loanOfficer }));
-      }  
+      }
       setLoanOfficersOptions(loanOfficers);
+
+      // Clear the active request since it completed successfully
+      if (activeRequestRef.current?.requestId === requestId) {
+        activeRequestRef.current = null;
+      }
 
     } catch (error) {
       if (signal?.aborted || (error as any)?.name === 'AbortError') {
+        setIsFiltering(false);
         return;
       }
 
-      setBookings([]);
-      setPagination({
-        currentPage: 1,
-        pageSize: 10,
-        totalItems: 0,
-        totalPages: 1,
-        hasNextPage: false,
-        hasPreviousPage: false,
-      });
+      // Only clear state if this is still the active request
+      if (activeRequestRef.current?.requestId === requestId) {
+        setBookings([]);
+        setPagination({
+          currentPage: 1,
+          pageSize: 10,
+          totalItems: 0,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        });
+        activeRequestRef.current = null;
+      }
+      setIsFiltering(false);
     } finally {
-      if (!signal?.aborted && requestId === lastRequestIdRef.current) {
-        setIsRequestInProgress(false);
+      // Only update loading states if this is still the active request
+      if (!signal?.aborted && activeRequestRef.current?.requestId === requestId) {
         setLoading(false);
         setFetchingData(false);
+        activeRequestRef.current = null;
       }
-    }
-  };
+      setIsFiltering(false);
+      }
+    };
 
   const fetchServicesData = useCallback(async () => {
     try {
@@ -393,14 +440,11 @@ const debouncedFetchBookings = useCallback((
 
   useEffect(() => {
     return () => {
-      if (fetchTimerRef.current) {
-        clearTimeout(fetchTimerRef.current);
-      }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      cancelActiveRequest();
+      clearDebounceTimer();
+      setIsFiltering(false);
     };
-  }, []);
+  }, [cancelActiveRequest, clearDebounceTimer]);
 
   const handlePageChange = (newPage: number) => {
     debouncedFetchBookings(newPage, false, true, false);
@@ -738,7 +782,7 @@ const debouncedFetchBookings = useCallback((
           Showing {bookings.length} of {pagination.totalItems} total bookings
           {pagination.totalPages > 1 && ` (Page ${pagination.currentPage} of ${pagination.totalPages})`}
         </Typography>
-        {(fetchingData || isRequestInProgress) && (
+        {(fetchingData || isFiltering) && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CircularProgress size={16} />
             <Typography variant="body2" color="text.secondary">Loading...</Typography>
@@ -957,7 +1001,7 @@ const debouncedFetchBookings = useCallback((
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}
         onSortChange={handleSortChange}
-        loading={fetchingData || isRequestInProgress}
+        loading={fetchingData || isFiltering}
       />
     </Box>
     <Snackbar

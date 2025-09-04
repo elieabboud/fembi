@@ -38,6 +38,7 @@ export interface PaginatedResponse<T> {
     hasNextPage: boolean;
     hasPreviousPage: boolean;
   };
+  loanOfficers: string[];
 }
 
 export const bookingService = {
@@ -95,7 +96,8 @@ export const bookingService = {
         totalPages: response.data.pagination?.totalPages || 1,
         hasNextPage: response.data.pagination?.hasNextPage || false,
         hasPreviousPage: response.data.pagination?.hasPreviousPage || false,
-      }
+      },
+      loanOfficers: response?.data?.loanOfficers
     };
   },
 
