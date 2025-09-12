@@ -124,8 +124,8 @@ html, body {
   }
 
   #bookings-header {
-    grid-template-columns: 1fr 1fr 2fr; /* Three columns for second row */
-    grid-template-areas: 
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-areas:
       "newBooking . actions"
       "search dateFilter filters";
     gap: 16px;
@@ -164,4 +164,25 @@ html, body {
 #week-view {
   display: flex;
   max-width: calc(100vw - 60px);
+}
+
+@media (min-width: 1200px) {
+  #bookings-header {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+  }
+
+  #bookings-header #filters {
+    gap: 16px;
+    flex-wrap: nowrap;
+  }
+}
+
+.MuiPopover-root {
+  z-index: 9999 !important;
+}
+
+.MuiMenu-paper {
+  max-height: 250px !important;
+  overflow-y: auto !important;
 }

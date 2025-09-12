@@ -334,6 +334,16 @@ export const bookingService = {
     return response.data;
   },
 
+  async getDistinctLoanOfficers(): Promise<{loanOfficers: Array<{loanOfficer: string, appointmentCount: number}>, totalCount: number}> {
+    try {
+      const response = await api.get('/api/Application/v1/GetDistinctLoanOfficers');
+      return response.data || {loanOfficers: [], totalCount: 0};
+    } catch (error) {
+      console.error('Error fetching distinct loan officers:', error);
+      return {loanOfficers: [], totalCount: 0};
+    }
+  },
+
   async sendEmail(request: EmailRequestDTO): Promise<EmailResponseDTO> {
     try{
       const response = await api.post('/api/Application/v1/SendEmail', request);

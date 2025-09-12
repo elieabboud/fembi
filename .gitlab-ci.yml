@@ -1,125 +1,218 @@
 stages:
-  - connectivity
   - build
-  - push
+  - deploy
 
-check-ssh-to-dev-via-bastion:
-  stage: connectivity
-  tags: [fembi, frontend, dev]
-  image: alpine:3.20
+# Define a base template for jobs
+.job_template: &job_template
+  tags:
+    - build
+  image: docker:24.0
   before_script:
-    - 'set euo pipefail'
-    - 'mkdir -p ~/.ssh && chmod 700 ~/.ssh'
-    # --- sanity: ensure variables exist (or fail with a clear message) ---
-    - '[[ -n "${SSH_HOST_BASTION:-}" ]] || { echo "Missing SSH_HOST_BASTION"; exit 1; }'
-    - '[[ -n "${SSH_USER_BASTION:-}" ]] || { echo "Missing SSH_USER_BASTION"; exit 1; }'
-    - '[[ -n "${SSH_HOST_DEV:-}" ]]     || { echo "Missing SSH_HOST_DEV"; exit 1; }'
-    - '[[ -n "${SSH_USER_DEV:-}" ]]     || { echo "Missing SSH_USER_DEV"; exit 1; }'
-    # --- Default SSH ports to 22 if unset ---
-    - '[[ -n "${SSH_PORT_BASTION:-}" ]] || { echo "Missing SSH_PORT_BASTION"; SSH_PORT_BASTION=${SSH_PORT_BASTION:-22}; }'
-    - '[[ -n "${SSH_PORT_DEV:-}" ]]     || { echo "Missing SSH_PORT_DEV"; SSH_PORT_DEV=${SSH_PORT_DEV:-22}; }'
-    # --- keys are FILE variables: copy the files (do NOT echo the paths) ---
-    - '[[ -n "${SSH_KEY_BASTION:-}" && -f "${SSH_KEY_BASTION}" ]] || { echo "SSH_KEY_BASTION must be a File variable"; exit 1; }'
-    - '[[ -n "${SSH_KEY_DEV:-}" && -f "${SSH_KEY_DEV}" ]]         || { echo "SSH_KEY_DEV must be a File variable"; exit 1; }'
-    - 'cp "${SSH_KEY_BASTION}" ~/.ssh/id_rsa_bastion'
-    - 'cp "${SSH_KEY_DEV}"     ~/.ssh/id_rsa_target'
-    # --- normalize line endings just in case, and set strict perms ---
-    - 'sed -i "s/\r$//" ~/.ssh/id_rsa_bastion ~/.ssh/id_rsa_target || true'
-    - 'chmod 600 ~/.ssh/id_rsa_bastion ~/.ssh/id_rsa_target'
-    # --- quick key sanity (fails fast if wrong format/passphrase) ---
-    - 'ssh-keygen -lf ~/.ssh/id_rsa_bastion >/dev/null || { echo "Bastion key invalid format"; exit 1; }'
-    - 'ssh-keygen -lf ~/.ssh/id_rsa_target  >/dev/null || { echo "Target key invalid format"; exit 1; }'
-    # SSH config with ProxyJump (bastion -> target)
-    - |
-      cat > ~/.ssh/config <<EOF
-      Host bastion
-        HostName ${SSH_HOST_BASTION}
-        Port ${SSH_PORT_BASTION}
-        User ${SSH_USER_BASTION}
-        IdentityFile ~/.ssh/id_rsa_bastion
-        ServerAliveInterval 30
-        ServerAliveCountMax 3
-        StrictHostKeyChecking no
-
-      Host target
-        HostName ${SSH_HOST_DEV}
-        Port ${SSH_PORT_DEV}
-        User ${SSH_USER_DEV}
-        IdentityFile ~/.ssh/id_rsa_target
-        ProxyJump bastion
-        ServerAliveInterval 30
-        ServerAliveCountMax 3
-        StrictHostKeyChecking no
-      EOF
-    - chmod 600 ~/.ssh/config
-  script: |
-    set -eup pipefail
-    echo "Testing jump: ${SSH_USER_BASTION}@${SSH_HOST_BASTION}:${SSH_PORT_BASTION} -> ${SSH_USER_DEV}@${SSH_HOST_DEV}:${SSH_PORT_DEV}"
-    ssh -F ~/.ssh/config target 'echo "OK: $(whoami) on $(hostname)"; uname -a'
-    ssh -F ~/.ssh/config target 'docker --version || echo "note: docker not found (optional check)"'
+    - echo "Job template activated."
+  # Rules for triggering the CI pipeline based on merged branches
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" &&
-            $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" &&
-            $CI_MERGE_REQUEST_APPROVED == "true"'
+    # Only run on merge request approval, NOT on merge actions
+    - if: '($CI_PIPELINE_SOURCE == "merge_request_event" && 
+            ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master") &&
+            $CI_MERGE_REQUEST_EVENT_TYPE == "detached") || $FORCE_PIPELINE == "true"'
       when: on_success
-    - when: never
+    # Explicitly prevent running on merge actions to avoid version increment
+    - if: '$CI_MERGE_REQUEST_EVENT_TYPE == "merged_result"'
+      when: never
+    - when: never  # Prevent the pipeline from running for non-merge request events
 
-#Login
-#docker login [JFrogPlatformURL] example https://artifactory.tacresearch.com/
-#$ curl -u<USERNAME>:<PASSWORD> "https://[JFrogPlatformURL]/artifactory/api/docker/<REPO_NAME>/<V1|V2>/auth"
-# curl -utac-automation:Sg4dX9t6cXiBGAQ "https://artifactory.tacresearch.com/artifactory/api/docker/fbc-frontend/V2/auth"
-
-
-services:
-  - docker:dind
-
-before_script:
-  - ssh -F ~/.ssh/config target 
-  - echo "$(whoami) on $(hostname)"; uname -a
-  - echo "$JFROG_PASSWORD" | docker login -u "$JFROG_USERNAME" --password-stdin $JFROG_REGISTRY
-
-build_image:
+# Set Version
+set_version:
   stage: build
-  tags: [fembi, frontend, dev]
-  image: docker:24.0
+  extends: .job_template
   script:
-    - docker build -t $JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME:$CI_COMMIT_SHA .
+    - echo "Setting up version..."
+    - git fetch --tags --unshallow --quiet
+    - |
+      # Determine the version based on branch and merge event
+      if [[ "$CI_COMMIT_REF_NAME" == "master" ]]; then
+        # Increment minor version and reset patch to 0 when merging into master
+        BASE=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || echo v1.0.0)
+        # Extract major.minor and increment minor, reset patch to 0
+        MAJOR_MINOR=$(echo "$BASE" | sed 's/v\([0-9]*\)\.\([0-9]*\).*/\1.\2/')
+        MAJOR=$(echo "$MAJOR_MINOR" | cut -d. -f1)
+        MINOR=$(echo "$MAJOR_MINOR" | cut -d. -f2)
+        NEW_MINOR=$((MINOR + 1))
+        VERSION="v${MAJOR}.${NEW_MINOR}.0"
+      elif [[ "$CI_COMMIT_REF_NAME" == "dev" ]]; then
+        # Increment patch version for feature branches merging into dev
+        if [[ "$CI_COMMIT_REF_NAME" =~ ^feature/ ]]; then
+          BASE=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || echo v1.0.0)
+          # Extract major.minor.patch and increment patch
+          MAJOR_MINOR_PATCH=$(echo "$BASE" | sed 's/v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\).*/\1.\2.\3/')
+          MAJOR=$(echo "$MAJOR_MINOR_PATCH" | cut -d. -f1)
+          MINOR=$(echo "$MAJOR_MINOR_PATCH" | cut -d. -f2)
+          PATCH=$(echo "$MAJOR_MINOR_PATCH" | cut -d. -f3)
+          NEW_PATCH=$((PATCH + 1))
+          VERSION="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+        fi
+      elif [[ "$CI_COMMIT_REF_NAME" =~ ^hotfix/ ]]; then
+        # Increment patch version for hotfix branches merging into master
+        BASE=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || echo v1.0.0)
+        # Extract major.minor.patch and increment patch
+        MAJOR_MINOR_PATCH=$(echo "$BASE" | sed 's/v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\).*/\1.\2.\3/')
+        MAJOR=$(echo "$MAJOR_MINOR_PATCH" | cut -d. -f1)
+        MINOR=$(echo "$MAJOR_MINOR_PATCH" | cut -d. -f2)
+        PATCH=$(echo "$MAJOR_MINOR_PATCH" | cut -d. -f3)
+        NEW_PATCH=$((PATCH + 1))
+        VERSION="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+      else
+        # Default versioning for non-special cases (if required)
+        BASE=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || echo v1.0.0)
+        # Extract major.minor.patch and increment patch
+        MAJOR_MINOR_PATCH=$(echo "$BASE" | sed 's/v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\).*/\1.\2.\3/')
+        MAJOR=$(echo "$MAJOR_MINOR_PATCH" | cut -d. -f1)
+        MINOR=$(echo "$MAJOR_MINOR_PATCH" | cut -d. -f2)
+        PATCH=$(echo "$MAJOR_MINOR_PATCH" | cut -d. -f3)
+        NEW_PATCH=$((PATCH + 1))
+        VERSION="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+      fi
+      
+      # Add timestamp and commit SHA for uniqueness (ensures re-runs get new versions)
+      # But keep master branch versions clean (v1.2.3 format)
+      if [[ "$CI_COMMIT_REF_NAME" == "master" ]]; then
+        # Master branch: clean semantic version (v1.2.3)
+        echo "Master branch: using clean version $VERSION"
+      else
+        # Dev/feature branches: detailed version with timestamp and commit SHA
+        TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+        COMMIT_SHA=$(git rev-parse --short HEAD)
+        VERSION="${VERSION}-${TIMESTAMP}-${COMMIT_SHA}"
+        echo "Feature branch: using detailed version $VERSION"
+      fi
+      
+      echo "VERSION=$VERSION" >> variables.env
+      export VERSION="$VERSION"  # Make it available to script
   artifacts:
-    paths:
-      - docker-image.tar
-    expire_in: 1h
+    reports:
+      dotenv: variables.env
 
-push_image:
-  stage: push
-  tags: [fembi, frontend, dev]
-  image: docker:24.0
-  script:
-    - docker push $JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME:$CI_COMMIT_SHA
+# Build and Push Docker Image
+# Combined into single job to avoid Docker image sharing issues between jobs
+build_and_push_image:
+  stage: build
+  extends: .job_template
+  script: |
+    echo "Building Docker image for version $VERSION"
+    docker login --username "$JFROG_USERNAME" --password-stdin "$JFROG_REGISTRY" <<EOF
+    $JFROG_PASSWORD
+    EOF
+    
+    # Build the image
+    docker build -t "$JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME:$VERSION" .
+    
+    # Verify the image was built successfully
+    if ! docker images | grep -q "$JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME.*$VERSION"; then
+      echo "ERROR: Failed to build Docker image $JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME:$VERSION"
+      exit 1
+    fi
+    
+    echo "Successfully built Docker image: $JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME:$VERSION"
+    
+    # List all images for debugging
+    echo "Available Docker images:"
+    docker images | grep "$JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME" || echo "No matching images found"
+    
+    echo "Pushing Docker image for version $VERSION"
+    docker push "$JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME:$VERSION"
+    
+    echo "Successfully pushed Docker image: $JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME:$VERSION"
+  needs:
+    - set_version
 
+# Create Git Tag
+create_tag:
+  stage: build
+  extends: .job_template
+  script: |
+    set -x
+    echo "Creating Git tag: $VERSION"
+    
+    # Check if tag exists
+    if git tag -l "$VERSION" | grep -q "$VERSION"; then
+      if [[ "$CI_COMMIT_REF_NAME" == "master" ]]; then
+        echo "ERROR: Tag $VERSION already exists on master! This shouldn't happen."
+        exit 1
+      else
+        echo "WARNING: Tag $VERSION already exists, but this is expected for feature branches with timestamps."
+        echo "Continuing with tag creation..."
+      fi
+    fi
+    
+    # Configure git user for tagging
+    git config user.email "itsm@tacresearch.com"
+    git config user.name "tac-runner"
 
-#variables:
-#  ENVIRONMENT: "dev" # default, can be overridden by pipeline
-#  FORCE_BUILD: "false" # default, can be set to true to force pipeline run
+    # Create and push the tag
+    git tag -a "$VERSION" -m "Release version $VERSION - Pipeline: $CI_PIPELINE_ID - Commit: $CI_COMMIT_SHA"
+  
+    # Use the RUNNER_TOKEN with full permissions for pushing tags
+    echo "Pushing tag using RUNNER_TOKEN"
+    
+    # Debug: Check if RUNNER_TOKEN is available
+    echo "RUNNER_TOKEN exists: $([ -n "$RUNNER_TOKEN" ] && echo "YES" || echo "NO")"
+    echo "RUNNER_TOKEN length: ${#RUNNER_TOKEN}"
+    echo "RUNNER_TOKEN first 4 chars: ${RUNNER_TOKEN:0:4}..."
+    
+    # Use the RUNNER_TOKEN with proper URL format
+    git push "https://root:$RUNNER_TOKEN@$CI_SERVER_HOST/tac-research/solutions/clients/fembi/bookingfrontend.git" "$VERSION"
+    
+    echo "Successfully created and pushed tag: $VERSION"
+  # Only run if previous stages succeeded (no failed pipelines create tags)
+  needs:
+    - set_version
+    - build_and_push_image
 
+# Deploy to DEV Environment automatically when CI runs on dev branch
+deploy_dev:
+  stage: deploy
+  extends: .job_template
+  script: |
+    # get the dev profile and extract the target and app dir
+    dev_profile=$(cat config/environments/dev.yml)
+    user=$(echo "$dev_profile" | grep "SSH_TARGET_USER" | awk '{print $2}')
+    target=$(echo "$dev_profile" | grep "SSH_TARGET_HOST" | awk '{print $2}')
+    port=$(echo "$dev_profile" | grep "SSH_TARGET_PORT" | awk '{print $2}')
+    app_dir=$(echo "$dev_profile" | grep "APP_DIR" | awk '{print $2}')
+    echo "Target: $target"
+    echo "App dir: $app_dir"
+    echo "Version: $VERSION"
+    echo "Image: $JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME:$VERSION"
 
-#deploy_backend:
-#  stage: deploy
-#  tags:
-#    - tac-micro-1
-#  before_script:
-#    - ssh ubuntu@tac-compute-4 -p 1069 "rm -rf /tmp/tacresearch_gitlab/fembi/bookingfrontend &&
-#      git clone git@pandora-sshbox.tacresearch.com:tac-research/solutions/clients/fembi/bookingfrontend.git /tmp/tacresearch_gitlab/fembi/bookingfrontend"
-#  script:
-#    - echo 'ENVIRONMENT' $ENVIRONMENT
-#    - echo 'FORCE_BUILD' $FORCE_BUILD
-#    - echo 'CI_COMMIT_BRANCH' $CI_COMMIT_BRANCH
-#    - ssh ubuntu@tac-compute-4 -p 1069 "export ENVIRONMENT=$ENVIRONMENT; cd /tmp/tacresearch_gitlab/fembi/bookingfrontend &&
-#      echo 'ENVIRONMENT IN TC4 ' $ENVIRONMENT &&
-#      git checkout $CI_COMMIT_BRANCH && if [ \"$ENVIRONMENT\" = \"prd\" ]; then cp .env_prd .env; else cp .env_sandbox .env; fi &&
-#      docker compose down && docker rmi fbc-backend-$ENVIRONMENT:1.0.0 || true &&
-#      docker compose build --build-arg ENVIRONMENT=$ENVIRONMENT && ENVIRONMENT=$ENVIRONMENT docker compose up -d --build"
-#  rules:
-#    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" && $CI_MERGE_REQUEST_APPROVED == "true"'
-#      when: always
-#    - if: '$FORCE_BUILD == "true"'
-#      when: always
+    if [ -z "$target" ] || [ -z "$app_dir" ]; then
+      echo "ERROR: Target or app dir not found in dev profile"
+      exit 1
+    fi
+    
+    # create a .env file from the yml dev profile
+    echo "Creating .env file from dev profile"
+
+    echo "VERSION=$VERSION" > .env
+    echo "IMAGE_NAME=$JFROG_REGISTRY/$JFROG_REPO/$IMAGE_NAME" >> .env
+    if command -v yq &> /dev/null; then
+      echo "yq is installed"
+    else
+      echo "yq is not installed, and is critical for this script to work"
+      echo "sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq"
+      echo "Please install yq and run the pipeline again"
+      exit 1
+    fi
+    yq eval '.deployment | to_entries | .[] | .key + "=" + .value' config/environments/dev.yml >> .env
+    set -x 
+    echo "Deploying version $VERSION to DEV environment"
+    scp -P $port docker-compose.yml .env $user@$target:$app_dir
+    echo "Deploying version $VERSION to DEV environment"
+    ssh $user@$target -p $port "set -x; cd $app_dir; docker compose down; docker compose pull; docker compose up -d"
+ 
+    echo "Successfully deployed to DEV"
+  environment:
+    name: dev
+    url: http://sandbox-fbc-dev.tacresearch.com
+  needs:
+    - set_version
+    - create_tag

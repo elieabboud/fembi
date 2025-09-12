@@ -128,17 +128,48 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
             event?.stopPropagation?.();
           }}
           renderValue={(selected) => (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {(selected as string[]).map((selectedId) => {
-                const option = options.find(opt => opt.id.toString() === selectedId);
-                return (
-                  <Chip 
-                    key={selectedId} 
-                    label={option ? option.label : selectedId} 
-                    size="small"
-                  />
-                );
-              })}
+            <Box
+              sx={{
+                display: "flex",
+                flexWrap: "nowrap",
+                gap: 0.5,
+                overflow: "hidden",
+                width: "100%",
+              }}
+            >
+              {(selected as string[]).length === 0 ? (
+                <Box sx={{ color: "text.secondary", fontStyle: "italic" }}>
+                  None selected
+                </Box>
+              ) : (selected as string[]).length === 1 ? (
+                <Chip
+                  label={
+                    options.find(
+                      (opt) => opt.id.toString() === (selected as string[])[0]
+                    )?.label || (selected as string[])[0]
+                  }
+                  size="small"
+                  sx={{
+                    maxWidth: "100%",
+                    "& .MuiChip-label": {
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      maxWidth: "120px",
+                    },
+                  }}
+                />
+              ) : (
+                <Chip
+                  label={`${(selected as string[]).length} selected`}
+                  size="small"
+                  color="primary"
+                  sx={{
+                    backgroundColor: "primary.main",
+                    color: "white",
+                    fontWeight: "bold",
+                  }}
+                />
+              )}
             </Box>
           )}
         >

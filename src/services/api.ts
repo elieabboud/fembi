@@ -1,13 +1,35 @@
 import axios from 'axios';
-import { config } from '../config';
 import { acquireToken } from './authService';
 
 const api = axios.create({
-    baseURL: config.apiConfig.baseUrl,
+    baseURL: process.env.REACT_APP_BACKEND_URL || "https://localhost:44349",
     headers: {
       'Content-Type': 'application/json'
     }
   });
+
+// Update baseURL after runtime config loads
+const updateBaseURL = async () => {
+  try {
+    const response = await fetch('/.env');
+    const envContent = await response.text();
+    
+    for (const line of envContent.split('\n')) {
+      if (line.startsWith('REACT_APP_BACKEND_URL=')) {
+        const value = line.split('=')[1]?.trim();
+        if (value) {
+          api.defaults.baseURL = value;
+          break;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Could not load runtime .env file:', error);
+  }
+};
+
+// Call this when your app initializes
+updateBaseURL();
   
   // Add request interceptor to include auth token
   api.interceptors.request.use(async (config) => {

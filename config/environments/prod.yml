@@ -1,0 +1,21 @@
+deployment:
+  ENVIRONMENT: production
+  EXPOSED_DOCKER_PORT: 10025
+  HTTP_LOCAL: http
+  HTTP_ENV: https
+  REACT_APP_BACKEND_URL: https://booking.fntis.com/back
+  
+# monitoring:
+#   log_level: debug
+#   metrics_enabled: true
+#   debug_mode: true
+  
+# features:
+#   cache_enabled: false
+#   hot_reload: true
+#   development_tools: true
+  
+# security:
+#   cors_origin: "*"
+#   rate_limiting: false
+#   ssl_required: false

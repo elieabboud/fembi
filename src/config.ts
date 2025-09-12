@@ -1,4 +1,25 @@
-
+// src/config.ts
+const loadRuntimeConfig = async (): Promise<string> => {
+  try {
+    // Fetch the .env file directly
+    const response = await fetch('/.env');
+    const envContent = await response.text();
+    
+    // Parse .env file to find REACT_APP_BACKEND_URL
+    const lines = envContent.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('REACT_APP_BACKEND_URL=')) {
+        const value = line.split('=')[1]?.trim();
+        if (value) return value;
+      }
+    }
+  } catch (error) {
+    console.warn('Could not load runtime .env file:', error);
+  }
+  
+  // Fallback to build-time env
+  return process.env.REACT_APP_BACKEND_URL || "https://localhost:44349";
+};
 export const config = {
     // MSAL Configuration
     msalConfig: {
@@ -16,8 +37,8 @@ export const config = {
     },
     // API Configuration
     apiConfig: {
-      baseUrl: (() => {
-        const backendUrl = "https://localhost:44349";
+      baseUrl: (async () => {
+        const backendUrl = await loadRuntimeConfig();
         return backendUrl;
       })(),
       scopes: ["https://graph.microsoft.com/.default"]
