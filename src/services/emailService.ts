@@ -1,22 +1,57 @@
-import { calendarBooking } from '../types/calendarBooking';
-import { EmailRequestDTO } from '../types/email';
-import { toLocalISOString } from '../utils/general';
-import { bookingService } from './bookingService';
-import { Column } from './exportToExcel';
-import { TimezoneService } from './timezoneUtils';
+import { format } from "date-fns";
+import { calendarBooking } from "../types/calendarBooking";
+import { EmailRequestDTO } from "../types/email";
+import { toLocalISOString } from "../utils/general";
+import { bookingService } from "./bookingService";
+import { Column } from "./exportToExcel";
+import { TimezoneService } from "./timezoneUtils";
+
+interface EmailOptions {
+  dateRange?: {
+    startDate: Date | null;
+    endDate: Date | null;
+  };
+  mtdClosings?: number;
+}
 
 export class EmailService {
-  
+  private static generateDateRangeText(options?: EmailOptions): string {
+    if (!options?.dateRange?.startDate && !options?.dateRange?.endDate) {
+      return "All Available Data";
+    }
+
+    const { startDate, endDate } = options.dateRange;
+
+    if (startDate && endDate) {
+      const startFormatted = format(startDate, "MMMM d");
+      const endFormatted = format(endDate, "MMMM d, yyyy");
+      return `${startFormatted} to ${endFormatted}`;
+    } else if (startDate) {
+      return `From ${format(startDate, "MMMM d, yyyy")}`;
+    } else if (endDate) {
+      return `Until ${format(endDate, "MMMM d, yyyy")}`;
+    }
+
+    return "All Available Data";
+  }
+
   /**
    * Option 1: Create EML file (Best for Outlook/Thunderbird)
    * Opens directly in user's default email client
    */
-  static createEMLFile(bookings: calendarBooking[], columns: Column[], recipientEmail?: string) {
-    const subject = `Bookings Report - ${bookings.length} items (${new Date().toLocaleDateString()})`;
+  static createEMLFile(
+    bookings: calendarBooking[],
+    columns: Column[],
+    recipientEmail?: string,
+    options?: EmailOptions
+  ) {
+    const subject = `Bookings Report - ${
+      bookings.length
+    } items (${new Date().toLocaleDateString()})`;
     const htmlBody = this.generateHTMLTableForEmail(bookings, columns);
     const textBody = this.generatePlainTextTable(bookings, columns);
-    
-    const emlContent = `To: ${recipientEmail || ''}
+
+    const emlContent = `To: ${recipientEmail || ""}
 Subject: ${subject}
 MIME-Version: 1.0
 Content-Type: multipart/alternative; boundary="boundary123"
@@ -34,11 +69,13 @@ ${htmlBody}
 --boundary123--`;
 
     // Create and download EML file
-    const blob = new Blob([emlContent], { type: 'message/rfc822' });
+    const blob = new Blob([emlContent], { type: "message/rfc822" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
-    link.download = `bookings-report-${toLocalISOString(new Date()).split('T')[0]}.eml`;
+    link.download = `bookings-report-${
+      toLocalISOString(new Date()).split("T")[0]
+    }.eml`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -49,25 +86,41 @@ ${htmlBody}
    * Option 2: Open default email client with mailto (Limited by URL length)
    * Good for simple cases
    */
-  static openDefaultEmailClient(bookings: calendarBooking[], columns: Column[], recipientEmail?: string) {
+  static openDefaultEmailClient(
+    bookings: calendarBooking[],
+    columns: Column[],
+    recipientEmail?: string,
+    options?: EmailOptions
+  ) {
     const subject = `Bookings Report - ${bookings.length} items`;
     const body = this.generatePlainTextTable(bookings, columns);
-    
+
     // URL encode the content
-    const mailtoUrl = `mailto:${recipientEmail || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    
+    const mailtoUrl = `mailto:${
+      recipientEmail || ""
+    }?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
     // Check URL length limit (most browsers limit to ~2000 characters)
     if (mailtoUrl.length > 2000) {
-      alert('Too much data for email link. Please use the EML file option instead.');
+      alert(
+        "Too much data for email link. Please use the EML file option instead."
+      );
       return false;
     }
-    
+
     window.location.href = mailtoUrl;
     return true;
   }
 
-  static async sendEmailWithRecipient(bookings: calendarBooking[], columns: Column[], recipientEmail?: string[]){
-    const subject = `Bookings Report - ${bookings.length} items (${new Date().toLocaleDateString()})`;
+  static async sendEmailWithRecipient(
+    bookings: calendarBooking[],
+    columns: Column[],
+    recipientEmail?: string[],
+    options?: EmailOptions
+  ) {
+    const subject = `Bookings Report - ${
+      bookings.length
+    } items (${new Date().toLocaleDateString()})`;
     const htmlBody = this.generateHTMLTableForEmail(bookings, columns);
 
     try {
@@ -79,10 +132,9 @@ ${htmlBody}
       };
 
       const response = await bookingService.sendEmail(emailRequest);
-
     } catch (error) {
-      console.error('❌ Error sending email:', error);
-      alert('Error sending email. Please check your connection and try again.');
+      console.error("❌ Error sending email:", error);
+      alert("Error sending email. Please check your connection and try again.");
     }
   }
 
@@ -90,17 +142,21 @@ ${htmlBody}
    * Option 3: Copy formatted data to clipboard
    * User can paste into any email client
    */
-  static async copyToClipboard(bookings: calendarBooking[], columns: Column[]) {
+  static async copyToClipboard(
+    bookings: calendarBooking[],
+    columns: Column[],
+    options?: EmailOptions
+  ) {
     const htmlTable = this.generateHTMLTableForEmail(bookings, columns);
     const plainText = this.generatePlainTextTable(bookings, columns);
-    
+
     try {
       // Try to copy both HTML and plain text to clipboard
       const clipboardItem = new ClipboardItem({
-        'text/html': new Blob([htmlTable], { type: 'text/html' }),
-        'text/plain': new Blob([plainText], { type: 'text/plain' })
+        "text/html": new Blob([htmlTable], { type: "text/html" }),
+        "text/plain": new Blob([plainText], { type: "text/plain" }),
       });
-      
+
       await navigator.clipboard.write([clipboardItem]);
       return true;
     } catch (error) {
@@ -109,39 +165,52 @@ ${htmlBody}
         await navigator.clipboard.writeText(plainText);
         return true;
       } catch (fallbackError) {
-        console.error('Failed to copy to clipboard:', fallbackError);
+        console.error("Failed to copy to clipboard:", fallbackError);
         return false;
       }
     }
   }
 
+  private static generateHTMLTableForEmail(
+    bookings: calendarBooking[],
+    columns: Column[],
+    options?: EmailOptions
+  ): string {
+    const userTimezone = TimezoneService.getUserTimezoneDisplay();
+    const dateRangeText = this.generateDateRangeText(options);
+    const mtdClosings = options?.mtdClosings ?? 0;
+    const currentMonth = format(new Date(), "MMMM yyyy");
 
- private static generateHTMLTableForEmail(bookings: calendarBooking[], columns: Column[]): string {
-  const userTimezone = TimezoneService.getUserTimezoneDisplay();
+    const tableRows = bookings
+      .map((booking, index) => {
+        const rowBgColor = index % 2 === 0 ? "#fafafa" : "#ffffff";
+        const cells = columns
+          .map((column) => {
+            let value = this.getCellValue(booking, column);
+            if (column.label === "Status") {
+              const colorMap: any = {
+                Upcoming: "#e53935",
+                "In Progress": "#fb8c00",
+                Completed: "#1e88e5",
+                Default: "#9e9e9e",
+              };
+              const bgColor = colorMap[value] || colorMap["Default"];
+              return `<td style="border:1px solid #e0e0e0; padding:14px; text-align:center; font-size:14px;"><span style="background:${bgColor};color:white;padding:6px 14px;border-radius:20px;display:inline-block;min-width:90px;font-weight:600;">${value}</span></td>`;
+            }
+            return `<td style="border:1px solid #e0e0e0; padding:14px; font-size:14px; vertical-align:top;">${value}</td>`;
+          })
+          .join("");
+        return `<tr style="background-color:${rowBgColor};">${cells}</tr>`;
+      })
+      .join("");
 
-  const tableRows = bookings.map((booking, index) => {
-    const rowBgColor = index % 2 === 0 ? '#fafafa' : '#ffffff';
-    const cells = columns.map(column => {
-      let value = this.getCellValue(booking, column);
-      if (column.label === 'Status') {
-        const colorMap: any = {
-          'Upcoming': '#e53935',
-          'In Progress': '#fb8c00',
-          'Completed': '#1e88e5',
-          'Default': '#9e9e9e'
-        };
-        const bgColor = colorMap[value] || colorMap['Default'];
-        return `<td style="border:1px solid #e0e0e0; padding:14px; text-align:center; font-size:14px;"><span style="background:${bgColor};color:white;padding:6px 14px;border-radius:20px;display:inline-block;min-width:90px;font-weight:600;">${value}</span></td>`;
-      }
-      return `<td style="border:1px solid #e0e0e0; padding:14px; font-size:14px; vertical-align:top;">${value}</td>`;
-    }).join('');
-    return `<tr style="background-color:${rowBgColor};">${cells}</tr>`;
-  }).join('');
-
-  const headerCells = columns.map(column => 
-    `<th style="border:1px solid #e0e0e0; padding:16px; background:#1976d2; color:white; font-weight:600; font-size:15px; text-align:left;">${column.label}</th>`
-  ).join('');
-  return `<!DOCTYPE html>
+    const headerCells = columns
+      .map(
+        (column) =>
+          `<th style="border:1px solid #e0e0e0; padding:16px; background:#1976d2; color:white; font-weight:600; font-size:15px; text-align:left;">${column.label}</th>`
+      )
+      .join("");
+    return `<!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8" />
@@ -159,26 +228,43 @@ ${htmlBody}
             </tr>
             <tr>
               <td style="padding:20px; background:#e3f2fd; border-bottom:1px solid #ddd;">
-                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                 <table width="100%" cellpadding="0" cellspacing="0" border="0">
                   <tr>
-                    <td align="center" style="text-align:center; padding: 0 10px;">
-                      <div style="font-size:28px; font-weight:bold; color:#1976d2;">${bookings.length}</div>
-                      <div>Total Records</div>
+                    <td align="center" style="text-align:center; padding: 0 8px;">
+                      <div style="font-size:24px; font-weight:bold; color:#1976d2;">${
+                        bookings.length
+                      }</div>
+                      <div style="font-size:12px;">Total Records</div>
                     </td>
-                    <td align="center" style="text-align:center; padding: 0 10px;">
-                      <div style="font-size:28px; font-weight:bold; color:#1976d2;">${bookings.filter(b => b.status === 'upcoming').length}</div>
-                      <div>Upcoming</div>
+                    <td align="center" style="text-align:center; padding: 0 8px;">
+                      <div style="font-size:24px; font-weight:bold; color:#1976d2;">${
+                        bookings.filter((b) => b.status === "upcoming").length
+                      }</div>
+                      <div style="font-size:12px;">Upcoming</div>
                     </td>
-                    <td align="center" style="text-align:center; padding: 0 10px;">
-                      <div style="font-size:28px; font-weight:bold; color:#1976d2;">${bookings.filter(b => b.status === 'inProgress').length}</div>
-                      <div>In Progress</div>
+                    <td align="center" style="text-align:center; padding: 0 8px;">
+                      <div style="font-size:24px; font-weight:bold; color:#1976d2;">${
+                        bookings.filter((b) => b.status === "inProgress").length
+                      }</div>
+                      <div style="font-size:12px;">In Progress</div>
                     </td>
-                    <td align="center" style="text-align:center; padding: 0 10px;">
-                      <div style="font-size:28px; font-weight:bold; color:#1976d2;">${bookings.filter(b => b.status === 'completed').length}</div>
-                      <div>Completed</div>
+                    <td align="center" style="text-align:center; padding: 0 8px;">
+                      <div style="font-size:24px; font-weight:bold; color:#1976d2;">${
+                        bookings.filter((b) => b.status === "completed").length
+                      }</div>
+                      <div style="font-size:12px;">Completed</div>
+                    </td>
+                    <td align="center" style="text-align:center; padding: 0 8px;">
+                      <div style="font-size:24px; font-weight:bold; color:#4caf50;">${mtdClosings}</div>
+                      <div style="font-size:12px;">MtD Closings</div>
+                      <div style="font-size:10px; color:#666;">(${currentMonth})</div>
                     </td>
                   </tr>
                 </table>
+                <div style="text-align:center; margin-top:15px; padding:10px; background:rgba(25,118,210,0.1); border-radius:8px;">
+                  <div style="font-weight:bold; color:#1976d2; margin-bottom:5px;">📅 Report Date Range</div>
+                  <div style="font-size:14px; color:#333;">${dateRangeText}</div>
+                </div>
               </td>
             </tr>
             <tr>
@@ -197,7 +283,10 @@ ${htmlBody}
             </tr>
             <tr>
               <td style="text-align:center; padding:20px; color:#777; font-size:14px;">
-                Report generated in timezone: ${userTimezone}
+                <div>Report generated in timezone: ${userTimezone}</div>
+                <div style="margin-top:8px; font-size:12px;">
+                  📈 MtD Closings: ${mtdClosings} • 📊 Date Range: ${dateRangeText}
+                </div>
               </td>
             </tr>
           </table>
@@ -206,18 +295,24 @@ ${htmlBody}
     </table>
   </body>
 </html>`;
-}
-
-
+  }
 
   /**
    * Generate plain text table for email body - Enhanced formatting
    */
-  private static generatePlainTextTable(bookings: calendarBooking[], columns: Column[]): string {
+  private static generatePlainTextTable(
+    bookings: calendarBooking[],
+    columns: Column[],
+    options?: EmailOptions
+  ): string {
     const userTimezone = TimezoneService.getUserTimezoneDisplay();
-    const separator = '='.repeat(100);
-    const lineSeparator = '-'.repeat(100);
-    
+    const separator = "=".repeat(100);
+    const lineSeparator = "-".repeat(100);
+
+    const dateRangeText = this.generateDateRangeText(options);
+    const mtdClosings = options?.mtdClosings ?? 0;
+    const currentMonth = format(new Date(), "MMMM yyyy");
+
     const header = `
 ${separator}
 📊 FNTIS BOOKINGS REPORT - FULL PAGE VIEW
@@ -226,33 +321,52 @@ ${separator}
 📅 Generated: ${new Date().toLocaleString()}
 📊 Total Records: ${bookings.length}
 📍 Timezone: ${userTimezone} (converted from Eastern Time)
+📈 Month-to-Date Closings: ${mtdClosings} (${currentMonth})
+📅 Date Range: ${dateRangeText}
 
 📈 Summary Statistics:
-   • Upcoming Appointments: ${bookings.filter(b => b.status === 'upcoming').length}
-   • In Progress: ${bookings.filter(b => b.status === 'inProgress').length}  
-   • Completed: ${bookings.filter(b => b.status === 'completed').length}
-   • Other Status: ${bookings.filter(b => !['upcoming', 'inProgress', 'completed'].includes(b.status || '')).length}
+   • Upcoming Appointments: ${
+     bookings.filter((b) => b.status === "upcoming").length
+   }
+   • In Progress: ${bookings.filter((b) => b.status === "inProgress").length}  
+   • Completed: ${bookings.filter((b) => b.status === "completed").length}
+   • Other Status: ${
+     bookings.filter(
+       (b) => !["upcoming", "inProgress", "completed"].includes(b.status || "")
+     ).length
+   }
+   • Month-to-Date Closings: ${mtdClosings} (${currentMonth})
+
+📋 REPORT FILTERS:
+   • Date Range Applied: ${dateRangeText}
+   • Records Matching Criteria: ${bookings.length}
 
 ${separator}
 DETAILED BOOKING RECORDS
 ${separator}`;
 
-    const tableData = bookings.map((booking, index) => {
-      const bookingData = columns.map(column => {
-        const value = this.getCellValue(booking, column);
-        return `${column.label}: ${value}`;
-      }).join('\n   ');
-      
-      return `
+    const tableData = bookings
+      .map((booking, index) => {
+        const bookingData = columns
+          .map((column) => {
+            const value = this.getCellValue(booking, column);
+            return `${column.label}: ${value}`;
+          })
+          .join("\n   ");
+
+        return `
 📋 Record ${index + 1} of ${bookings.length}:
    ${bookingData}
 ${lineSeparator}`;
-    }).join('');
+      })
+      .join("");
 
     const footer = `
 ${separator}
-📧 FNTIS BOOKING MANAGEMENT SYSTEM
+📧 FNTIS BOOKING MANAGEMENT SYSTEM - ENHANCED REPORT
 ${separator}
+📈 Month-to-Date Performance: ${mtdClosings} closings in ${currentMonth}
+📅 Report Coverage: ${dateRangeText}
 🌍 All times converted to your timezone: ${userTimezone}
 📞 For support, contact your system administrator
 🏢 First National Title & Insurance Services, Inc.
@@ -264,50 +378,69 @@ ${separator}`;
   /**
    * Extract cell value based on column configuration
    */
-  private static getCellValue(booking: calendarBooking, column: Column): string {
+  private static getCellValue(
+    booking: calendarBooking,
+    column: Column
+  ): string {
     const id = column.id as string;
     let value: any;
-    
-    if (id === 'customerName' && column.label === 'Borrower') {
+
+    if (id === "customerName" && column.label === "Borrower") {
       if (booking.loanData) {
-        const fullName = `${booking.loanData.borrowerFirstName || ''} ${booking.loanData.borrowerLastName || ''}`.trim();
+        const fullName = `${booking.loanData.borrowerFirstName || ""} ${
+          booking.loanData.borrowerLastName || ""
+        }`.trim();
         value = fullName || booking.customerName;
       } else {
         value = booking.customerName;
       }
-    }else if (id === 'LoanPurpose' && column.label === 'Loan Purpose') {
+    } else if (id === "LoanPurpose" && column.label === "Loan Purpose") {
       value = booking.loanData?.loanPurpose;
-    }
-    else if (id === 'LoanCloser' && column.label === 'Loan Closer') {
+    } else if (id === "LoanCloser" && column.label === "Loan Closer") {
       value = booking.loanData?.loanCloser || booking.LoanCloser;
-    } else if (id === 'LoanOfficer' && column.label === 'Loan Officer') {
+    } else if (id === "LoanOfficer" && column.label === "Loan Officer") {
       value = booking.loanData?.loanOfficer || booking.LoanOfficer;
-    } else if (id === 'dpa' && column.label === 'DPA Program') {
-      value = booking.loanData?.dpa || booking.dpa || '';
-    } else if (id === 'start' && column.label === 'Closing Date') {
+    } else if (id === "dpa" && column.label === "DPA Program") {
+      value = booking.loanData?.dpa || booking.dpa || "";
+    } else if (id === "start" && column.label === "Closing Date") {
       if (booking.start?.dateTime) {
-        value = TimezoneService.formatDateForUser(booking.start.dateTime, 'MMMM d, yyyy');
+        value = TimezoneService.formatDateForUser(
+          booking.start.dateTime,
+          "MMMM d, yyyy"
+        );
       }
-    } else if (id === 'start' && column.label === 'Closing Time') {
+    } else if (id === "start" && column.label === "Closing Time") {
       if (booking.start?.dateTime) {
-        value = TimezoneService.formatTimeForUser(booking.start.dateTime, 'h:mm a');
+        value = TimezoneService.formatTimeForUser(
+          booking.start.dateTime,
+          "h:mm a"
+        );
       }
-    } else if (id === 'serviceName' && column.label === 'Service Location') {
+    } else if (id === "serviceName" && column.label === "Service Location") {
       value = booking.serviceName;
-    } else if (id === 'status') {
+    } else if (id === "status") {
       if (booking.status) {
         switch (booking.status) {
-          case 'upcoming': value = 'Upcoming'; break;
-          case 'inProgress': value = 'In Progress'; break;
-          case 'completed': value = 'Completed'; break;
-          case 'canceled': value = 'Canceled'; break;
-          default: value = booking.status;
+          case "upcoming":
+            value = "Upcoming";
+            break;
+          case "inProgress":
+            value = "In Progress";
+            break;
+          case "completed":
+            value = "Completed";
+            break;
+          case "canceled":
+            value = "Canceled";
+            break;
+          default:
+            value = booking.status;
         }
       }
     } else {
       value = booking[id as keyof calendarBooking];
     }
-    
-    return value || '-';
+
+    return value || "-";
   }
 }

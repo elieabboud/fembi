@@ -49,7 +49,7 @@ import {
 } from "../services/exportToExcel";
 import FilterDropdown from "../components/common/FilterDropDownComp";
 import { formatDateForApi } from "../services/calendarUtils";
-import { endOfYear, startOfYear } from "date-fns";
+import { endOfYear, format, startOfYear } from "date-fns";
 import { BookingService } from "../types/service";
 import CreateBookingForm from "../components/forms/NewBookingForm";
 import { CreateAppointmentRequest } from "../types/CreateAppointmentRequest";
@@ -64,6 +64,7 @@ import {
 } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { useUrlQueryParams } from "../hooks/useUrlQueryParams";
+import { dashboardService } from "../services/dashboardService";
 
 const sortBookings = (bookings: calendarBooking[]): calendarBooking[] => {
   return [...bookings].sort((a, b) => {
@@ -166,6 +167,9 @@ const Bookings: React.FC = () => {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
+  const [mtdClosings, setMtdClosings] = useState<number>(0);
+  const [loadingMtdClosings, setLoadingMtdClosings] = useState(false);
+
   const [loanOfficersOptions, setLoanOfficersOptions] = useState<
     { id: string; label: string }[]
   >([]);
@@ -229,6 +233,37 @@ const Bookings: React.FC = () => {
   const handleSelectionChange = (selectedRows: calendarBooking[]) => {
     setSelectedBookings(selectedRows);
   };
+
+  const fetchMtdClosings = useCallback(async () => {
+    try {
+      setLoadingMtdClosings(true);
+      const dashboardData = await dashboardService.getDashboardData();
+
+      // Get current month closings from the API response
+      const currentMonth = format(new Date(), "yyyy-MM");
+      const monthlyData =
+        dashboardData.getClosingsPerMonth?.totalMeetingsPerMonth || [];
+
+      // Find current month's closings
+      const currentMonthData = monthlyData.find(
+        (data) => data.month === currentMonth
+      );
+      const currentMonthClosings = currentMonthData
+        ? parseInt(currentMonthData.numberOfMeetings, 10)
+        : 0;
+
+      setMtdClosings(currentMonthClosings);
+    } catch (error) {
+      console.error("Error fetching MtD closings:", error);
+      setMtdClosings(0);
+    } finally {
+      setLoadingMtdClosings(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMtdClosings();
+  }, [fetchMtdClosings]);
 
   const debouncedFetchBookings = useCallback(
     (
@@ -446,20 +481,26 @@ const Bookings: React.FC = () => {
 
   const fetchLoanOfficersData = useCallback(async () => {
     try {
-      const loanOfficersResponse = await bookingService.getDistinctLoanOfficers();
-      console.log('Loan officers response:', loanOfficersResponse);
-      
+      const loanOfficersResponse =
+        await bookingService.getDistinctLoanOfficers();
+      console.log("Loan officers response:", loanOfficersResponse);
+
       // Extract the loanOfficers array from the response object
       const loanOfficersArray = loanOfficersResponse.loanOfficers || [];
-      
+
       const loanOfficersOptionsFromAPI = loanOfficersArray
-        .filter((officer) => officer.loanOfficer && officer.loanOfficer.trim() !== '')
+        .filter(
+          (officer) => officer.loanOfficer && officer.loanOfficer.trim() !== ""
+        )
         .map((officer) => ({
           id: officer.loanOfficer,
           label: officer.loanOfficer,
         }));
-      
-      console.log('Loan officers options from API:', loanOfficersOptionsFromAPI);
+
+      console.log(
+        "Loan officers options from API:",
+        loanOfficersOptionsFromAPI
+      );
       setLoanOfficersOptions(loanOfficersOptionsFromAPI);
     } catch (error) {
       console.error("Error fetching loan officers:", error);
@@ -520,7 +561,6 @@ const Bookings: React.FC = () => {
     debouncedFetchBookings(1, true, true, true);
   }, []);
 
-
   useEffect(() => {
     debouncedFetchBookings(1, true, false, false);
   }, [searchQuery]);
@@ -572,38 +612,47 @@ const Bookings: React.FC = () => {
     const dataToEmail =
       selectedBookings.length > 0 ? selectedBookings : bookings;
 
+    const emailOptions = {
+      dateRange: dateRangeFilter,
+      mtdClosings: mtdClosings,
+    };
     switch (option) {
       case "eml":
         EmailService.createEMLFile(
           dataToEmail,
           columns,
-          recipientEmails.join(", ")
+          recipientEmails.join(", "),
+          emailOptions
         );
         break;
       case "mailto":
         const success = EmailService.openDefaultEmailClient(
           dataToEmail,
           columns,
-          recipientEmails.join(", ")
+          recipientEmails.join(", "),
+          emailOptions
         );
         if (!success) {
           EmailService.createEMLFile(
             dataToEmail,
             columns,
-            recipientEmails.join(", ")
+            recipientEmails.join(", "),
+            emailOptions
           );
         }
         break;
       case "copy":
-        EmailService.copyToClipboard(dataToEmail, columns).then((success) => {
-          if (success) {
-            alert(
-              "Bookings data copied to clipboard! You can now paste it into any email client."
-            );
-          } else {
-            alert("Failed to copy to clipboard. Please try another option.");
+        EmailService.copyToClipboard(dataToEmail, columns, emailOptions).then(
+          (success) => {
+            if (success) {
+              alert(
+                "Bookings data copied to clipboard! You can now paste it into any email client."
+              );
+            } else {
+              alert("Failed to copy to clipboard. Please try another option.");
+            }
           }
-        });
+        );
         break;
     }
 
@@ -625,11 +674,16 @@ const Bookings: React.FC = () => {
     const dataToEmail =
       selectedBookings.length > 0 ? selectedBookings : bookings;
 
+    const emailOptions = {
+      dateRange: dateRangeFilter,
+      mtdClosings: mtdClosings,
+    };
     try {
       await EmailService.sendEmailWithRecipient(
         dataToEmail,
         columns,
-        recipientEmails
+        recipientEmails,
+        emailOptions
       );
       setEmailDialogOpen(false);
       setRecipientEmails([]);
